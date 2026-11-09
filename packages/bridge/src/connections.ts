@@ -44,6 +44,8 @@ export interface ServerView {
   local?: true;
   /** How many agent sessions run there while connected, once it said so (tray, ADR 0036). */
   sessions?: number;
+  /** Number of the reconnect attempt running or waiting, since it was last connected. */
+  retry?: number;
 }
 
 interface LiveState {
@@ -113,6 +115,7 @@ export class ServerConnections {
   list(): ServerView[] {
     return this.saved.map(({ id, name, local }) => {
       const live = this.live.get(id);
+      const retry = this.retries.get(id)?.failed;
       return {
         id,
         name,
@@ -122,6 +125,7 @@ export class ServerConnections {
         bays: live?.connection?.bays ?? [],
         badges: live?.connection?.badges ?? {},
         ...(live?.connection?.sessions !== undefined && { sessions: live.connection.sessions }),
+        ...(retry && { retry }),
       };
     });
   }
@@ -146,10 +150,12 @@ export class ServerConnections {
     } catch (e) {
       if (!current()) return;
       const error = (e as Error).message;
-      this.set(id, { status: 'failed', error });
       // Locally anyone may hold the old port until the own server writes its new one (ADR 0036).
       const foreign = !!server.local && error.startsWith('Server fingerprint does not match');
+      // Counted before the change is told: the pause names the attempt that follows it.
       if (!FINAL.test(error) || foreign) this.retry(id);
+      else this.stopRetry(id);
+      this.set(id, { status: 'failed', error });
     }
   }
 
@@ -321,8 +327,8 @@ export class ServerConnections {
     connection.onClose(() => {
       // Only if this connection is still the current one (not after disconnect or remove).
       if (this.live.get(id)?.connection !== connection) return;
-      this.set(id, { status: 'disconnected' });
       this.retry(id);
+      this.set(id, { status: 'disconnected' });
     });
     this.retries.delete(id);
     this.set(id, { status: 'connected', connection });

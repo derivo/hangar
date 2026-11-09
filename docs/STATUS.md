@@ -262,6 +262,14 @@ manual step is needed. pnpm reports ignored build scripts of
   Tray and prompt count running shells (`ctx.setRunning`, sum in the
   server): `sessions.test.ts`, `bay-runtime.test.ts`, `server.test.ts`. Review:
   `docs/reviews/2026-11-03-local-server-step-4a.md`.
+  The page while it is down or restarting follows `server.log` (last 200 lines,
+  `log-tail.ts`: missing file waited for, truncated file read from its start)
+  (short reads, cut line starts dropped, endless lines capped at 64 KiB), can be paused
+  and follows only while scrolled to its end (`App.test.tsx`), and names the reconnect
+  attempt (`ServerView.retry`, counted before the change, gone once it gives up): `log-tail.test.ts`,
+  `host.test.ts`, `App.test.tsx`, `connections.test.ts`; the real log and attempt
+  after `launchctl bootout` in `e2e/local-server.spec.ts`, axe light/dark and
+  200 % zoom of the log in `e2e/a11y.spec.ts`.
 - **Local server, step 4b** (ADR 0036): Default in the packaged app
   on macOS, in the build from the repository only with `HANGAR_LOCAL_SERVER=1`
   or the switch; E2E start with `HANGAR_LOCAL_SERVER=0`. The third test

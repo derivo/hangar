@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
@@ -144,6 +144,74 @@ describe('App', () => {
     expect(screen.queryByRole('heading')).toBeNull();
     push({ ...down, selected: 'dev.other', localServer: { status: 'failed', bays: [bay] } });
     expect(screen.queryByRole('heading')).toBeNull();
+  });
+
+  it('follows the log of the local server on its page and says which reconnect runs', async () => {
+    const key = 'remote:loc:dev.hangar.agents';
+    const bay = { id: key, name: 'Agents', icon: 'data:image/svg+xml;base64,PHN2Zy8+', badge: 0 };
+    const down: ShellState = {
+      ...base,
+      selected: key,
+      localServer: { status: 'connecting', bays: [bay], log: [] },
+    };
+    const { api, push } = fakeApi(down);
+    render(<App api={api} />);
+    const log = await screen.findByRole('log', { name: 'Log des lokalen Servers' });
+    expect(log).toHaveTextContent('Noch keine Einträge.');
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent('');
+    const scrolled = vi.spyOn(log, 'scrollHeight', 'get').mockReturnValue(500);
+    push({
+      ...down,
+      localServer: { status: 'connecting', bays: [bay], log: ['a', 'b'], retry: 3 },
+    });
+    expect(log).toHaveTextContent(/^a\s*b$/);
+    expect(log.scrollTop).toBe(500);
+    expect(status).toHaveTextContent('Verbinde erneut … (Versuch 3)');
+    scrolled.mockRestore();
+    // Without a log path nothing is followed: no region.
+    push({ ...down, localServer: { status: 'failed', bays: [bay] } });
+    expect(screen.queryByRole('log')).toBeNull();
+  });
+
+  it('pauses the log, and follows it only while scrolled to its end (WCAG 2.2.2, Codex review)', async () => {
+    const key = 'remote:loc:dev.hangar.agents';
+    const bay = { id: key, name: 'Agents', icon: 'data:image/svg+xml;base64,PHN2Zy8+', badge: 0 };
+    const at = (log: string[]): ShellState => ({
+      ...base,
+      selected: key,
+      localServer: { status: 'connecting', bays: [bay], log },
+    });
+    const { api, push } = fakeApi(at(['a']));
+    render(<App api={api} />);
+    const log = await screen.findByRole('log', { name: 'Log des lokalen Servers' });
+    vi.spyOn(log, 'scrollHeight', 'get').mockReturnValue(500);
+    vi.spyOn(log, 'clientHeight', 'get').mockReturnValue(100);
+    const pause = screen.getByRole('button', { name: 'Log anhalten' });
+    expect(pause).toHaveAttribute('aria-pressed', 'false');
+
+    // Paused: neither new lines nor scrolling, until it goes on.
+    await userEvent.click(pause);
+    expect(pause).toHaveAttribute('aria-pressed', 'true');
+    log.scrollTop = 0;
+    push(at(['a', 'b']));
+    expect(log).toHaveTextContent(/^a$/);
+    expect(log.scrollTop).toBe(0);
+    await userEvent.click(pause);
+    expect(pause).toHaveAttribute('aria-pressed', 'false');
+    expect(log).toHaveTextContent(/^a\s*b$/);
+
+    // Scrolled up by the person: new lines come, the view stays.
+    log.scrollTop = 100;
+    fireEvent.scroll(log);
+    push(at(['a', 'b', 'c']));
+    expect(log).toHaveTextContent(/c$/);
+    expect(log.scrollTop).toBe(100);
+    // Back at the end: it follows again.
+    log.scrollTop = 400;
+    fireEvent.scroll(log);
+    push(at(['a', 'b', 'c', 'd']));
+    expect(log.scrollTop).toBe(500);
   });
 
   it('shows the hint of a new version above a bay of the local server, with the restart', async () => {

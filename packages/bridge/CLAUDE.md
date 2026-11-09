@@ -24,7 +24,7 @@ under Node (built-in `WebSocket`).
   → `{ port, close }` (waits until the local port accepts; error
   `SSH failed: <last line of ssh>`).
 - `ServerConnections(file, { name, locale? }, { changed, event, ask, notify, jobs }, ssh = 'ssh', retryMs = 1000)` – paired servers
-  in `file` (0600): `list()` (with `badges` per bay, `sessions` of the server, `local: true` for the local server), `connectAll()`, `connect`, `disconnect`, `remove`,
+  in `file` (0600): `list()` (with `badges` per bay, `sessions` of the server, `local: true` for the local server, `retry`: number of the reconnect attempt running or waiting since the last connection, counted before `changed`; gone when no further attempt follows), `connectAll()`, `connect`, `disconnect`, `remove`,
   `probe(address)` → `{ id, fingerprint }`, `pair(probeId, name, code)`,
   `pairLocal(dataDir, name)` (server on the same machine, ADR 0036: code from `pair-code`, only with the fingerprint from `listen.json`; stored with `local`, the port comes from `listen.json` on every connect; already paired → the same ID and a new connection attempt if none is running),
   `cancel`, `invoke`, `jobs(id)`, `job(id, action, jobId)`, `workspaces(id, action, args)`, `offerAgain()`, `closeAll()`;
