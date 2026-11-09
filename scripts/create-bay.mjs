@@ -1,5 +1,5 @@
 // Scaffolds a new bay: `pnpm create:bay <id> [Name]`, e.g. `pnpm create:bay dev.hangar.notes Notizen`.
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -21,7 +21,21 @@ export function createBay(id, { root, name }) {
     mkdirSync(dirname(join(dir, file)), { recursive: true });
     writeFileSync(join(dir, file), content);
   }
+  shipBay(root, slug);
   return dir;
+}
+
+/** Adds the bay to the bundled bays (`files`) of `electron-builder.yml`, if there is one. */
+function shipBay(root, slug) {
+  const builder = join(root, 'apps', 'desktop', 'electron-builder.yml');
+  if (!existsSync(builder)) return;
+  const entry =
+    `  - from: ../../bays/${slug}\n    to: bays/${slug}\n` +
+    `    filter: [manifest.json, icon.svg, dist/**]\n`;
+  const text = readFileSync(builder, 'utf8');
+  const end = text.indexOf('\nextraResources:');
+  if (end < 0) throw new Error(`Kein Abschnitt extraResources in ${builder}`);
+  writeFileSync(builder, text.slice(0, end + 1) + entry + text.slice(end + 1));
 }
 
 const json = (value) => JSON.stringify(value, null, 2) + '\n';
@@ -177,7 +191,7 @@ Zweck: UNBEKANNT – beim Ausbau hier eintragen.
 ## Fallstricke
 
 - Jede Funktion muss im Manifest deklariert sein, sonst wirft \`ctx.provide\`.
-- Für die Auslieferung die Bay in \`apps/desktop/electron-builder.yml\` (\`files\`) eintragen.
+- Ausgeliefert wird die Bay über \`apps/desktop/electron-builder.yml\` (\`files\`); \`pnpm create:bay\` hat sie dort eingetragen.
 - Leitfaden: \`docs/bay-development.md\`.
 `,
   };

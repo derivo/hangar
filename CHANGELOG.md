@@ -87,6 +87,7 @@ All notable changes to this project. Format based on
 
 ### Changed
 
+- `pnpm create:bay` adds the new bay to the bundled bays in `apps/desktop/electron-builder.yml`; it no longer has to be entered by hand.
 - README: one-line pitch, screenshot (light and dark, rendered by `apps/desktop/e2e/readme-screenshots.spec.ts` with `HANGAR_SCREENSHOTS=1`), "Why", features with board, password bay and local server, status, "How it works" and "For AI agents". Sessions are described as shells in the project folder (ADR 0022), no longer in their own worktree.
 - Agent bay: "Add project" stays at the top of the project tree and the session counts at the bottom; only the projects scroll between them. Keyboard focus scrolls clear of both.
 - Board: a new task is created like a card in a list: "Add a task" at the end of the column "Open" opens a small form (title, optional description, Esc cancels), instead of a form across the page.
