@@ -29,21 +29,21 @@ bay runtime (context for the main part), IPC between bays and main process.
 
 ## Environment variables
 
-| Variable                   | Effect                                                                                                                               |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `HANGAR_USER_DATA`         | Own data folder (tests, parallel instances); without it package "Hangar Dev"                                                         |
-| `HANGAR_BAYS_DIR`          | Bay folder (path list), replaces the default `bays/`                                                                                 |
-| `HANGAR_E2E_EXECUTABLE`    | E2E only: test the packaged app instead of `out/`                                                                                    |
-| `HANGAR_E2E`               | Only record notifications; window invisible, without focus and Dock icon                                                             |
-| `HANGAR_E2E_SHOW`          | Only with `HANGAR_E2E`: show the window after all (debugging)                                                                        |
-| `HANGAR_LOCALE`            | Force the language: `de`, `en` or pseudo-locale `en-XA` (ADR 0009)                                                                   |
-| `HANGAR_BAY_INDEX`         | Bay index (`index.json`, https or local path) for "Install bays"                                                                     |
-| `HANGAR_BAY_INDEX_KEY`     | Public Ed25519 key of the index (JWK `x`), only with `HANGAR_BAY_INDEX`                                                              |
-| `HANGAR_SSH`               | `ssh` command for server tunnels (E2E: `packages/bridge/fixtures/fake-ssh.mjs`)                                                      |
-| `HANGAR_LOCAL_SERVER`      | `1`/`0`: local server on/off, before setting and default (ADR 0036, macOS only; default only packaged, E2E `0`)                      |
-| `HANGAR_LAUNCH_AGENTS`     | Folder of the plist instead of `~/Library/LaunchAgents` (E2E)                                                                        |
-| `HANGAR_KEY_PASSPHRASE`    | Without a keychain: encrypt new relay keys with it (`pass:`, ADR 0030 addendum); removed from the environment after reading          |
-| `HANGAR_LOCAL_SERVER_ROOT` | `--root` of the local server instead of the home folder (E2E); with `HANGAR_E2E` the service also inherits `SHELL`, `HOME`, `TMPDIR` |
+| Variable                   | Effect                                                                                                                                                                                                                                                             |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `HANGAR_USER_DATA`         | Own data folder (tests, parallel instances); without it package "Hangar Dev"                                                                                                                                                                                       |
+| `HANGAR_BAYS_DIR`          | Bay folder (path list), replaces the default `bays/`                                                                                                                                                                                                               |
+| `HANGAR_E2E_EXECUTABLE`    | E2E only: test the packaged app instead of `out/`                                                                                                                                                                                                                  |
+| `HANGAR_E2E`               | Only record notifications; window invisible, without focus and Dock icon                                                                                                                                                                                           |
+| `HANGAR_E2E_SHOW`          | Only with `HANGAR_E2E`: show the window after all (debugging)                                                                                                                                                                                                      |
+| `HANGAR_LOCALE`            | Force the language: `de`, `en` or pseudo-locale `en-XA` (ADR 0009)                                                                                                                                                                                                 |
+| `HANGAR_BAY_INDEX`         | Bay index (`index.json`, https or local path) for "Install bays"                                                                                                                                                                                                   |
+| `HANGAR_BAY_INDEX_KEY`     | Public Ed25519 key of the index (JWK `x`), only with `HANGAR_BAY_INDEX`                                                                                                                                                                                            |
+| `HANGAR_SSH`               | `ssh` command for server tunnels (E2E: `packages/bridge/fixtures/fake-ssh.mjs`)                                                                                                                                                                                    |
+| `HANGAR_LOCAL_SERVER`      | `1`/`0`: local server on/off, before setting and default (ADR 0036, macOS only; default only packaged, E2E `0`)                                                                                                                                                    |
+| `HANGAR_LAUNCH_AGENTS`     | Folder of the plist instead of `~/Library/LaunchAgents` (E2E)                                                                                                                                                                                                      |
+| `HANGAR_KEY_PASSPHRASE`    | Without a keychain: encrypt new relay keys with it (`pass:`, ADR 0030 addendum); taken out of the environment after reading (`takePassphrase`), put back before the in-app relaunch; keys it cannot open → error box, start without workspaces, identity untouched |
+| `HANGAR_LOCAL_SERVER_ROOT` | `--root` of the local server instead of the home folder (E2E); with `HANGAR_E2E` the service also inherits `SHELL`, `HOME`, `TMPDIR`                                                                                                                               |
 
 ## Pitfalls
 

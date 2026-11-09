@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { keysWithoutKeychain } from './key-protection';
+import { keysWithoutKeychain, takePassphrase } from './key-protection';
 
 describe('keysWithoutKeychain', () => {
   it('stores plain without a passphrase, as before', () => {
@@ -42,5 +42,19 @@ describe('keysWithoutKeychain', () => {
     expect(() => keysWithoutKeychain('x').decrypt('safe:abc')).toThrow(
       'Keys are protected by the keychain of the app',
     );
+  });
+});
+
+describe('takePassphrase', () => {
+  it('takes HANGAR_KEY_PASSPHRASE out of the environment and puts it back for a relaunch', () => {
+    const env: NodeJS.ProcessEnv = { HANGAR_KEY_PASSPHRASE: 'correct horse', PATH: '/bin' };
+    const taken = takePassphrase(env);
+    expect(taken.passphrase).toBe('correct horse');
+    expect(env).toEqual({ PATH: '/bin' });
+    taken.restore();
+    expect(env).toEqual({ HANGAR_KEY_PASSPHRASE: 'correct horse', PATH: '/bin' });
+    const none: NodeJS.ProcessEnv = {};
+    takePassphrase(none).restore();
+    expect(none).toEqual({});
   });
 });

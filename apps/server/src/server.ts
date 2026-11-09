@@ -7,6 +7,7 @@ import {
   BayRuntime,
   discoverBays,
   keysWithoutKeychain,
+  takePassphrase,
   readSettings,
   startCore,
   uiLocale,
@@ -38,8 +39,7 @@ export async function startServer(
   delete process.env.ELECTRON_RUN_AS_NODE;
   // Relay keys without a keychain: `plain:` (the app moves them here decrypted), new ones
   // `pass:` with the passphrase; `safe:` only the app's keychain reads. Agents must not get it.
-  const keys = keysWithoutKeychain(process.env.HANGAR_KEY_PASSPHRASE);
-  delete process.env.HANGAR_KEY_PASSPHRASE;
+  const keys = keysWithoutKeychain(takePassphrase().passphrase);
   const version = pkg.version;
   // The language of the desktop that connected last, unless HANGAR_LOCALE fixes it (ADR 0019).
   const localeFile = join(options.data, 'desktop-locale');

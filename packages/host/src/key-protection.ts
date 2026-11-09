@@ -44,3 +44,19 @@ export function keysWithoutKeychain(passphrase: string | undefined) {
     },
   };
 }
+
+/**
+ * Reads `HANGAR_KEY_PASSPHRASE` and removes it from `env`, so shells and jobs do not inherit it
+ * (on Linux `/proc/<pid>/environ` still shows the original environment to the same user).
+ * `restore` puts it back, e.g. right before a relaunch.
+ */
+export function takePassphrase(env: NodeJS.ProcessEnv = process.env) {
+  const passphrase = env.HANGAR_KEY_PASSPHRASE;
+  delete env.HANGAR_KEY_PASSPHRASE;
+  return {
+    passphrase,
+    restore: () => {
+      if (passphrase !== undefined) env.HANGAR_KEY_PASSPHRASE = passphrase;
+    },
+  };
+}

@@ -65,7 +65,10 @@ working on: instance, project, session, status, description.
   when the keys are written, i.e. to a new identity; an existing `plain:` file
   stays as it is. App and server remove the variable from their environment after
   reading it, so session shells and jobs do not inherit it. The local server
-  (ADR 0036) still gets the keys as `plain:` from the app.
+  (ADR 0036) still gets the keys as `plain:` from the app. If the desktop cannot
+  open `pass:` keys (passphrase missing or wrong), it shows an error box and starts
+  without workspaces; the identity file stays untouched. The in-app relaunch puts
+  the passphrase back into the environment first.
 - Settings: `apps/desktop/src/renderer/Workspaces.tsx`; agent bay:
   `bays/agents/src/main/share.ts`, `src/ui/RemoteList.tsx`. E2E with two
   instances and a local relay: `apps/desktop/e2e/workspaces.spec.ts`.

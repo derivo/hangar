@@ -118,6 +118,7 @@ All notable changes to this project. Format based on
 
 ### Fixed
 
+- Desktop: relay keys that `HANGAR_KEY_PASSPHRASE` cannot open (missing or wrong) no longer stop the start without a word; an error box names the reason and Hangar starts without workspaces, the encrypted identity untouched. The in-app relaunch keeps the passphrase.
 - Agent bay: a job that timed out or was stopped now ends even when the kill misses a child that keeps its output open (a failed `taskkill` on Windows, a child outside the process group); after 2 s Hangar closes the pipes itself.
 - Agent bay and server: git calls drop `GIT_*` variables in any case (`git_dir`, `Git_Config_Count`); Windows reads environment names case-insensitively, so they still reached git there.
 - Server tunnels: `StdinNull yes` in the person's ssh config no longer ends the tunnel at once. The desktop reads `ssh -V` and passes `-o StdinNull=no` from OpenSSH 8.7 on; older versions, which reject the option, get the arguments as before.
