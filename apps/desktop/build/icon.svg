@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none">
+  <defs>
+    <path id="tile" d="M284 100h456c128 0 184 56 184 184v456c0 128-56 184-184 184H284c-128 0-184-56-184-184V284c0-128 56-184 184-184Z"/>
+    <clipPath id="clip"><use href="#tile"/></clipPath>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0v40" stroke="#23345a" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <use href="#tile" fill="#0f1828"/>
+  <g clip-path="url(#clip)">
+    <path d="M100 100h824v824H100Z" fill="url(#grid)"/>
+    <path d="M512 100v824M100 512h824" stroke="#23345a" stroke-width="2"/>
+  </g>
+  <use href="#tile" stroke="#23345a" stroke-width="2"/>
+  <path d="M200 776V392l192-168h240l192 168v384H656V488H368v288Z" fill="#49d6f0"/>
+  <path d="m264 416 152-128h192" stroke="#0a7186" stroke-width="8"/>
+  <path d="M440 776h144" stroke="#ffb547" stroke-width="16"/>
+  <path d="M168 360v-32h32m624 0h32v32M168 800v32h32m624 0h32v-32" stroke="#8fa1bb" stroke-width="4"/>
+</svg>

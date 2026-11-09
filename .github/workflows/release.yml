@@ -1,0 +1,63 @@
+name: Release
+
+# Tag v1.2.3 publishes a stable release, v1.2.3-beta.1 a prerelease (beta channel).
+# Each platform uploads into a draft; the release goes public only after all of them
+# succeeded, so the updater never sees a release with missing files.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm build
+      - name: Prepare notarization key (macOS, if configured)
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          KEY: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          if [ -n "$KEY" ]; then
+            echo "$KEY" > "$RUNNER_TEMP/apple_api_key.p8"
+            echo "APPLE_API_KEY=$RUNNER_TEMP/apple_api_key.p8" >> "$GITHUB_ENV"
+          fi
+      - name: Package and publish to GitHub Releases
+        run: pnpm --filter @hangar/desktop exec electron-builder --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signing: without these secrets the packages stay unsigned.
+          CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          WIN_CSC_LINK: ${{ secrets.WIN_CERT_P12_BASE64 }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CERT_PASSWORD }}
+          # macOS notarization (App Store Connect API key; APPLE_API_KEY is set above).
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+
+  publish:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the draft (prerelease for beta tags)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ "$TAG" == *-* ]]; then pre=true; else pre=false; fi
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease="$pre"

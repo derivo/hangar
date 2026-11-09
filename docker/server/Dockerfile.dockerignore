@@ -1,0 +1,7 @@
+# The build context is the repository root; the image needs only the built bundles.
+*
+!apps/server/dist
+!packages/cli/dist
+!bays/agents/manifest.json
+!bays/agents/icon.svg
+!bays/agents/dist

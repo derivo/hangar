@@ -1,0 +1,27 @@
+{
+  "name": "@hangar/bay-agents",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build --config vite.ui.config.ts && vite build --config vite.main.config.ts"
+  },
+  "dependencies": {
+    "node-pty": "1.1.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@hangar/bus": "workspace:*",
+    "@hangar/mcp": "workspace:*",
+    "@hangar/scheduler": "workspace:*",
+    "@hangar/sdk": "workspace:*",
+    "@hangar/theme": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@vitejs/plugin-react": "^6.1.2",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "vite": "^8.3.5"
+  }
+}

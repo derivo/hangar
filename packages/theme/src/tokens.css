@@ -1,0 +1,141 @@
+/* Hangar design tokens. Injected into every bay; bays only reference var(--hangar-*). */
+:root {
+  color-scheme: light;
+  --hangar-font-sans: 'Geist', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --hangar-font-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  /* Headings, wide and sparing. Bays get the font files via @hangar/theme/fonts.css. */
+  --hangar-font-display: 'Michroma', 'Geist', system-ui, sans-serif;
+  --hangar-font-size-sm: 12px;
+  --hangar-font-size-md: 13px;
+  --hangar-font-size-lg: 15px;
+
+  --hangar-space-1: 4px;
+  --hangar-space-2: 8px;
+  --hangar-space-3: 12px;
+  --hangar-space-4: 16px;
+  --hangar-space-6: 24px;
+  --hangar-radius: 6px;
+  /* Soft light around what is active (focused field, current session, quota). */
+  --hangar-glow: 0 0 10px color-mix(in srgb, var(--hangar-color-glow) 35%, transparent);
+  --hangar-sidebar-width: 64px;
+
+  --hangar-color-bg: #f1efec;
+  --hangar-color-surface: #fbfaf8;
+  --hangar-color-surface-raised: #ffffff;
+  --hangar-color-border: #d9d5cf;
+  --hangar-color-text: #17140f;
+  --hangar-color-text-muted: #5f5a53;
+  --hangar-color-accent: #b34a00;
+  --hangar-color-accent-text: #ffffff;
+  --hangar-color-focus: #b34a00;
+  --hangar-color-danger: #b42318;
+  --hangar-color-badge: #f2c94c;
+  --hangar-color-badge-text: #1a1400;
+  --hangar-color-status-working: #b34a00;
+  --hangar-color-status-waiting: #8f6c00;
+  --hangar-color-status-done: #1d7a3a;
+  --hangar-color-status-idle: #6f6a63;
+  --hangar-color-terminal-bg: #ffffff;
+  --hangar-color-terminal-fg: #17140f;
+  /* The dock stays dark in both modes: bay icons are light images. */
+  --hangar-color-dock: #17140f;
+  --hangar-color-dock-text: #a19b94;
+  --hangar-color-dock-glow: #ff8a2a;
+  --hangar-color-glow: #b34a00;
+  --hangar-color-waiting-text: #806200;
+  /* Tab colors of the agent bay: at least 4.5:1 against bg and both surfaces. */
+  --hangar-color-tab-red: #b42318;
+  --hangar-color-tab-orange: #a33f00;
+  --hangar-color-tab-yellow: #7f5a00;
+  --hangar-color-tab-green: #136b4b;
+  --hangar-color-tab-teal: #0a6e7d;
+  --hangar-color-tab-blue: #1d4ed8;
+  --hangar-color-tab-violet: #6d28d9;
+  --hangar-color-tab-pink: #b4185a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --hangar-color-bg: #111214;
+    --hangar-color-surface: #18191c;
+    --hangar-color-surface-raised: #1f2024;
+    --hangar-color-border: #2e2f33;
+    --hangar-color-text: #eeeae5;
+    --hangar-color-text-muted: #a19b94;
+    --hangar-color-accent: #ff8a2a;
+    --hangar-color-accent-text: #1a0d00;
+    --hangar-color-focus: #ff8a2a;
+    --hangar-color-danger: #ff7b72;
+    --hangar-color-badge: #ffd84a;
+    --hangar-color-badge-text: #1a1400;
+    --hangar-color-status-working: #ff8a2a;
+    --hangar-color-status-waiting: #ffd84a;
+    --hangar-color-status-done: #7bd88f;
+    --hangar-color-status-idle: #8a857f;
+    --hangar-color-terminal-bg: #141518;
+    --hangar-color-terminal-fg: #e8e4de;
+    --hangar-color-dock: #111214;
+    --hangar-color-dock-text: #a19b94;
+    --hangar-color-dock-glow: #ff8a2a;
+    --hangar-color-glow: #ff8a2a;
+    --hangar-color-waiting-text: #ffd84a;
+    --hangar-color-tab-red: #ff8a80;
+    --hangar-color-tab-orange: #ffa463;
+    --hangar-color-tab-yellow: #f2d04b;
+    --hangar-color-tab-green: #4fd19b;
+    --hangar-color-tab-teal: #49d6f0;
+    --hangar-color-tab-blue: #8ab4ff;
+    --hangar-color-tab-violet: #c3a6ff;
+    --hangar-color-tab-pink: #ff8cc6;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --hangar-color-bg: #111214;
+  --hangar-color-surface: #18191c;
+  --hangar-color-surface-raised: #1f2024;
+  --hangar-color-border: #2e2f33;
+  --hangar-color-text: #eeeae5;
+  --hangar-color-text-muted: #a19b94;
+  --hangar-color-accent: #ff8a2a;
+  --hangar-color-accent-text: #1a0d00;
+  --hangar-color-focus: #ff8a2a;
+  --hangar-color-danger: #ff7b72;
+  --hangar-color-badge: #ffd84a;
+  --hangar-color-badge-text: #1a1400;
+  --hangar-color-status-working: #ff8a2a;
+  --hangar-color-status-waiting: #ffd84a;
+  --hangar-color-status-done: #7bd88f;
+  --hangar-color-status-idle: #8a857f;
+  --hangar-color-terminal-bg: #141518;
+  --hangar-color-terminal-fg: #e8e4de;
+  --hangar-color-dock: #111214;
+  --hangar-color-dock-text: #a19b94;
+  --hangar-color-dock-glow: #ff8a2a;
+  --hangar-color-glow: #ff8a2a;
+  --hangar-color-waiting-text: #ffd84a;
+  --hangar-color-tab-red: #ff8a80;
+  --hangar-color-tab-orange: #ffa463;
+  --hangar-color-tab-yellow: #f2d04b;
+  --hangar-color-tab-green: #4fd19b;
+  --hangar-color-tab-teal: #49d6f0;
+  --hangar-color-tab-blue: #8ab4ff;
+  --hangar-color-tab-violet: #c3a6ff;
+  --hangar-color-tab-pink: #ff8cc6;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--hangar-color-bg);
+  color: var(--hangar-color-text);
+  font-family: var(--hangar-font-mono);
+  font-size: var(--hangar-font-size-md);
+}
+
+:focus-visible {
+  outline: 2px solid var(--hangar-color-focus);
+  outline-offset: 1px;
+}

@@ -1,0 +1,11 @@
+pre-commit:
+  parallel: false
+  commands:
+    lint:
+      glob: '*.{ts,tsx,js,mjs,json,md,yml,yaml,css}'
+      run: pnpm exec eslint --no-warn-ignored {staged_files} && pnpm exec prettier --check --ignore-unknown {staged_files}
+    typecheck:
+      run: pnpm typecheck
+    test:
+      glob: '*.{ts,tsx}'
+      run: pnpm exec vitest related --run {staged_files}

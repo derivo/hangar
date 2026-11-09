@@ -1,0 +1,32 @@
+# Example: hangar-server as a systemd service without Docker (ADR 0029, docs/server-operations.md).
+# Copy to /etc/systemd/system/, then `systemctl enable --now hangar-server`.
+[Unit]
+Description=Hangar server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=hangar
+Group=hangar
+# Repository checkout with the built bundles (server, CLI, agent bay) and node-pty installed.
+WorkingDirectory=/opt/hangar
+ExecStart=/usr/bin/node /opt/hangar/apps/server/dist/hangar-server.mjs \
+  --data /var/lib/hangar \
+  --listen 127.0.0.1:7420 \
+  --root /home/hangar/projects \
+  --bays /opt/hangar/bays
+StateDirectory=hangar
+# Keys, tokens, session env and scrollback: readable by the service user only.
+StateDirectoryMode=0700
+UMask=0077
+# API keys of the agents and git identity (server.env.example).
+EnvironmentFile=/etc/hangar/server.env
+Restart=always
+RestartSec=5
+# The server closes its sessions on SIGTERM; their state is on disk for the restart.
+KillMode=mixed
+TimeoutStopSec=30
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

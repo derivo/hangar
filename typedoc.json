@@ -1,0 +1,12 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "name": "Hangar SDK",
+  "entryPoints": ["packages/sdk/src/index.ts"],
+  "out": "docs/api",
+  "tsconfig": "tsconfig.json",
+  "readme": "none",
+  "excludePrivate": true,
+  "disableSources": true,
+  "validation": { "notDocumented": true },
+  "treatWarningsAsErrors": true
+}

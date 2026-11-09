@@ -1,0 +1,869 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hangar – Oberflächen-Mock</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* Mock only – proposal for the --hangar-* tokens, not wired into the app. */
+      :root {
+        --font-ui: 'Geist', system-ui, sans-serif;
+        --font-display: 'Chakra Petch', 'Geist', system-ui, sans-serif;
+        --font-mono: 'Geist Mono', ui-monospace, Menlo, monospace;
+        --cut: 10px; /* chamfer size */
+
+        --hull: #e9edf3;
+        --grid: rgb(14 23 38 / 0.05);
+        --glass: rgb(255 255 255 / 0.72);
+        --glass-strong: rgb(255 255 255 / 0.92);
+        --line: #c6d0de;
+        --ink: #0e1726;
+        --ink-muted: #526178;
+        --dock: #0e1726;
+        --dock-ink: #8fa1bb;
+
+        --ion: #0b7f96; /* text-safe accent */
+        --ion-glow: #19b8d6; /* fills and light */
+        --beacon: #f2a516;
+        --beacon-ink: #1a1203;
+        --beacon-text: #8a5800; /* amber as text on light glass */
+        --working: #0b7f96;
+        --done: #18805a;
+        --idle: #7b8798;
+        --focus: #0b7f96;
+
+        --term-bg: rgb(255 255 255 / 0.8);
+        --term-fg: #0e1726;
+        --term-dim: #5f6e83;
+        --term-ok: #18805a;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) {
+          --hull: #070c18;
+          --grid: rgb(120 170 230 / 0.06);
+          --glass: rgb(18 28 48 / 0.72);
+          --glass-strong: rgb(22 34 58 / 0.94);
+          --line: #23345a;
+          --ink: #e6edf7;
+          --ink-muted: #8fa1bb;
+          --dock: #040812;
+          --dock-ink: #6f84a3;
+          --ion: #49d6f0;
+          --ion-glow: #3fd3ee;
+          --beacon: #ffb547;
+          --beacon-text: #ffb547;
+          --working: #49d6f0;
+          --done: #4fd19b;
+          --idle: #7d8ca3;
+          --focus: #49d6f0;
+          --term-bg: rgb(6 12 26 / 0.82);
+          --term-fg: #d9e3f1;
+          --term-dim: #7f91ab;
+          --term-ok: #4fd19b;
+        }
+      }
+      :root[data-theme='dark'] {
+        --hull: #070c18;
+        --grid: rgb(120 170 230 / 0.06);
+        --glass: rgb(18 28 48 / 0.72);
+        --glass-strong: rgb(22 34 58 / 0.94);
+        --line: #23345a;
+        --ink: #e6edf7;
+        --ink-muted: #8fa1bb;
+        --dock: #040812;
+        --dock-ink: #6f84a3;
+        --ion: #49d6f0;
+        --ion-glow: #3fd3ee;
+        --beacon: #ffb547;
+        --beacon-text: #ffb547;
+        --working: #49d6f0;
+        --done: #4fd19b;
+        --idle: #7d8ca3;
+        --focus: #49d6f0;
+        --term-bg: rgb(6 12 26 / 0.82);
+        --term-fg: #d9e3f1;
+        --term-dim: #7f91ab;
+        --term-ok: #4fd19b;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        color: var(--ink);
+        font: 14.5px/1.5 var(--font-ui);
+        -webkit-font-smoothing: antialiased;
+        background-color: var(--hull);
+        /* Blueprint grid of the hangar floor. */
+        background-image:
+          linear-gradient(var(--grid) 1px, transparent 1px),
+          linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+        background-size: 24px 24px;
+      }
+      button {
+        font: inherit;
+        color: inherit;
+      }
+      :focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: 2px;
+      }
+
+      /* Chamfered corners: top-left and bottom-right cut. */
+      .chamfer {
+        clip-path: polygon(
+          var(--cut) 0,
+          100% 0,
+          100% calc(100% - var(--cut)),
+          calc(100% - var(--cut)) 100%,
+          0 100%,
+          0 var(--cut)
+        );
+      }
+
+      .app {
+        display: grid;
+        grid-template-columns: 68px 288px 1fr;
+        gap: 12px;
+        height: 100vh;
+        min-height: 560px;
+        padding: 12px 12px 12px 0;
+      }
+
+      /* ---- Dock: the bays ----------------------------------------------- */
+      .dock {
+        background: var(--dock);
+        margin: -12px 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 18px 0;
+        gap: 8px;
+      }
+      .dock-mark {
+        width: 30px;
+        height: 30px;
+        margin-bottom: 18px;
+        color: var(--ion-glow);
+      }
+      .bay {
+        --cut: 7px;
+        position: relative;
+        width: 44px;
+        height: 44px;
+        display: grid;
+        place-items: center;
+        border: 0;
+        background: rgb(255 255 255 / 0.04);
+        color: var(--dock-ink);
+        cursor: pointer;
+      }
+      .bay:hover {
+        color: #fff;
+        background: rgb(255 255 255 / 0.08);
+      }
+      .bay[aria-current='page'] {
+        color: #fff;
+        background: linear-gradient(90deg, rgb(25 184 214 / 0.28), rgb(25 184 214 / 0.08));
+      }
+      .bay-slot {
+        position: relative;
+      }
+      .bay-slot:has(.bay[aria-current='page'])::before {
+        content: '';
+        position: absolute;
+        left: -12px;
+        top: 8px;
+        bottom: 8px;
+        width: 3px;
+        background: var(--ion-glow);
+        box-shadow: 0 0 12px var(--ion-glow);
+      }
+      .bay svg {
+        width: 22px;
+        height: 22px;
+      }
+      .bay-count {
+        position: absolute;
+        top: -5px;
+        right: -7px;
+        min-width: 19px;
+        height: 19px;
+        padding: 0 5px;
+        background: var(--beacon);
+        color: var(--beacon-ink);
+        font: 700 11px/19px var(--font-display);
+        text-align: center;
+        clip-path: polygon(
+          4px 0,
+          100% 0,
+          100% calc(100% - 4px),
+          calc(100% - 4px) 100%,
+          0 100%,
+          0 4px
+        );
+      }
+      .dock-spacer {
+        flex: 1;
+      }
+
+      /* ---- Glass panels ------------------------------------------------- */
+      .panel {
+        background: var(--glass);
+        backdrop-filter: blur(14px) saturate(1.2);
+        -webkit-backdrop-filter: blur(14px) saturate(1.2);
+        border: 1px solid var(--line);
+      }
+
+      /* ---- Project tree ------------------------------------------------- */
+      .tree {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        --cut: 14px;
+      }
+      .tree-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 16px 8px;
+      }
+      .tree-head h1 {
+        margin: 0;
+        font: 600 19px/1 var(--font-display);
+        letter-spacing: 0.02em;
+      }
+      .btn {
+        --cut: 6px;
+        border: 1px solid var(--line);
+        background: var(--glass-strong);
+        padding: 5px 12px;
+        cursor: pointer;
+        font: 500 13px/1.4 var(--font-ui);
+      }
+      .btn:hover {
+        border-color: var(--ion);
+        color: var(--ion);
+      }
+
+      .project {
+        padding: 8px 10px 6px;
+      }
+      .project-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 6px 8px;
+      }
+      .project-name {
+        display: block;
+        font: 600 15px/1.2 var(--font-display);
+        letter-spacing: 0.02em;
+      }
+      .project-path {
+        display: block;
+        font: 400 12px/1.3 var(--font-mono);
+        color: var(--ink-muted);
+      }
+      .icon-btn {
+        --cut: 5px;
+        width: 28px;
+        height: 28px;
+        border: 1px solid var(--line);
+        background: transparent;
+        color: var(--ink-muted);
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+      }
+      .icon-btn:hover {
+        color: var(--ion);
+        border-color: var(--ion);
+      }
+
+      .stands {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 6px;
+      }
+      .stand {
+        --cut: 8px;
+        position: relative;
+        display: grid;
+        grid-template-columns: 22px 1fr auto;
+        gap: 1px 10px;
+        align-items: center;
+        padding: 9px 12px 9px 10px;
+        background: var(--glass-strong);
+        border: 1px solid transparent;
+        cursor: pointer;
+      }
+      .stand:hover {
+        border-color: var(--line);
+      }
+      .stand[aria-current='true'] {
+        border-color: var(--ion);
+      }
+      .stand-title {
+        grid-column: 2;
+        font: 500 13.5px/1.3 var(--font-ui);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .stand-branch {
+        grid-column: 2;
+        font: 400 11.5px/1.3 var(--font-mono);
+        color: var(--ink-muted);
+      }
+      .stand-status {
+        grid-column: 3;
+        grid-row: 1 / span 2;
+        font: 600 12px/1 var(--font-display);
+        letter-spacing: 0.03em;
+        color: var(--ink-muted);
+      }
+
+      /* Status light: a ring (idle), a filled core (working, done), a beacon (waiting). */
+      .light {
+        grid-column: 1;
+        grid-row: 1 / span 2;
+        position: relative;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 2px solid var(--idle);
+        justify-self: center;
+      }
+      .working .light {
+        border-color: var(--working);
+        background: radial-gradient(var(--working) 35%, transparent 40%);
+      }
+      .working .stand-status {
+        color: var(--working);
+      }
+      .done .light {
+        border-color: var(--done);
+        background: var(--done);
+      }
+      .done .stand-status {
+        color: var(--done);
+      }
+      .waiting .light {
+        border-color: var(--beacon);
+        background: var(--beacon);
+        box-shadow: 0 0 10px var(--beacon);
+      }
+      .waiting .light::after {
+        content: '';
+        position: absolute;
+        inset: -6px;
+        border-radius: 50%;
+        border: 2px solid var(--beacon);
+        animation: beacon 1.8s ease-out infinite;
+      }
+      .waiting .stand-status {
+        --cut: 5px;
+        background: var(--beacon);
+        color: var(--beacon-ink);
+        padding: 5px 8px;
+      }
+      @keyframes beacon {
+        from {
+          transform: scale(0.6);
+          opacity: 0.9;
+        }
+        to {
+          transform: scale(1.5);
+          opacity: 0;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .waiting .light::after {
+          animation: none;
+          opacity: 0.5;
+        }
+      }
+
+      .tree-foot {
+        margin-top: auto;
+        padding: 12px 16px;
+        border-top: 1px solid var(--line);
+        display: flex;
+        gap: 18px;
+      }
+      .readout {
+        display: grid;
+        gap: 1px;
+      }
+      .readout b {
+        font: 600 18px/1 var(--font-display);
+        font-variant-numeric: tabular-nums;
+      }
+      .readout span {
+        font-size: 12px;
+        color: var(--ink-muted);
+      }
+      .readout.alert b {
+        color: var(--beacon-text);
+      }
+
+      /* ---- Session pane -------------------------------------------------- */
+      .pane {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        gap: 12px;
+      }
+      .pane-head {
+        --cut: 14px;
+        padding: 16px 20px;
+        display: grid;
+        gap: 10px;
+      }
+      .pane-row {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .pane-row > input {
+        flex: 1;
+        min-width: 12ch;
+        border: 0;
+        background: transparent;
+        padding: 0;
+        font: 600 26px/1.1 var(--font-display);
+        letter-spacing: 0.01em;
+        color: var(--ink);
+        border-bottom: 1px solid transparent;
+      }
+      .pane-row > input:hover {
+        border-bottom-color: var(--line);
+      }
+      .pane-row > input:focus-visible {
+        outline: none;
+        border-bottom-color: var(--focus);
+      }
+      .actions {
+        display: flex;
+        gap: 8px;
+      }
+
+      .telemetry {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 26px;
+        flex: 1;
+      }
+      .telemetry .readout b {
+        font-size: 14px;
+        font-family: var(--font-mono);
+        font-weight: 500;
+      }
+
+      .alert-chip {
+        --cut: 7px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 14px 8px 12px;
+        background: var(--beacon);
+        color: var(--beacon-ink);
+        font: 600 14px/1 var(--font-display);
+        letter-spacing: 0.02em;
+      }
+      .alert-chip svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      .console {
+        --cut: 14px;
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .terminal {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        padding: 18px 20px;
+        background: var(--term-bg);
+        color: var(--term-fg);
+        font: 13px/1.65 var(--font-mono);
+        white-space: pre-wrap;
+      }
+      .t-dim {
+        color: var(--term-dim);
+      }
+      .t-ok {
+        color: var(--term-ok);
+      }
+      .t-acc {
+        color: var(--ion);
+      }
+      .t-ask {
+        display: block;
+        margin-top: 10px;
+        padding: 10px 14px;
+        border-left: 3px solid var(--beacon);
+        background: color-mix(in srgb, var(--beacon) 13%, transparent);
+      }
+      .cursor {
+        display: inline-block;
+        width: 8px;
+        height: 16px;
+        vertical-align: -3px;
+        background: var(--ion-glow);
+      }
+
+      /* ---- Status bar ---------------------------------------------------- */
+      .statusbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 28px;
+        padding: 10px 20px;
+        border-top: 1px solid var(--line);
+        background: var(--glass-strong);
+        font-size: 13px;
+      }
+      .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      .seg-key {
+        color: var(--ink-muted);
+      }
+      .seg-val {
+        font: 500 12.5px var(--font-mono);
+      }
+      .seg-path {
+        max-width: 32ch;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      /* bar: segmented gauge */
+      .gauge {
+        display: inline-flex;
+        gap: 2px;
+      }
+      .gauge i {
+        width: 7px;
+        height: 12px;
+        background: var(--line);
+        transform: skewX(-18deg);
+      }
+      .gauge i.on {
+        background: var(--ion-glow);
+      }
+      .seg-badge {
+        --cut: 4px;
+        padding: 2px 9px;
+        border: 1px solid var(--done);
+        color: var(--done);
+        font: 600 12px/1.4 var(--font-display);
+        letter-spacing: 0.03em;
+      }
+
+      /* ---- Mock controls (not part of the UI) ---------------------------- */
+      .mock-switch {
+        --cut: 7px;
+        position: fixed;
+        right: 20px;
+        bottom: 20px;
+        z-index: 10;
+        display: flex;
+        gap: 2px;
+        padding: 4px;
+        background: var(--glass-strong);
+        border: 1px solid var(--line);
+        font-size: 13px;
+      }
+      /* Keep the mock switch from covering status bar segments. */
+      .statusbar {
+        padding-right: 210px;
+      }
+      .mock-switch button {
+        border: 0;
+        background: transparent;
+        padding: 4px 10px;
+        cursor: pointer;
+      }
+      .mock-switch button[aria-pressed='true'] {
+        background: var(--ink);
+        color: var(--hull);
+      }
+
+      @media (max-width: 900px) {
+        .app {
+          grid-template-columns: 68px 1fr;
+        }
+        .tree {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <nav class="dock" aria-label="Bays">
+        <svg class="dock-mark" viewBox="0 0 32 32" aria-hidden="true">
+          <path
+            d="M2 26 9 8h14l7 18z"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linejoin="round"
+          />
+          <path d="M12 26v-8h8v8" fill="none" stroke="currentColor" stroke-width="2" />
+        </svg>
+        <div class="bay-slot">
+          <button
+            class="bay chamfer"
+            aria-current="page"
+            aria-label="Agents, 1 Session wartet"
+            title="Agents"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3 6.5 6.5 3H21v14.5L17.5 21H3z" />
+              <path d="m7.5 10 3 2-3 2" />
+              <path d="M12.5 15h4" />
+            </svg>
+          </button>
+          <span class="bay-count" aria-hidden="true">1</span>
+        </div>
+        <div class="bay-slot">
+          <button class="bay chamfer" aria-label="Browser (später)" title="Browser (später)">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18" />
+            </svg>
+          </button>
+        </div>
+        <div class="dock-spacer"></div>
+        <div class="bay-slot">
+          <button class="bay chamfer" aria-label="Einstellungen" title="Einstellungen">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              aria-hidden="true"
+            >
+              <path d="M4 7h10M18 7h2M4 17h4M12 17h8" />
+              <circle cx="16" cy="7" r="2" />
+              <circle cx="10" cy="17" r="2" />
+            </svg>
+          </button>
+        </div>
+      </nav>
+
+      <aside class="tree panel chamfer" aria-label="Projekte und Sessions">
+        <div class="tree-head">
+          <h1>Projekte</h1>
+          <button class="btn chamfer">Projekt hinzufügen</button>
+        </div>
+
+        <section class="project" aria-labelledby="p-shop">
+          <div class="project-row">
+            <div style="flex: 1; min-width: 0">
+              <span class="project-name" id="p-shop">shop</span>
+              <span class="project-path">~/code/shop</span>
+            </div>
+            <button class="icon-btn chamfer" aria-label="Neue Session in shop" title="Neue Session">
+              <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2" />
+              </svg>
+            </button>
+          </div>
+          <ul class="stands">
+            <li class="stand chamfer waiting" aria-current="true">
+              <span class="light" aria-hidden="true"></span>
+              <span class="stand-title">Checkout auf Stripe umstellen</span>
+              <span class="stand-branch">hangar/8e67a3f1</span>
+              <span class="stand-status chamfer">wartet</span>
+            </li>
+            <li class="stand chamfer working">
+              <span class="light" aria-hidden="true"></span>
+              <span class="stand-title">Produktsuche: Tippfehler tolerieren</span>
+              <span class="stand-branch">hangar/31c0d2aa</span>
+              <span class="stand-status">arbeitet</span>
+            </li>
+            <li class="stand chamfer done">
+              <span class="light" aria-hidden="true"></span>
+              <span class="stand-title">Login-Tests reparieren</span>
+              <span class="stand-branch">hangar/c4b19e07</span>
+              <span class="stand-status">fertig</span>
+            </li>
+          </ul>
+        </section>
+
+        <section class="project" aria-labelledby="p-api">
+          <div class="project-row">
+            <div style="flex: 1; min-width: 0">
+              <span class="project-name" id="p-api">billing-api</span>
+              <span class="project-path">~/code/billing-api</span>
+            </div>
+            <button
+              class="icon-btn chamfer"
+              aria-label="Neue Session in billing-api"
+              title="Neue Session"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2" />
+              </svg>
+            </button>
+          </div>
+          <ul class="stands">
+            <li class="stand chamfer idle">
+              <span class="light" aria-hidden="true"></span>
+              <span class="stand-title">hangar/5d2f88b0</span>
+              <span class="stand-branch">Shell bereit</span>
+              <span class="stand-status">inaktiv</span>
+            </li>
+          </ul>
+        </section>
+
+        <div class="tree-foot">
+          <div class="readout"><b>4</b><span>Sessions</span></div>
+          <div class="readout"><b>1</b><span>arbeitet</span></div>
+          <div class="readout alert"><b>1</b><span>wartet</span></div>
+        </div>
+      </aside>
+
+      <main class="pane" aria-label="Session">
+        <header class="pane-head panel chamfer">
+          <div class="pane-row">
+            <input aria-label="Beschreibung" value="Checkout auf Stripe umstellen" />
+            <div class="actions">
+              <button class="btn chamfer">Umgebung</button>
+              <button class="btn chamfer">Schließen</button>
+            </div>
+          </div>
+          <div class="pane-row">
+            <div class="telemetry">
+              <div class="readout"><b>shop</b><span>Projekt</span></div>
+              <div class="readout"><b>hangar/8e67a3f1</b><span>Branch</span></div>
+              <div class="readout"><b>40100–40199</b><span>Ports</span></div>
+              <div class="readout"><b>12 min</b><span>Laufzeit</span></div>
+            </div>
+            <span class="alert-chip chamfer" role="status">
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M8 1.5 15 14H1z" fill="currentColor" />
+                <path
+                  d="M8 6v4M8 11.6v.4"
+                  stroke="var(--beacon)"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                />
+              </svg>
+              Wartet auf deine Eingabe
+            </span>
+          </div>
+        </header>
+
+        <section class="console panel chamfer" aria-label="Terminal und Statusleiste">
+          <div class="terminal" role="log" aria-label="Terminal">
+            <span class="t-dim">~/…/worktrees/shop-8e67a3f1 $</span> claude
+            <span class="t-acc">◆</span> Ich stelle den Checkout auf Stripe Payment Intents um.
+
+            <span class="t-ok">✓</span> src/checkout/payment.ts PaymentIntent statt Charge
+            <span class="t-ok">✓</span> src/checkout/webhook.ts Signatur prüfen, Events idempotent
+            <span class="t-ok">✓</span> tests/checkout.spec.ts 14 bestanden
+
+            <span class="t-acc">◆</span> Für den Webhook brauche ich ein Signing-Secret.
+            <span class="t-ask"
+              >Soll ich STRIPE_WEBHOOK_SECRET in .env.example eintragen und die Migration für die
+              Spalte payment_intent_id anlegen? (j/n)</span
+            >
+            <span class="t-dim">›</span> <span class="cursor" aria-hidden="true"></span>
+          </div>
+
+          <div class="statusbar" role="group" aria-label="Statusleiste">
+            <span class="seg"
+              ><span class="seg-key">Modell</span><span class="seg-val">opus</span></span
+            >
+            <span class="seg"
+              ><span class="seg-key">Worktree</span
+              ><span
+                class="seg-val seg-path"
+                title="~/Library/Application Support/Hangar/bays/dev.hangar.agents/worktrees/shop-8e67a3f1"
+                >…/worktrees/shop-8e67a3f1</span
+              ></span
+            >
+            <span class="seg">
+              <span class="seg-key">Kontingent</span>
+              <span
+                class="gauge"
+                role="meter"
+                aria-label="Kontingent"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow="42"
+              >
+                <i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i
+                ><i></i><i></i><i></i><i></i><i></i>
+              </span>
+              <span class="seg-val">42 / 100</span>
+            </span>
+            <span class="seg"
+              ><span class="seg-key">Tests</span><span class="seg-badge chamfer">grün</span></span
+            >
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="mock-switch chamfer" role="group" aria-label="Farbmodus (nur im Mock)">
+      <button type="button" data-theme="light" aria-pressed="false">Hell</button>
+      <button type="button" data-theme="dark" aria-pressed="false">Dunkel</button>
+      <button type="button" data-theme="" aria-pressed="true">System</button>
+    </div>
+    <script>
+      for (const b of document.querySelectorAll('.mock-switch button')) {
+        b.addEventListener('click', () => {
+          const t = b.dataset.theme;
+          if (t) document.documentElement.dataset.theme = t;
+          else delete document.documentElement.dataset.theme;
+          for (const o of document.querySelectorAll('.mock-switch button'))
+            o.setAttribute('aria-pressed', String(o === b));
+        });
+      }
+    </script>
+  </body>
+</html>

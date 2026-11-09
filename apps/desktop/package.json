@@ -1,0 +1,41 @@
+{
+  "name": "@hangar/desktop",
+  "productName": "Hangar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hangar desktop app",
+  "author": "Derivo",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "test:e2e": "playwright test",
+    "package": "electron-builder --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11",
+    "node-pty": "1.1.0"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@hangar/bay-agents": "workspace:*",
+    "@hangar/bridge": "workspace:*",
+    "@hangar/bus": "workspace:*",
+    "@hangar/cli": "workspace:*",
+    "@hangar/host": "workspace:*",
+    "@hangar/mcp": "workspace:*",
+    "@hangar/scheduler": "workspace:*",
+    "@hangar/sdk": "workspace:*",
+    "@hangar/theme": "workspace:*",
+    "@playwright/test": "^1.64.1",
+    "@types/semver": "^7.7.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "electron": "45.1.0",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "semver": "^7.8.5",
+    "vite": "^8.3.5"
+  }
+}

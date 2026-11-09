@@ -1,0 +1,3 @@
+# The build context is the repository root; the image needs only the relay bundle.
+*
+!apps/relay/dist/hangar-relay.mjs

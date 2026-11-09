@@ -1,0 +1,60 @@
+{
+  "id": "dev.hangar.browser",
+  "name": "Browser",
+  "version": "0.1.0",
+  "minHangarVersion": "0.1.0",
+  "icon": "icon.svg",
+  "ui": "dist/ui/index.html",
+  "main": "dist/main/index.js",
+  "hostModules": ["browser"],
+  "functions": [
+    {
+      "name": "tab.open",
+      "sensitive": false,
+      "openToAgents": true,
+      "description": "Opens a web page in a new tab of your own (http or https; localhost:5173 means http://localhost:5173) and waits up to 30 seconds for it to load. Your tabs have their own cookies, separate from the person's and other agents'. Returns the tab with id, url, title and error if loading failed."
+    },
+    {
+      "name": "tab.navigate",
+      "sensitive": false,
+      "openToAgents": true,
+      "description": "Loads another address in one of your tabs and waits up to 30 seconds. Returns the tab."
+    },
+    {
+      "name": "tab.list",
+      "sensitive": false,
+      "openToAgents": true,
+      "description": "Lists your own tabs with id, url, title, loading and error."
+    },
+    {
+      "name": "tab.close",
+      "sensitive": false,
+      "openToAgents": true,
+      "description": "Closes one of your tabs."
+    },
+    {
+      "name": "page.text",
+      "sensitive": false,
+      "openToAgents": true,
+      "description": "Returns the visible text of the page in one of your tabs (at most 100000 characters)."
+    },
+    {
+      "name": "page.click",
+      "sensitive": false,
+      "openToAgents": true,
+      "description": "Clicks the first element matching a CSS selector in one of your tabs."
+    },
+    {
+      "name": "page.fill",
+      "sensitive": false,
+      "openToAgents": true,
+      "description": "Sets the value of the first input, textarea or select matching a CSS selector in one of your tabs, as if typed."
+    },
+    {
+      "name": "page.screenshot",
+      "sensitive": false,
+      "openToAgents": true,
+      "description": "Saves a PNG screenshot of one of your tabs and returns its file path."
+    }
+  ]
+}

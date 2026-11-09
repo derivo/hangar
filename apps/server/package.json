@@ -1,0 +1,23 @@
+{
+  "name": "@hangar/server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hangar without a display: bays, MCP and scheduler in a Node process",
+  "type": "module",
+  "bin": {
+    "hangar-server": "./dist/hangar-server.mjs"
+  },
+  "scripts": {
+    "build": "vite build",
+    "start": "node dist/hangar-server.mjs"
+  },
+  "devDependencies": {
+    "@hangar/bridge": "workspace:*",
+    "@hangar/bus": "workspace:*",
+    "@hangar/host": "workspace:*",
+    "@hangar/sdk": "workspace:*",
+    "@types/ws": "^8.18.2",
+    "vite": "^8.3.5",
+    "ws": "^8.22.0"
+  }
+}

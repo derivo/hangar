@@ -1,0 +1,27 @@
+# Started by `pnpm dev:server` (scripts/dev-server.mjs), which builds the mounted files and
+# passes the key. ADR 0020.
+name: hangar-dev
+services:
+  server:
+    build:
+      context: .
+      args:
+        NODE_PTY_VERSION: ${HANGAR_NODE_PTY:-1.1.0}
+    init: true
+    environment:
+      HANGAR_DEV_KEY: ${HANGAR_DEV_KEY:?run pnpm dev:server}
+    # SSH only, and only on this machine's loopback.
+    ports:
+      - 127.0.0.1:${HANGAR_DEV_SSH_PORT:-2299}:22
+    volumes:
+      # Same layout as the repository: the server finds the CLI at ../../../packages/cli.
+      - ../../apps/server/dist:/opt/hangar/apps/server/dist:ro
+      - ../../packages/cli/dist:/opt/hangar/packages/cli/dist:ro
+      - ../../bays/agents/manifest.json:/opt/hangar/bays/agents/manifest.json:ro
+      - ../../bays/agents/icon.svg:/opt/hangar/bays/agents/icon.svg:ro
+      - ../../bays/agents/dist:/opt/hangar/bays/agents/dist:ro
+      - data:/home/test/data
+      - projects:/home/test/projects
+volumes:
+  data:
+  projects:

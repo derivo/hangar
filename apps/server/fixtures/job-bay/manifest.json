@@ -1,0 +1,10 @@
+{
+  "id": "dev.hangar.jobtest",
+  "name": "Job-Test",
+  "version": "0.1.0",
+  "minHangarVersion": "0.1.0",
+  "icon": "icon.svg",
+  "ui": "index.html",
+  "main": "main.mjs",
+  "functions": []
+}

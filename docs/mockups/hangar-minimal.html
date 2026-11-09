@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="de" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hangar – Leitstand</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Michroma&family=Geist+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* Fine lines; only what is active lights up, in orange. */
+      :root,
+      [data-theme='dark'] {
+        --bg: #111214;
+        --field: #18191c;
+        --text: #eeeae5;
+        --dim: #a19b94;
+        --wire: rgb(255 255 255 / 0.08);
+        --wire-strong: rgb(255 255 255 / 0.16);
+        --lit: #ff8a2a;
+        --glow: 0 0 3px rgb(255 138 42 / 0.7), 0 0 10px rgb(255 138 42 / 0.25);
+        --glow-soft: 0 0 20px rgb(255 138 42 / 0.06);
+        --amber: #ffd84a;
+        --amber-glow: 0 0 3px rgb(255 216 74 / 0.6);
+        --green: #7bd88f;
+        --drop: drop-shadow(0 0 2px rgb(255 138 42 / 0.6));
+      }
+      [data-theme='light'] {
+        --bg: #f1efec;
+        --field: #fbfaf8;
+        --text: #17140f;
+        --dim: #5f5a53;
+        --wire: rgb(23 20 15 / 0.12);
+        --wire-strong: rgb(23 20 15 / 0.24);
+        --lit: #b34a00;
+        --glow: 0 0 3px rgb(179 74 0 / 0.35);
+        --glow-soft: 0 0 20px rgb(179 74 0 / 0.05);
+        --amber: #806200;
+        --amber-glow: 0 0 3px rgb(128 98 0 / 0.4);
+        --green: #1d7a3a;
+        --drop: drop-shadow(0 0 1px rgb(179 74 0 / 0.4));
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font:
+          12.5px/1.5 'Geist Mono',
+          ui-monospace,
+          monospace;
+      }
+      button {
+        font: inherit;
+        color: inherit;
+        background: none;
+        border: 0;
+        cursor: pointer;
+      }
+      :focus-visible {
+        outline: 1px solid var(--lit);
+        outline-offset: 2px;
+        box-shadow: var(--glow);
+      }
+
+      .app {
+        position: relative;
+        height: 100vh;
+        display: grid;
+        grid-template-columns: 56px 232px 1fr;
+        grid-template-rows: 1fr 36px;
+      }
+
+      /* Dock: one vertical wire; it lights beside the active bay. */
+      .dock {
+        grid-row: 1 / 3;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        padding: 14px 0;
+        border-right: 1px solid var(--wire);
+      }
+      .dock .spacer {
+        flex: 1;
+      }
+      .dock-btn {
+        position: relative;
+        width: 38px;
+        height: 38px;
+        display: grid;
+        place-items: center;
+        color: var(--dim);
+        border-radius: 6px;
+      }
+      .dock-btn:hover {
+        color: var(--text);
+      }
+      .dock-btn svg {
+        width: 20px;
+        height: 20px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.3;
+      }
+      .dock-btn[aria-current='page'] {
+        color: var(--lit);
+      }
+      .dock-btn[aria-current='page'] svg {
+        filter: var(--drop);
+      }
+      .dock-btn[aria-current='page']::after {
+        content: '';
+        position: absolute;
+        right: -10px;
+        top: 4px;
+        bottom: 4px;
+        width: 1px;
+        background: var(--lit);
+        box-shadow: var(--glow);
+      }
+      .badge {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--amber);
+        box-shadow: var(--amber-glow);
+      }
+
+      /* Project tree */
+      .tree {
+        border-right: 1px solid var(--wire);
+        padding: 18px 0;
+        overflow: auto;
+      }
+      .tree header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 14px 14px 18px;
+      }
+      .wordmark {
+        font:
+          12px 'Michroma',
+          sans-serif;
+        letter-spacing: 0.04em;
+      }
+      .tree ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .project {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px 4px 18px;
+        color: var(--dim);
+      }
+      .session {
+        position: relative;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 14px 6px 30px;
+        text-align: left;
+        color: var(--dim);
+      }
+      .session:hover {
+        color: var(--text);
+      }
+      .session[aria-current='true'] {
+        color: var(--text);
+      }
+      /* The tree's line lights at the active row. */
+      .session[aria-current='true']::after {
+        content: '';
+        position: absolute;
+        right: -1px;
+        top: 3px;
+        bottom: 3px;
+        width: 1px;
+        background: var(--lit);
+        box-shadow: var(--glow);
+      }
+      .ring {
+        width: 7px;
+        height: 7px;
+        flex: none;
+        border-radius: 50%;
+        border: 1px solid var(--wire-strong);
+      }
+      .ring.working {
+        border-color: var(--lit);
+        background: var(--lit);
+        box-shadow: var(--glow);
+      }
+      .ring.waiting {
+        border-color: var(--amber);
+        background: var(--amber);
+        box-shadow: var(--amber-glow);
+      }
+      .ring.done {
+        border-color: var(--green);
+      }
+
+      .icon-btn {
+        width: 24px;
+        height: 24px;
+        display: grid;
+        place-items: center;
+        border-radius: 4px;
+        color: var(--dim);
+      }
+      .icon-btn:hover {
+        color: var(--lit);
+      }
+
+      /* Fields */
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+        padding: 18px 18px 18px 28px;
+        min-width: 0;
+      }
+      .field {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        background: var(--field);
+        border: 1px solid var(--wire);
+        border-radius: 6px;
+        transition:
+          border-color 160ms,
+          box-shadow 160ms;
+      }
+      .field.focused {
+        border-color: var(--lit);
+        box-shadow:
+          var(--glow),
+          var(--glow-soft),
+          inset var(--glow-soft);
+      }
+      .field-head {
+        display: grid;
+        gap: 8px;
+        padding: 12px 14px 10px;
+        border-bottom: 1px solid var(--wire);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .title {
+        flex: 1;
+        font:
+          11.5px/1.4 'Michroma',
+          sans-serif;
+        letter-spacing: 0.03em;
+      }
+      .chip {
+        padding: 2px 10px;
+        border: 1px solid var(--wire-strong);
+        border-radius: 4px;
+        color: var(--dim);
+      }
+      .chip:hover {
+        color: var(--text);
+        border-color: var(--lit);
+        box-shadow: var(--glow);
+      }
+      .telemetry {
+        gap: 18px;
+        color: var(--dim);
+        font-size: 11.5px;
+      }
+      .telemetry b {
+        font-weight: 400;
+        color: var(--text);
+        margin-left: 4px;
+      }
+      .telemetry .live {
+        color: var(--lit);
+      }
+      .telemetry .wait {
+        color: var(--amber);
+      }
+      .term {
+        flex: 1;
+        margin: 0;
+        padding: 14px;
+        overflow: auto;
+        white-space: pre-wrap;
+      }
+      .prompt {
+        color: var(--lit);
+      }
+      .muted {
+        color: var(--dim);
+      }
+      .copy-note {
+        position: absolute;
+        right: 12px;
+        bottom: 12px;
+        padding: 4px 10px;
+        border: 1px solid var(--lit);
+        border-radius: 4px;
+        background: var(--field);
+        color: var(--lit);
+        box-shadow: var(--glow);
+        pointer-events: none;
+      }
+
+      /* Quota: a lit wire as long as what is still free. */
+      .quota {
+        grid-column: 2 / 4;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 18px;
+        border-top: 1px solid var(--wire);
+        color: var(--dim);
+        font-size: 11.5px;
+      }
+      .quota b {
+        font-weight: 400;
+        color: var(--text);
+      }
+      .quota .sep {
+        width: 24px;
+      }
+      .meter {
+        position: relative;
+        width: 120px;
+        height: 1px;
+        background: var(--wire-strong);
+      }
+      .meter i {
+        position: absolute;
+        inset: 0 auto 0 0;
+        background: var(--lit);
+        box-shadow: var(--glow);
+      }
+
+      @media (max-width: 760px) {
+        .app {
+          grid-template-columns: 52px 1fr;
+        }
+        .tree {
+          display: none;
+        }
+        .grid {
+          grid-template-columns: 1fr;
+          padding: 16px;
+        }
+        .quota {
+          grid-column: 2;
+          flex-wrap: wrap;
+          padding: 6px 16px;
+        }
+        .app {
+          grid-template-rows: 1fr auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <nav class="dock" aria-label="Bays">
+        <button class="dock-btn" aria-current="page" aria-label="Agents, 1 Session wartet">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+            <path d="M7 10l3 2.5L7 15M12.5 15H17" />
+          </svg>
+          <span class="badge" aria-hidden="true"></span>
+        </button>
+        <button class="dock-btn" aria-label="Browser">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="8.5" />
+            <path
+              d="M3.5 12h17M12 3.5c2.5 2.4 3.5 5.3 3.5 8.5s-1 6.1-3.5 8.5c-2.5-2.4-3.5-5.3-3.5-8.5s1-6.1 3.5-8.5z"
+            />
+          </svg>
+        </button>
+        <div class="spacer"></div>
+        <button
+          class="dock-btn"
+          id="theme-btn"
+          aria-label="Darstellung: dunkel"
+          title="Darstellung: dunkel"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" id="theme-icon"></svg>
+        </button>
+        <button class="dock-btn" aria-label="Einstellungen">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="3" />
+            <path
+              d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"
+            />
+          </svg>
+        </button>
+      </nav>
+
+      <aside class="tree" aria-label="Projekte">
+        <header>
+          <span class="wordmark">Hangar</span>
+          <button class="icon-btn" aria-label="Projekt hinzufügen">＋</button>
+        </header>
+        <ul>
+          <li>
+            <div class="project">
+              hangar <button class="icon-btn" aria-label="Neue Session in hangar">＋</button>
+            </div>
+            <ul>
+              <li>
+                <button class="session" data-field="f1" aria-current="true">
+                  <span class="ring working"></span>Quota-Leiste
+                </button>
+              </li>
+              <li>
+                <button class="session" data-field="f2">
+                  <span class="ring waiting"></span>Prompt der zsh
+                </button>
+              </li>
+              <li>
+                <button class="session"><span class="ring done"></span>a0de8fb8</button>
+              </li>
+            </ul>
+          </li>
+          <li>
+            <div class="project">
+              billing-api
+              <button class="icon-btn" aria-label="Neue Session in billing-api">＋</button>
+            </div>
+            <ul>
+              <li>
+                <button class="session"><span class="ring"></span>Login-Tests</button>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </aside>
+
+      <main class="grid" aria-label="Felder">
+        <section class="field focused" id="f1" aria-label="Quota-Leiste">
+          <div class="field-head">
+            <div class="row">
+              <span class="title">Quota-Leiste</span>
+              <button class="icon-btn" aria-label="Abdocken" title="Abdocken">↗</button>
+              <button class="icon-btn" aria-label="Session schließen" title="Session schließen">
+                ×
+              </button>
+            </div>
+            <div class="row">
+              <button class="chip">Umgebung</button>
+              <button class="chip">Job planen</button>
+              <button class="chip">Feld schließen</button>
+            </div>
+            <div class="row telemetry">
+              <span>Branch<b>main</b></span>
+              <span>Ports<b>40000–40099</b></span>
+              <span>Status<b class="live">arbeitet</b></span>
+            </div>
+          </div>
+          <pre class="term"><span class="prompt">~/code/hangar (main) %</span> claude
+<span class="muted">✻ Welcome to Claude Code</span>
+
+> Zeig die Kontingente unten an
+
+  Lese bays/agents/src/ui/QuotaBar.tsx …
+  ✓ 4 Tests grün</pre>
+          <div class="copy-note" role="status">In die Zwischenablage kopiert</div>
+        </section>
+
+        <section class="field" id="f2" aria-label="Prompt der zsh">
+          <div class="field-head">
+            <div class="row">
+              <span class="title">Prompt der zsh</span>
+              <button class="icon-btn" aria-label="Abdocken" title="Abdocken">↗</button>
+              <button class="icon-btn" aria-label="Session schließen" title="Session schließen">
+                ×
+              </button>
+            </div>
+            <div class="row">
+              <button class="chip">Umgebung</button>
+              <button class="chip">Job planen</button>
+              <button class="chip">Feld schließen</button>
+            </div>
+            <div class="row telemetry">
+              <span>Branch<b>main</b></span>
+              <span>Ports<b>40100–40199</b></span>
+              <span>Status<b class="wait">wartet</b></span>
+            </div>
+          </div>
+          <pre class="term"><span class="prompt">~/code/hangar (main) %</span> pnpm test
+<span class="muted"> Test Files  63 passed (63)
+      Tests  582 passed (582)</span>
+<span class="prompt">~/code/hangar (main) %</span> </pre>
+        </section>
+      </main>
+
+      <footer class="quota" aria-label="Kontingente">
+        <span><b>Claude</b> 5h</span>
+        <span
+          class="meter"
+          role="meter"
+          aria-label="Claude"
+          aria-valuenow="62"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuetext="62 % frei, Reset 20:40"
+          ><i style="width: 62%"></i
+        ></span>
+        <span>62 % frei, Reset 20:40</span>
+        <span class="sep"></span>
+        <span><b>Codex</b> 5h</span>
+        <span
+          class="meter"
+          role="meter"
+          aria-label="Codex"
+          aria-valuenow="76"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuetext="76 % frei, Reset 22:07"
+          ><i style="width: 76%"></i
+        ></span>
+        <span>76 % frei, Reset 22:07</span>
+      </footer>
+    </div>
+
+    <script>
+      const root = document.documentElement;
+      const app = document.querySelector('.app');
+
+      const focus = (id) => {
+        document
+          .querySelectorAll('.field')
+          .forEach((f) => f.classList.toggle('focused', f.id === id));
+        document
+          .querySelectorAll('.session')
+          .forEach((s) =>
+            s.dataset.field === id
+              ? s.setAttribute('aria-current', 'true')
+              : s.removeAttribute('aria-current'),
+          );
+      };
+      document
+        .querySelectorAll('.session[data-field]')
+        .forEach((s) => s.addEventListener('click', () => focus(s.dataset.field)));
+      document
+        .querySelectorAll('.field')
+        .forEach((f) => f.addEventListener('mousedown', () => focus(f.id)));
+
+      // Theme switch: dark → light → system → dark.
+      const icons = {
+        dark: '<path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/>',
+        light:
+          '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
+        system:
+          '<rect x="3.5" y="4.5" width="17" height="12" rx="1.5"/><path d="M9 20h6M12 16.5V20"/>',
+      };
+      const names = { dark: 'dunkel', light: 'hell', system: 'wie das System' };
+      const order = ['dark', 'light', 'system'];
+      let mode = 'dark';
+      const media = matchMedia('(prefers-color-scheme: dark)');
+      const apply = () => {
+        root.dataset.theme = mode === 'system' ? (media.matches ? 'dark' : 'light') : mode;
+        const btn = document.getElementById('theme-btn');
+        btn.setAttribute('aria-label', `Darstellung: ${names[mode]}`);
+        btn.title = `Darstellung: ${names[mode]}`;
+        document.getElementById('theme-icon').innerHTML = icons[mode];
+      };
+      document.getElementById('theme-btn').addEventListener('click', () => {
+        mode = order[(order.indexOf(mode) + 1) % order.length];
+        apply();
+      });
+      media.addEventListener('change', apply);
+      apply();
+    </script>
+  </body>
+</html>

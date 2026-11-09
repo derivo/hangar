@@ -1,0 +1,9 @@
+{
+  "id": "dev.hangar.test",
+  "name": "Test-Bay",
+  "version": "0.1.0",
+  "minHangarVersion": "0.1.0",
+  "icon": "icon.svg",
+  "ui": "index.html",
+  "functions": []
+}

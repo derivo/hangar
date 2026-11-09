@@ -1,0 +1,18 @@
+# Example: the Hangar Relay on a server reachable by every instance (ADR 0011, docs/relay-operations.md).
+# Image: `pnpm image:relay` in the repository. Then `docker compose up -d`.
+name: hangar-relay
+services:
+  relay:
+    image: hangar-relay
+    restart: always
+    ports:
+      - '7430:7430'
+    # HANGAR_RELAY_TOKEN (whoever knows it may create workspaces) and HANGAR_RELAY_URL, the
+    # address instances use: see relay.env.example.
+    env_file: relay.env
+    volumes:
+      - data:/data
+      # cert.pem and key.pem, readable by uid 1000 (user node in the image).
+      - ./tls:/tls:ro
+volumes:
+  data:

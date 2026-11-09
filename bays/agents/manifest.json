@@ -1,0 +1,101 @@
+{
+  "id": "dev.hangar.agents",
+  "name": "Agents",
+  "version": "0.1.0",
+  "minHangarVersion": "0.1.0",
+  "icon": "icon.svg",
+  "ui": "dist/ui/index.html",
+  "main": "dist/main/index.js",
+  "hostModules": ["workspaces"],
+  "agentSessions": true,
+  "uses": ["dev.hangar.secrets/secret.list", "dev.hangar.secrets/secret.resolve"],
+  "dataVersion": 1,
+  "functions": [
+    {
+      "name": "session.setDescription",
+      "sensitive": false,
+      "description": "Sets the short description of your own session."
+    },
+    {
+      "name": "session.setStatus",
+      "sensitive": false,
+      "description": "Reports the status of your own session: working, waiting, background, done or idle."
+    },
+    {
+      "name": "statusbar.set",
+      "sensitive": false,
+      "description": "Sets a segment of your own session's status bar."
+    },
+    {
+      "name": "statusbar.remove",
+      "sensitive": false,
+      "description": "Removes a segment from your own session's status bar."
+    },
+    {
+      "name": "job.add",
+      "sensitive": true,
+      "description": "Schedules a shell command in your own session (five-field cron in local time, e.g. 0 2 * * 1-5). Runs while Hangar runs; the result shows in Hangar's job list."
+    },
+    {
+      "name": "job.list",
+      "sensitive": false,
+      "description": "Lists the scheduled jobs of your own session with next run and last result."
+    },
+    {
+      "name": "handover.create",
+      "sensitive": false,
+      "remote": true,
+      "description": "Hands work over to a new session: task, optional context, project, branch and Git remote. Text and Git references only."
+    },
+    {
+      "name": "handover.get",
+      "sensitive": false,
+      "description": "Returns the handover your own session was started with, or null."
+    },
+    {
+      "name": "quota.report",
+      "sensitive": false,
+      "description": "Reports Claude Code's 5-hour and weekly usage limit (used by `hangar statusline`)."
+    },
+    {
+      "name": "session.info",
+      "sensitive": false,
+      "bayOnly": true,
+      "description": "Project and name of an agent session, for other bays."
+    },
+    {
+      "name": "project.list",
+      "sensitive": false,
+      "bayOnly": true,
+      "description": "Ids and names of the projects, for other bays."
+    }
+  ],
+  "settings": [
+    {
+      "key": "copyOnSelect",
+      "type": "boolean",
+      "default": true,
+      "label": {
+        "de": "Markieren kopiert in die Zwischenablage",
+        "en": "Selecting copies to the clipboard"
+      },
+      "description": {
+        "de": "Gilt für neue Sessions; je Session im Kopf ihres Feldes umschaltbar.",
+        "en": "Applies to new sessions; switchable per session in the header of its field."
+      }
+    },
+    {
+      "key": "prompt",
+      "type": "text",
+      "default": "%F{cyan}%~%f%F{magenta}${vcs_info_msg_0_}%f %# ",
+      "label": {
+        "de": "Prompt der zsh in Sessions",
+        "en": "zsh prompt in sessions"
+      },
+      "description": {
+        "de": "zsh-Prompt-Syntax, ${vcs_info_msg_0_} ist der Git-Branch. Leer: der Prompt deiner zsh. Gilt für neue und neu gestartete Shells.",
+        "en": "zsh prompt syntax, ${vcs_info_msg_0_} is the git branch. Empty: your zsh's prompt. Applies to new and restarted shells."
+      }
+    }
+  ]
+}

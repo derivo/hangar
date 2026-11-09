@@ -1,0 +1,8 @@
+pnpm-lock.yaml
+dist/
+out/
+apps/desktop/release/
+coverage/
+docs/api/
+test-results/
+playwright-report/

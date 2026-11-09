@@ -1,0 +1,211 @@
+/* Board layout. All values come from the Hangar theme (--hangar-*), injected by the host. */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--hangar-color-bg);
+  color: var(--hangar-color-text);
+  font: var(--hangar-font-size-md) / 1.5 var(--hangar-font-sans);
+}
+
+.layout {
+  display: grid;
+  gap: var(--hangar-space-3);
+  padding: var(--hangar-space-4);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hangar-space-4);
+}
+
+h1 {
+  margin: 0;
+  font: var(--hangar-font-size-lg) var(--hangar-font-display);
+}
+
+h2,
+h3 {
+  margin: 0;
+  font-size: var(--hangar-font-size-md);
+}
+
+.muted {
+  color: var(--hangar-color-text-muted);
+}
+
+.project {
+  display: grid;
+  grid-auto-flow: column;
+  align-items: center;
+  gap: var(--hangar-space-2);
+}
+
+.add {
+  display: grid;
+  gap: var(--hangar-space-2);
+  padding: var(--hangar-space-2);
+  border: 1px solid var(--hangar-color-accent);
+  border-radius: 4px;
+  background: var(--hangar-color-surface);
+}
+
+.add input,
+.add textarea {
+  background: var(--hangar-color-surface-raised);
+}
+
+.add input {
+  font-weight: 600;
+}
+
+/* Like the end of a list: quiet until pointed at. */
+.add-open {
+  min-height: 30px;
+  padding: 0 var(--hangar-space-2);
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--hangar-color-text-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.add-open:hover {
+  background: var(--hangar-color-surface);
+  color: var(--hangar-color-text);
+}
+
+.add-open:focus-visible {
+  outline: 2px solid var(--hangar-color-focus);
+  outline-offset: 1px;
+}
+
+input,
+select,
+textarea {
+  min-height: 30px;
+  padding: var(--hangar-space-1) var(--hangar-space-2);
+  border: 1px solid var(--hangar-color-border);
+  border-radius: 4px;
+  background: var(--hangar-color-bg);
+  color: var(--hangar-color-text);
+  font: inherit;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.button {
+  min-height: 30px;
+  padding: 0 var(--hangar-space-3);
+  border: 1px solid var(--hangar-color-border);
+  border-radius: 4px;
+  background: var(--hangar-color-surface-raised);
+  color: var(--hangar-color-text);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.button:hover {
+  border-color: var(--hangar-color-accent);
+  color: var(--hangar-color-accent);
+}
+
+.button-quiet {
+  border-color: transparent;
+  background: transparent;
+}
+
+.button-primary,
+.button-primary:hover {
+  background: var(--hangar-color-accent);
+  border-color: var(--hangar-color-accent);
+  color: var(--hangar-color-accent-text);
+}
+
+.button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--hangar-color-focus);
+  outline-offset: 1px;
+}
+
+.error {
+  margin: 0;
+  color: var(--hangar-color-danger);
+}
+
+.error:empty {
+  display: none;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--hangar-space-3);
+  align-items: start;
+}
+
+.column {
+  display: grid;
+  gap: var(--hangar-space-2);
+  padding: var(--hangar-space-3);
+  border: 1px solid var(--hangar-color-border);
+  border-radius: var(--hangar-radius);
+}
+
+.tasks,
+.notes {
+  display: grid;
+  gap: var(--hangar-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: grid;
+  gap: var(--hangar-space-1);
+  padding: var(--hangar-space-2) var(--hangar-space-3);
+  border: 1px solid var(--hangar-color-border);
+  border-radius: 4px;
+  background: var(--hangar-color-surface);
+}
+
+.card p {
+  margin: 0;
+}
+
+.description {
+  white-space: pre-wrap;
+}
+
+.meta,
+.notes {
+  font-size: var(--hangar-font-size-sm);
+}
+
+.taken {
+  color: var(--hangar-color-status-working);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hangar-space-2);
+  margin-top: var(--hangar-space-1);
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--hangar-font-size-sm);
+}

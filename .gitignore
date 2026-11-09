@@ -1,0 +1,17 @@
+node_modules/
+dist/
+out/
+apps/desktop/release/
+coverage/
+test-results/
+playwright-report/
+docs/api/
+*.log
+.DS_Store
+docs/api/
+graphify-out/
+.dev-server/
+docker/server/server.env
+docker/server/ssh/
+docker/relay/relay.env
+docker/relay/tls/

@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Test-Bay</title>
+  </head>
+  <body>
+    <h1 data-testid="test-bay">Test-Bay geladen</h1>
+    <p data-testid="has-api"></p>
+    <script>
+      document.querySelector('[data-testid=has-api]').textContent =
+        typeof window.hangar?.invoke === 'function' ? 'hangar-api' : 'no-api';
+    </script>
+  </body>
+</html>

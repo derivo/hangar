@@ -1,0 +1,196 @@
+/* Browser bay layout. All values come from the Hangar theme (--hangar-*), injected by the host. */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root,
+.layout {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--hangar-color-bg);
+  color: var(--hangar-color-text);
+  font: var(--hangar-font-size-md) / 1.4 var(--hangar-font-mono);
+}
+
+.layout {
+  display: grid;
+  /* minmax(0, …): the column must not grow to the tabs' min-content (overflow at 200 % zoom). */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+}
+
+.muted {
+  color: var(--hangar-color-text-muted);
+}
+
+/* Tab strip: tabs scroll sideways, the new-tab button stays visible. */
+.tabbar {
+  display: flex;
+  align-items: center;
+  gap: var(--hangar-space-2);
+  padding: var(--hangar-space-2) var(--hangar-space-3) 0;
+  background: var(--hangar-color-surface);
+  border-bottom: 1px solid var(--hangar-color-border);
+}
+
+.tabs {
+  display: flex;
+  gap: var(--hangar-space-1);
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  max-width: 220px;
+  flex: none;
+  padding-right: var(--hangar-space-1);
+  border: 1px solid var(--hangar-color-border);
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  background: var(--hangar-color-bg);
+}
+
+.tab-active {
+  background: var(--hangar-color-surface-raised);
+  border-color: var(--hangar-color-accent);
+  box-shadow: inset 0 2px 0 var(--hangar-color-accent);
+}
+
+.tab-select {
+  display: flex;
+  align-items: center;
+  gap: var(--hangar-space-2);
+  min-width: 0;
+  height: 32px;
+  padding: 0 var(--hangar-space-2) 0 var(--hangar-space-3);
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Agent tabs carry a badge: the person sees what agents are looking at. */
+.agent-mark {
+  flex: none;
+  padding: 0 var(--hangar-space-1);
+  background: var(--hangar-color-badge);
+  color: var(--hangar-color-badge-text);
+  font-size: var(--hangar-font-size-sm);
+  font-weight: 600;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--hangar-space-1);
+  padding: var(--hangar-space-2) var(--hangar-space-3);
+  background: var(--hangar-color-surface-raised);
+}
+
+.address {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 var(--hangar-space-2);
+  border: 1px solid var(--hangar-color-border);
+  background: var(--hangar-color-bg);
+  color: var(--hangar-color-text);
+  font: var(--hangar-font-size-md) var(--hangar-font-mono);
+}
+
+.address[aria-invalid='true'] {
+  border-color: var(--hangar-color-danger);
+}
+
+.messages {
+  padding: 0 var(--hangar-space-3);
+  background: var(--hangar-color-surface-raised);
+  border-bottom: 1px solid var(--hangar-color-border);
+}
+
+.messages p {
+  margin: 0 0 var(--hangar-space-1);
+  font-size: var(--hangar-font-size-sm);
+}
+
+.messages p:empty {
+  display: none;
+}
+
+.error {
+  color: var(--hangar-color-danger);
+}
+
+/* The page is a host view laid over this area; without a tab it shows the background. */
+.page {
+  position: relative;
+  background-color: var(--hangar-color-bg);
+}
+
+.empty {
+  margin: 0;
+  padding: var(--hangar-space-6) var(--hangar-space-4);
+  text-align: center;
+}
+
+.button,
+.icon-button {
+  border-radius: 4px;
+  border: 1px solid var(--hangar-color-border);
+  background: var(--hangar-color-surface-raised);
+  color: var(--hangar-color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.button {
+  min-height: 30px;
+  padding: 0 var(--hangar-space-3);
+  white-space: nowrap;
+}
+
+.icon-button {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--hangar-color-text-muted);
+  font-size: var(--hangar-font-size-lg);
+  line-height: 1;
+}
+
+.button:hover,
+.icon-button:hover:not(:disabled) {
+  border-color: var(--hangar-color-accent);
+  color: var(--hangar-color-accent);
+}
+
+.icon-button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.button:focus-visible,
+.icon-button:focus-visible,
+.tab-select:focus-visible,
+.address:focus-visible {
+  outline: 2px solid var(--hangar-color-focus);
+  outline-offset: -3px;
+}

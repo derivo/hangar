@@ -1,0 +1,47 @@
+{
+  "id": "dev.hangar.board",
+  "name": "Board",
+  "version": "0.1.0",
+  "minHangarVersion": "0.1.0",
+  "icon": "icon.svg",
+  "ui": "dist/ui/index.html",
+  "main": "dist/main/index.js",
+  "uses": ["dev.hangar.agents/session.info", "dev.hangar.agents/project.list"],
+  "functions": [
+    {
+      "name": "task.list",
+      "sensitive": false,
+      "openToAgents": true,
+      "description": "Lists the tasks of your session's project: id, title, description, status (open, doing, done), the session working on it and notes. Optional status filters. From another instance: name a shared project in project.",
+      "remote": true
+    },
+    {
+      "name": "task.add",
+      "sensitive": false,
+      "openToAgents": true,
+      "description": "Adds an open task to your session's project, e.g. to split up work for other agents. Returns the task. From another instance: name a shared project in project.",
+      "remote": true
+    },
+    {
+      "name": "task.claim",
+      "sensitive": false,
+      "openToAgents": true,
+      "description": "Takes an open task for your session (status doing). Fails if another session took it. When your session ends, its tasks become open again. From another instance: name a shared project in project.",
+      "remote": true
+    },
+    {
+      "name": "task.note",
+      "sensitive": false,
+      "openToAgents": true,
+      "description": "Adds a progress note to a task of your project that no other session took. From another instance: name a shared project in project.",
+      "remote": true
+    },
+    {
+      "name": "task.done",
+      "sensitive": false,
+      "openToAgents": true,
+      "description": "Marks a task done, with an optional closing note. Fails if another session took it. From another instance: name a shared project in project.",
+      "remote": true
+    }
+  ]
+}

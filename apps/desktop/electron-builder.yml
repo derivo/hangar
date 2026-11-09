@@ -1,0 +1,62 @@
+# Packaging for macOS, Windows and Linux. Signing/notarization run only when the
+# CI secrets are present (CSC_LINK, APPLE_API_KEY…, WIN_CSC_LINK); see docs/STATUS.md.
+appId: dev.hangar.app
+productName: Hangar
+copyright: Copyright © 2026 Derivo
+directories:
+  output: release/${version}
+  buildResources: build
+files:
+  - out/**
+  - resources/**
+  - package.json
+  # Bays shipped with Hangar, loaded from <app>/bays (ADR 0004).
+  - from: ../../bays/agents
+    to: bays/agents
+    filter: [manifest.json, icon.svg, dist/**]
+  - from: ../../bays/browser
+    to: bays/browser
+    filter: [manifest.json, icon.svg, dist/**]
+  - from: ../../bays/secrets
+    to: bays/secrets
+    filter: [manifest.json, icon.svg, dist/**]
+  - from: ../../bays/board
+    to: bays/board
+    filter: [manifest.json, icon.svg, dist/**]
+extraResources:
+  - from: ../../packages/cli/dist/hangar.mjs
+    to: cli/hangar.mjs
+  # The local server, run from a copy of the app by a LaunchAgent (ADR 0036).
+  - from: ../../apps/server/dist/hangar-server.mjs
+    to: server/hangar-server.mjs
+# node-pty is N-API: the prebuilt (macOS/Windows) or install-time compiled (Linux)
+# binary works in Electron as is, so no electron-rebuild (it cannot cross-compile).
+npmRebuild: false
+asarUnpack:
+  # Native addon plus spawn-helper must exist as real files.
+  - node_modules/node-pty/**
+generateUpdatesFilesForAllChannels: true
+publish:
+  provider: github
+  owner: derivo
+  repo: hangar
+mac:
+  category: public.app-category.developer-tools
+  target: [dmg, zip]
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    NSMicrophoneUsageDescription: Agents in Hangar-Terminals können Spracheingabe nutzen.
+win:
+  target: [nsis]
+  # Windows uses node-pty's prebuilds; a locally compiled build/ is for the build host.
+  files: ['!node_modules/node-pty/build/**']
+nsis:
+  oneClick: true
+  perMachine: false
+linux:
+  # Default is the package name (@hangar/desktop), which AppImage refuses.
+  executableName: hangar
+  target: [AppImage]
+  category: Development

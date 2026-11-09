@@ -1,0 +1,24 @@
+{
+  "name": "@hangar/relay-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hangar Relay: forwards sealed messages between Hangar instances (ADR 0011)",
+  "type": "module",
+  "bin": {
+    "hangar-relay": "./dist/hangar-relay.mjs"
+  },
+  "scripts": {
+    "build": "vite build",
+    "start": "node dist/hangar-relay.mjs"
+  },
+  "devDependencies": {
+    "@hangar/bay-agents": "workspace:*",
+    "@hangar/bay-board": "workspace:*",
+    "@hangar/bus": "workspace:*",
+    "@hangar/host": "workspace:*",
+    "@hangar/relay": "workspace:*",
+    "@types/ws": "^8.18.2",
+    "vite": "^8.3.5",
+    "ws": "^8.22.0"
+  }
+}
