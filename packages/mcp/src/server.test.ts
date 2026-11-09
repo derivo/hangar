@@ -147,7 +147,7 @@ describe('MCP server', () => {
   });
 
   it('answers 429 once a session exceeds its rate limit, other sessions unaffected', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.useFakeTimers({ toFake: ['performance'] });
     try {
       const a = { authorization: `Bearer ${tokens.issue('dev.hangar.agents', 'a')}` };
       const b = { authorization: `Bearer ${tokens.issue('dev.hangar.agents', 'b')}` };
@@ -157,7 +157,7 @@ describe('MCP server', () => {
       expect(statuses[100]).toBe(429);
       expect((await post('{nope', b)).status).toBe(400);
       // 600 requests per minute: 0.1 s brings one back.
-      vi.setSystemTime(Date.now() + 100);
+      vi.advanceTimersByTime(100);
       expect((await post('{nope', a)).status).toBe(400);
     } finally {
       vi.useRealTimers();
@@ -166,6 +166,18 @@ describe('MCP server', () => {
 });
 
 describe('rateLimiter', () => {
+  it('keeps its budget when the system clock is set back', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const auth = { authorization: `Bearer ${tokens.issue('dev.hangar.agents', 'c')}` };
+      expect((await post('{nope', auth)).status).toBe(400);
+      vi.setSystemTime(Date.now() - 3_600_000);
+      expect((await post('{nope', auth)).status).toBe(400);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('forgets buckets that are full again once it holds 1000', () => {
     let clock = 0;
     const limiter = rateLimiter(() => clock);

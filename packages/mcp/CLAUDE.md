@@ -14,6 +14,7 @@ MCP server (Streamable HTTP, `127.0.0.1`, stateless) on top of the bus.
 - Without a valid bearer token the server answers 401 before MCP even runs.
 - Rate limit per token (bucket of 100, refilled at 600/min, in memory per server; the statusline reports several times a second): beyond it 429.
   `hangar statusline` (quota report) counts against the same session budget. `rateLimiter` drops
-  full buckets once it holds 1000 (one per token ever used would only grow).
+  full buckets once it holds 1000 (one per token ever used would only grow). Its clock is
+  `performance.now()` (monotonic): a system clock set back would drain the buckets.
 - Errors from handlers and denied permissions are reported as tool errors (`isError`), not as HTTP errors.
 - Decisions: ADR 0007.

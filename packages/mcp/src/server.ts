@@ -37,8 +37,8 @@ export interface RunningMcpServer {
 /** Buckets kept before full ones are swept: one per token ever used would only grow. */
 const MAX_BUCKETS = 1000;
 
-/** The token buckets of one server; `now` in milliseconds. */
-export function rateLimiter(now = () => Date.now()) {
+/** The token buckets of one server; `now` in milliseconds, monotonic: a clock set back would drain them. */
+export function rateLimiter(now = () => performance.now()) {
   const buckets = new Map<string, { tokens: number; at: number }>();
   const level = (b: { tokens: number; at: number }, t: number) =>
     Math.min(BURST, b.tokens + (t - b.at) * REFILL_PER_MS);
