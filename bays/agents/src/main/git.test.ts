@@ -6,10 +6,16 @@ import { addExcludes, addWorktree, currentBranch, gitEnv, removeWorktree, repoRo
 import { createTempRepo } from './test-repo';
 
 describe('git', () => {
-  it('ignores variables that redirect git to another repository', () => {
+  it('ignores every GIT_ variable, as the server does', () => {
     expect(
-      gitEnv({ GIT_DIR: '.git', GIT_INDEX_FILE: 'i', GIT_AUTHOR_NAME: 'a', PATH: '/bin' }),
-    ).toEqual({ GIT_AUTHOR_NAME: 'a', PATH: '/bin' });
+      gitEnv({
+        GIT_DIR: '.git',
+        GIT_SSH_COMMAND: 'malicious',
+        GIT_CONFIG_COUNT: '1',
+        GIT_ASKPASS: 'x',
+        PATH: '/bin',
+      }),
+    ).toEqual({ PATH: '/bin' });
   });
 
   it('resolves the repository root from a sub folder', async () => {

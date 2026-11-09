@@ -6,20 +6,13 @@ import { t } from './messages';
 
 const exec = promisify(execFile);
 
-// Variables that pin git to another repository (set e.g. inside git hooks).
-const LOCATING_VARS = [
-  'GIT_DIR',
-  'GIT_WORK_TREE',
-  'GIT_INDEX_FILE',
-  'GIT_OBJECT_DIRECTORY',
-  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
-  'GIT_COMMON_DIR',
-  'GIT_PREFIX',
-];
-
-/** The current environment without variables that would redirect git. */
+/**
+ * The current environment without any GIT_ variable (as the server, `apps/server/src/options.ts`):
+ * they could point git at another repository (GIT_DIR, set inside git hooks) or run other
+ * programs (GIT_SSH_COMMAND, GIT_ASKPASS, GIT_CONFIG_*).
+ */
 export function gitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  return Object.fromEntries(Object.entries(env).filter(([k]) => !LOCATING_VARS.includes(k)));
+  return Object.fromEntries(Object.entries(env).filter(([k]) => !k.startsWith('GIT_')));
 }
 
 /** Runs git without a shell (arguments are never interpolated). */
