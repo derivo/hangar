@@ -265,7 +265,7 @@ export class Host {
     this.errors = errors;
     this.found = bays;
     for (const id of this.sidebar.get()) {
-      // ponytail: a sidebar bay that is no longer on disk is skipped silently.
+      // A sidebar bay that is no longer on disk is skipped silently.
       const bay = this.startable().find((b) => b.manifest.id === id);
       if (!bay) continue;
       try {
@@ -402,7 +402,7 @@ export class Host {
             // The local server's bays work as if they ran here: folder dialog, no path form.
             ...(!server.local && { server: server.name }),
             invoke: async (channel, args) => {
-              // ponytail: the one channel that opens a dialog (ADR 0036, point 6).
+              // The one channel that opens a dialog (ADR 0036, point 6).
               if (server.local && channel === 'project.add' && typeof args[0] !== 'string') {
                 const path = await this.services.pickFolder(undefined);
                 if (!path) return undefined;
@@ -738,7 +738,7 @@ export class Host {
   }
 
   async stop(): Promise<void> {
-    // ponytail: saved on quit only; a crash loses the last window position.
+    // Saved on quit only; a crash loses the last window position.
     writeViewState(this.viewFile, {
       bounds: this.window.getNormalBounds(),
       maximized: this.window.isMaximized(),

@@ -88,7 +88,7 @@ export async function openTunnel(target: SshTarget, ssh = 'ssh'): Promise<Tunnel
   return { port, close };
 }
 
-// ponytail: the port may be taken between closing and ssh binding it; ssh then exits
+// The port may be taken between closing and ssh binding it; ssh then exits
 // (ExitOnForwardFailure) and the connection fails with that message. Retry if it ever matters.
 function freePort(): Promise<number> {
   return new Promise((resolve) => {

@@ -62,9 +62,9 @@ export class Bus {
   private readonly remote?: RemoteAccess;
   private sessionGrants: Grant[] = [];
   /** Ended sessions, so an answer that arrives after the end grants nothing. */
-  // ponytail: grows by one id per session; prune if sessions ever number in the millions.
+  // Grows by one id per session; prune if sessions ever number in the millions.
   private readonly endedSessions = new Set<string>();
-  /** Last successful use per grant. ponytail: memory only, a file write per call is too much. */
+  /** Last successful use per grant. Memory only, a file write per call is too much. */
   private readonly lastUsed = new Map<string, string>();
   private readonly now: () => Date;
 

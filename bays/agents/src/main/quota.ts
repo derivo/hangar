@@ -43,7 +43,7 @@ export function readCodexQuota(codexHome: string): Quota | undefined {
           .map((f) => join(dir, f)),
       )
       .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
-    // ponytail: at most 5 logs (up to 5 MB) per minute; more only if exec logs pile up between turns.
+    // At most 5 logs (up to 5 MB) per minute; more only if exec logs pile up between turns.
     for (const file of files.slice(0, 5)) {
       const quota = lastFiveHourLimit(file);
       if (quota) return quota;

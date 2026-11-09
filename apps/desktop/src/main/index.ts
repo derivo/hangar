@@ -199,7 +199,7 @@ async function start(): Promise<void> {
         onChange: () => host?.workspacesChanged(),
       });
   workspaces = ws;
-  // Installed bays (ADR 0034). ponytail: index and key from the environment until Hangar
+  // Installed bays (ADR 0034). Index and key from the environment until Hangar
   // has a built-in key and a published index (phase 21).
   const indexUrl = process.env.HANGAR_BAY_INDEX;
   const indexKey = process.env.HANGAR_BAY_INDEX_KEY;

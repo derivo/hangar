@@ -231,7 +231,7 @@ export function attachBridge(http: Server, options: BridgeOptions): Bridge {
   newCode();
 
   const paired = new Set<WebSocket>();
-  // ponytail: in memory; a server restart loses them, like the desktop's own notifications.
+  // In memory; a server restart loses them, like the desktop's own notifications.
   const kept: ServerMessage[] = [];
   const badges = new Map<string, number>();
   let sessions: number | undefined;
@@ -264,7 +264,7 @@ export function attachBridge(http: Server, options: BridgeOptions): Bridge {
   >();
   /** The desktop whose bays the server calls: the one that offered last (ADR 0036). */
   let offerer: WebSocket | undefined;
-  // ponytail: in memory; a server restart loses them, the app's tabs end with its own restart.
+  // In memory; a server restart loses them, the app's tabs end with its own restart.
   const endedAway: ServerMessage[] = [];
   let nextCall = 0;
   const calls = new Map<
@@ -272,7 +272,7 @@ export function attachBridge(http: Server, options: BridgeOptions): Bridge {
     { ws: WebSocket; resolve(v: unknown): void; reject(e: Error): void }
   >();
   const desktopClosed = () => new Error(options.desktopClosed?.() ?? 'Hangar is not open');
-  // ponytail: 16 MB per message covers terminal scrollback; raise if a bay sends more.
+  // 16 MB per message covers terminal scrollback; raise if a bay sends more.
   const wss = new WebSocketServer({ noServer: true, maxPayload: 16 * 1024 * 1024 });
   let ready = !options.ready;
   void options.ready?.finally(() => (ready = true));
@@ -414,7 +414,7 @@ export function attachBridge(http: Server, options: BridgeOptions): Bridge {
     ask(request) {
       const denied = (why: string) =>
         new Error(`Access denied: ${request.caller.bayId} → ${request.target} (${why})`);
-      // ponytail: the paired desktop that connected last; ask all, first answer wins, if needed.
+      // The paired desktop that connected last; ask all, first answer wins, if needed.
       const ws = [...paired].at(-1);
       if (!ws) {
         return Promise.reject(

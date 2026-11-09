@@ -2,7 +2,7 @@ import type { EnvValue } from '../main/types';
 import { t } from './messages';
 
 /** A value written as `@secret:NAME` refers to a password of the secrets bay (ADR 0021). */
-// ponytail: no escape, a literal value starting with "@secret:" cannot be set; add one if asked.
+// No escape, a literal value starting with "@secret:" cannot be set; add one if asked.
 const SECRET = /^@secret:(.+)$/;
 
 /** Parses `KEY=value` lines; blank lines and `#` comments are ignored. */

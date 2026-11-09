@@ -39,7 +39,7 @@ const octal = (n: number, length: number) => `${n.toString(8).padStart(length - 
 
 function header(entry: TarEntry, size: number): Buffer {
   const h = Buffer.alloc(BLOCK);
-  // ponytail: ASCII paths only (bundled bays); non-ASCII would need pax headers.
+  // ASCII paths only (bundled bays); non-ASCII would need pax headers.
   let name = entry.path;
   let prefix = '';
   if (name.length > 100) {
