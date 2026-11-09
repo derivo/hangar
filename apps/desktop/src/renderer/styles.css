@@ -243,6 +243,43 @@ li:has(> .sidebar-item[aria-current='page'])::before,
   gap: var(--hangar-space-2);
 }
 
+/* Empty, it stays in the page: a live region has to exist before it speaks. */
+.local-server-retry:empty {
+  margin: 0;
+}
+
+/* The log wraps instead of scrolling sideways (200 % zoom) and keeps its newest lines in view. */
+.local-server-log-pause {
+  margin-top: var(--hangar-space-4);
+}
+
+/* Paused: filled like a pressed key. */
+.local-server-log-pause[aria-pressed='true'],
+.local-server-log-pause[aria-pressed='true']:hover {
+  border-color: var(--hangar-color-accent);
+  background: var(--hangar-color-accent);
+  color: var(--hangar-color-accent-text);
+}
+
+.local-server-log {
+  max-height: 50vh;
+  overflow-y: auto;
+  margin: var(--hangar-space-2) 0 0;
+  padding: var(--hangar-space-3);
+  border: 1px solid var(--hangar-color-border);
+  border-radius: var(--hangar-radius);
+  background: var(--hangar-color-surface);
+  color: var(--hangar-color-text);
+  font: 12px/1.5 var(--hangar-font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.local-server-log:focus-visible {
+  outline: 2px solid var(--hangar-color-focus);
+  outline-offset: 2px;
+}
+
 .update-hint {
   box-sizing: border-box;
   display: flex;

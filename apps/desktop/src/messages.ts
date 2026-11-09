@@ -189,6 +189,10 @@ const de = {
   workspacesUnavailable: 'Arbeitsbereiche nicht verfügbar: Hangar startet ohne sie',
   restart: 'Neu starten',
   openLog: 'Log öffnen',
+  localServerLog: 'Log des lokalen Servers',
+  localServerLogEmpty: 'Noch keine Einträge.',
+  pauseLog: 'Log anhalten',
+  reconnecting: (attempt: number) => `Verbinde erneut … (Versuch ${attempt})`,
   localServerShells: (n: number) =>
     n === 1 ? 'Lokaler Server: 1 Shell läuft' : `Lokaler Server: ${n} Shells laufen`,
   localServerDownHint:
@@ -485,6 +489,10 @@ const en: typeof de = {
   workspacesUnavailable: 'Workspaces not available: Hangar starts without them',
   restart: 'Restart',
   openLog: 'Open log',
+  localServerLog: 'Log of the local server',
+  localServerLogEmpty: 'No entries yet.',
+  pauseLog: 'Pause log',
+  reconnecting: (attempt) => `Reconnecting … (attempt ${attempt})`,
   localServerShells: (n) =>
     n === 1 ? 'Local server: 1 shell running' : `Local server: ${n} shells running`,
   localServerDownHint:

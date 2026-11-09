@@ -101,6 +101,14 @@ test('the pages of the local server without violations: down, starting, new vers
       [{ status: 'connecting' }, 'Lokaler Server startet …'],
       [
         {
+          status: 'connecting',
+          retry: 3,
+          log: ['listening on 127.0.0.1:4711', `fingerprint SHA256:${'x'.repeat(200)}`],
+        },
+        'Lokaler Server startet …',
+      ],
+      [
+        {
           status: 'connected',
           update: { running: '0.1.0', ready: '0.2.0' },
           restarting: true,
@@ -134,9 +142,32 @@ test('the pages of the local server without violations: down, starting, new vers
       .toBeLessThanOrEqual(0);
     expect((await hint.boundingBox())!.height).toBeGreaterThan(48);
     await expect(hint.getByRole('button', { name: 'Lokalen Server neu starten' })).toBeInViewport();
+    // The log of the restart page wraps long lines at 200 % zoom too.
+    await expect(async () => {
+      await show({
+        status: 'connecting',
+        retry: 3,
+        log: [`fingerprint SHA256:${'x'.repeat(200)}`],
+      });
+      await expect(content.getByRole('log')).toBeVisible({ timeout: 1000 });
+    }).toPass();
+    await expect
+      .poll(() => content.getByRole('log').evaluate((l) => l.scrollWidth - l.clientWidth))
+      .toBeLessThanOrEqual(0);
+    expect(
+      await shell.evaluate(() => document.documentElement.scrollWidth - innerWidth),
+    ).toBeLessThanOrEqual(0);
     await app.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0]!.webContents.setZoomFactor(1),
     );
+    // The log paused (WCAG 2.2.2): the pressed button without violations too.
+    const pause = content.getByRole('button', { name: 'Log anhalten' });
+    await pause.click();
+    await expect(pause).toHaveAttribute('aria-pressed', 'true');
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await shell.emulateMedia({ colorScheme });
+      expect(await violations(shell), `log paused (${colorScheme})`).toEqual([]);
+    }
     // The switch in the settings, with the hint of a pending change (step 4b; macOS only).
     if (process.platform !== 'darwin') return;
     await shell.getByRole('button', { name: 'Einstellungen' }).click();

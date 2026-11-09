@@ -28,6 +28,10 @@ export function App({ api }: { api: ShellApi }) {
             <h1>{localBay.status === 'connecting' ? t.localServerStarting : t.localServerDown}</h1>
             <p>{t.localServerDownHint}</p>
             {localBay.error && <p className="local-server-error">{localBay.error}</p>}
+            <p role="status" className="local-server-retry">
+              {localBay.retry !== undefined && t.reconnecting(localBay.retry)}
+            </p>
+            {localBay.log && <ServerLog lines={localBay.log} />}
             <div className="local-server-actions">
               <button
                 type="button"
@@ -51,6 +55,47 @@ export function App({ api }: { api: ShellApi }) {
         )}
       </main>
     </div>
+  );
+}
+
+/**
+ * The local server's log like `tail -f`: new lines at the bottom, followed while scrolled to
+ * the end. Pausing holds the lines shown (WCAG 2.2.2).
+ */
+function ServerLog({ lines }: { lines: string[] }) {
+  const ref = useRef<HTMLPreElement>(null);
+  const atEnd = useRef(true);
+  const [held, setHeld] = useState<string[]>();
+  const shown = held ?? lines;
+  useEffect(() => {
+    const el = ref.current!;
+    if (atEnd.current) el.scrollTop = el.scrollHeight;
+  }, [shown]);
+  return (
+    <>
+      <button
+        type="button"
+        className="button local-server-log-pause"
+        aria-pressed={!!held}
+        onClick={() => setHeld(held ? undefined : lines)}
+      >
+        {t.pauseLog}
+      </button>
+      {/* Focusable: the region scrolls, also by keyboard. */}
+      <pre
+        ref={ref}
+        role="log"
+        aria-label={t.localServerLog}
+        tabIndex={0}
+        className="local-server-log"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 2;
+        }}
+      >
+        {shown.length > 0 ? shown.join('\n') : t.localServerLogEmpty}
+      </pre>
+    </>
   );
 }
 
