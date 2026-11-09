@@ -73,9 +73,7 @@ export async function checkedFolder(
   if (!inside(real)) throw new Error(t.folderOutside(path));
   // The agent bay works in the repository root, which may lie above the folder.
   // Without GIT_* variables of the server's environment: they could point git elsewhere.
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_')),
-  );
+  const env = withoutGitVars(process.env);
   const top = await promisify(execFile)('git', ['-C', real, 'rev-parse', '--show-toplevel'], {
     env,
   }).then(
@@ -86,4 +84,9 @@ export async function checkedFolder(
     throw new Error(t.repositoryOutside(top));
   }
   return real;
+}
+
+/** The environment without GIT_ variables, in any case: Windows reads names case-insensitively. */
+export function withoutGitVars(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(env).filter(([k]) => !/^git_/i.test(k)));
 }

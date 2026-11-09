@@ -118,6 +118,7 @@ All notable changes to this project. Format based on
 
 ### Fixed
 
+- Agent bay and server: git calls drop `GIT_*` variables in any case (`git_dir`, `Git_Config_Count`); Windows reads environment names case-insensitively, so they still reached git there.
 - Server tunnels: `StdinNull yes` in the person's ssh config no longer ends the tunnel at once. The desktop reads `ssh -V` and passes `-o StdinNull=no` from OpenSSH 8.7 on; older versions, which reject the option, get the arguments as before.
 - MCP server: each session token is rate limited (bursts of 100, 600 requests per minute, enough for the statusline's quota reports); beyond that the server answers HTTP 429 `Too many requests`. Other sessions are not affected.
 - Agent bay: when 100 creations or removals of sessions and projects already wait, a new one is refused with "The agent bay is busy" instead of queueing without limit.

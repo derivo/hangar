@@ -12,7 +12,8 @@ const exec = promisify(execFile);
  * programs (GIT_SSH_COMMAND, GIT_ASKPASS, GIT_CONFIG_*).
  */
 export function gitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  return Object.fromEntries(Object.entries(env).filter(([k]) => !k.startsWith('GIT_')));
+  // Any case: Windows reads environment names case-insensitively (`git_dir` is GIT_DIR there).
+  return Object.fromEntries(Object.entries(env).filter(([k]) => !/^git_/i.test(k)));
 }
 
 /** Runs git without a shell (arguments are never interpolated). */

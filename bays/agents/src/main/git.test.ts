@@ -13,6 +13,9 @@ describe('git', () => {
         GIT_SSH_COMMAND: 'malicious',
         GIT_CONFIG_COUNT: '1',
         GIT_ASKPASS: 'x',
+        // Windows reads environment names case-insensitively.
+        git_dir: '.git',
+        Git_Config_Count: '1',
         PATH: '/bin',
       }),
     ).toEqual({ PATH: '/bin' });
