@@ -417,6 +417,21 @@ describe.skipIf(process.platform === 'win32')('migrateToLocalServer', () => {
     expect(existsSync(join(userData, 'local-server', 'migrated'))).toBe(true);
   });
 
+  it('runs the bay in the server after a move that broke off once its data went over (C5)', async () => {
+    const { options, userData, data } = appData();
+    // Cannot be written: the move stops after the bay's folder went over, before the marker.
+    mkdirSync(join(data, 'jobs.json'), { recursive: true });
+    await expect(migrateToLocalServer(options, [ID])).rejects.toThrow();
+    expect(existsSync(join(userData, 'local-server', 'migrated'))).toBe(false);
+    expect(existsSync(join(userData, 'bays', ID))).toBe(false);
+    // Not complete, yet the data lies in the server: the app must not run the bay empty.
+    expect(bayInLocalServer(userData, ID)).toBe(true);
+    rmSync(join(data, 'jobs.json'), { recursive: true });
+    await migrateToLocalServer(options, [ID]);
+    expect(json(join(data, 'bays', ID, 'state.json'))).toEqual({ projects: ['shop'] });
+    expect(existsSync(join(userData, 'local-server', 'migrated'))).toBe(true);
+  });
+
   it('keeps worktree sessions working: paths in state.json and git follow the move', async () => {
     const { options, userData, data } = appData();
     const repo = mkdtempSync(join(tmpdir(), 'hangar-migrate-repo-'));
