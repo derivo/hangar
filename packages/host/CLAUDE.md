@@ -2,7 +2,9 @@
 
 Core of Hangar without Electron (Phase 8): the desktop app and later the server
 (Phase 9) use the same code. A lint rule forbids Electron imports
-(`no-restricted-imports` in `eslint.config.mjs`).
+(`no-restricted-imports` in `eslint.config.mjs`). Node's own modules (`node:fs`,
+`node:crypto`, `node:path` …) are allowed; only Electron is kept out, so the server can run
+the same code.
 
 ## Interfaces
 
