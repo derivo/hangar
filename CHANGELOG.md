@@ -118,6 +118,7 @@ All notable changes to this project. Format based on
 
 ### Fixed
 
+- Dependencies: `minimatch` 7 to 11.0.0 (pulled in by electron-builder, ESLint and typedoc) is replaced by 11.0.5 through a pnpm override; Dependabot GHSA-g3hv-75wg-m249 (denial of service via glob patterns).
 - MCP server: the rate limit measures time with a monotonic clock; a system clock set back no longer answers every request with 429.
 - MCP server: the rate limit forgets buckets that are full again once it holds 1000, instead of keeping one per token ever used.
 - Desktop: relay keys that `HANGAR_KEY_PASSPHRASE` cannot open (missing or wrong) no longer stop the start without a word; an error box names the reason and Hangar starts without workspaces, the encrypted identity untouched. The in-app relaunch keeps the passphrase.
