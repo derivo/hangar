@@ -75,7 +75,7 @@ export function QuotaBar({
                 aria-valuetext={week.text}
               >
                 <span className="quota-window">7d</span>
-                <span className="quota-left">{week.left} %</span>
+                <span className="quota-left">{t.quotaLeft(week.left)}</span>
                 {week.reset && <span className="quota-reset">{week.reset}</span>}
               </span>
             )}
