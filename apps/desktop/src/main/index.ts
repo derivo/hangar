@@ -2,12 +2,14 @@ import { createPublicKey } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { homedir, hostname } from 'node:os';
 import { basename, join, resolve } from 'node:path';
-import { app, BrowserWindow, ipcMain, nativeTheme, safeStorage } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, safeStorage } from 'electron';
 import type { SettingValue } from '@hangar/sdk';
 import { catalogFor } from '@hangar/sdk/i18n';
 import {
   BayStore,
   baySetting,
+  keysWithoutKeychain,
+  takePassphrase,
   readSettings,
   startCore,
   themeSetting,
@@ -45,16 +47,22 @@ let host: Host | undefined;
 let core: Core | undefined;
 let workspaces: Workspaces | undefined;
 
-/** Private keys at rest: safeStorage, or plain (file mode 600) where the system has no keyring. */
+/**
+ * Private keys at rest: safeStorage; where the system has no keyring, encrypted with
+ * `HANGAR_KEY_PASSPHRASE` (`pass:`) or else plain (`plain:`, file mode 600).
+ */
+// Out of the environment, so session shells and jobs do not inherit it; back for a relaunch.
+const passphrase = takePassphrase();
+const noKeychain = keysWithoutKeychain(passphrase.passphrase);
 const protect = {
   encrypt: (text: string) =>
     safeStorage.isEncryptionAvailable()
       ? `safe:${safeStorage.encryptString(text).toString('base64')}`
-      : `plain:${text}`,
+      : noKeychain.encrypt(text),
   decrypt: (text: string) =>
     text.startsWith('safe:')
       ? safeStorage.decryptString(Buffer.from(text.slice(5), 'base64'))
-      : text.slice(6),
+      : noKeychain.decrypt(text),
 };
 
 /** Host module `secrets` (ADR 0021): only with the keychain, never plain like `protect`. */
@@ -189,17 +197,24 @@ async function start(): Promise<void> {
     },
   });
   // With the local server, its agent bay holds the workspaces (ADR 0036, point 11).
-  const ws = localServer
-    ? undefined
-    : new Workspaces({
-        dir: join(userData, 'workspaces'),
-        name: hostname(),
-        bus: core.bus,
-        protect,
-        onChange: () => host?.workspacesChanged(),
-      });
+  let ws: Workspaces | undefined;
+  try {
+    ws = localServer
+      ? undefined
+      : new Workspaces({
+          dir: join(userData, 'workspaces'),
+          name: hostname(),
+          bus: core.bus,
+          protect,
+          onChange: () => host?.workspacesChanged(),
+        });
+  } catch (e) {
+    // E.g. `pass:` keys without the right HANGAR_KEY_PASSPHRASE: run without workspaces and
+    // leave the identity as it is, so the right passphrase opens it next start.
+    dialog.showErrorBox(t.workspacesUnavailable, (e as Error).message);
+  }
   workspaces = ws;
-  // Installed bays (ADR 0034). ponytail: index and key from the environment until Hangar
+  // Installed bays (ADR 0034). Index and key from the environment until Hangar
   // has a built-in key and a published index (phase 21).
   const indexUrl = process.env.HANGAR_BAY_INDEX;
   const indexKey = process.env.HANGAR_BAY_INDEX_KEY;
@@ -328,6 +343,8 @@ async function start(): Promise<void> {
     writeSettings(settingsFile, { ...readSettings(settingsFile), localServer: enabled === true });
   });
   ipcMain.on('shell:relaunch', () => {
+    // The new process inherits this environment.
+    passphrase.restore();
     app.relaunch();
     app.quit();
   });

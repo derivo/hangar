@@ -60,4 +60,4 @@ session and waits for a marker with `$?`. The codebase review of 2026-10-29
 - If the session's shell restarts while a job is running, the job keeps the old
   token; it is then invalid, and `hangar` commands in the job fail.
 - Child processes that detach themselves from their process group survive the
-  time limit under POSIX; on Windows only the shell is terminated.
+  time limit under POSIX; on Windows `taskkill /T /F` ends the shell's process tree.

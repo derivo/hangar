@@ -131,6 +131,8 @@ export class SessionManager {
   private stopped = false;
   /** Creating sessions and removing projects run one at a time (ports, project lookups). */
   private queue: Promise<unknown> = Promise.resolve();
+  /** Tasks in `queue` not finished yet; more than `MAX_QUEUED` are refused. */
+  private queued = 0;
 
   constructor(private readonly deps: ManagerDeps) {
     this.stateFile = join(deps.dataDir, 'state.json');
@@ -532,7 +534,10 @@ export class SessionManager {
   // --- internals ------------------------------------------------------------
 
   private serial<T>(task: () => Promise<T>): Promise<T> {
-    const run = this.queue.then(task, task);
+    // Refused with an error, never dropped: a lost create or remove would go unnoticed.
+    if (this.queued >= MAX_QUEUED) return Promise.reject(new Error(t.busy));
+    this.queued++;
+    const run = this.queue.then(task, task).finally(() => this.queued--);
     this.queue = run.catch(() => undefined);
     return run;
   }
@@ -712,8 +717,15 @@ export function validateEnv(env: Record<string, EnvValue>): void {
   }
 }
 
-/** How far trimming looks for the next line start before cutting mid-line. */
-const LINE_SEARCH = 4096;
+/** Creating and removing wait for each other; past this many something is stuck or flooding. */
+const MAX_QUEUED = 100;
+
+/**
+ * How far trimming looks for the next line start before cutting mid-line: 4 KiB is far more
+ * than a terminal line, so ordinary output always cuts at a line start, but a full-screen
+ * program without line breaks does not lose a large part of its scrollback.
+ */
+const SCROLLBACK_LINE_SEARCH_LIMIT = 4096;
 /** Keeps the newest output, cut at a line start so no escape sequence is split mid-line. */
 export function trimScrollback(text: string, limit = SCROLLBACK_LIMIT): string {
   if (text.length <= limit) return text;
@@ -721,5 +733,7 @@ export function trimScrollback(text: string, limit = SCROLLBACK_LIMIT): string {
   const nextLine = text.indexOf('\n', cut);
   // Full-screen programs (Claude Code) hardly write line breaks: the next one may be far
   // away, e.g. in the restart marker; then cut where the limit is.
-  return text.slice(nextLine === -1 || nextLine - cut > LINE_SEARCH ? cut : nextLine + 1);
+  return text.slice(
+    nextLine === -1 || nextLine - cut > SCROLLBACK_LINE_SEARCH_LIMIT ? cut : nextLine + 1,
+  );
 }

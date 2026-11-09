@@ -59,6 +59,20 @@ working on: instance, project, session, status, description.
 - Without an available keychain (`safeStorage.isEncryptionAvailable()` false,
   such as Linux without Secret Service) the keys are stored unencrypted in
   `relay-identity.json` (mode 600, prefix `plain:`); with a keychain `safe:`.
+  Addendum (S2): if `HANGAR_KEY_PASSPHRASE` is set, keys written without a
+  keychain are encrypted instead (`pass:`, scrypt N=2^15 + AES-256-GCM,
+  `keysWithoutKeychain` in `@hangar/host`); `plain:` is still read. It applies
+  when the keys are written, i.e. to a new identity; an existing `plain:` file
+  stays as it is. App and server remove the variable from their environment after
+  reading it, so session shells and jobs do not inherit it. That only stops
+  inheritance: on Linux `/proc/<pid>/environ` keeps the original environment,
+  readable to every process of the same user, agents included. The passphrase
+  protects keys at rest (backups, a copied disk), not against processes of the same
+  user; that would need a separate user or process isolation. The local server
+  (ADR 0036) still gets the keys as `plain:` from the app. If the desktop cannot
+  open `pass:` keys (passphrase missing or wrong), it shows an error box and starts
+  without workspaces; the identity file stays untouched. The in-app relaunch puts
+  the passphrase back into the environment first.
 - Settings: `apps/desktop/src/renderer/Workspaces.tsx`; agent bay:
   `bays/agents/src/main/share.ts`, `src/ui/RemoteList.tsx`. E2E with two
   instances and a local relay: `apps/desktop/e2e/workspaces.spec.ts`.

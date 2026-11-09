@@ -348,7 +348,7 @@ export class Connection {
       if (waiting >= 0) this.waiting.splice(waiting, 1);
       if (this.shown?.id === message.id) this.shown.dialog.abort();
     } else if ((message.type === 'notify' || message.type === 'badge') && !this.paired) {
-      // ponytail: the server sends at most 50 kept notifications plus one badge per bay.
+      // The server sends at most 50 kept notifications plus one badge per bay.
       if (this.early.length < 500) this.early.push(message);
     } else if (message.type === 'notify') {
       const { bay, notification } = message;
@@ -379,7 +379,7 @@ export class Connection {
       const run = this.caller ?? (() => Promise.reject(new Error(`Unknown function: ${target}`)));
       const call = new AbortController();
       this.calls.add(call);
-      // ponytail: no limit on calls in flight; the server is the one on this machine.
+      // No limit on calls in flight; the server is the one on this machine.
       void Promise.resolve()
         .then(() => run(target, args, caller, call.signal))
         .then(

@@ -2,7 +2,9 @@
 
 Core of Hangar without Electron (Phase 8): the desktop app and later the server
 (Phase 9) use the same code. A lint rule forbids Electron imports
-(`no-restricted-imports` in `eslint.config.mjs`).
+(`no-restricted-imports` in `eslint.config.mjs`). Node's own modules (`node:fs`,
+`node:crypto`, `node:path` …) are allowed; only Electron is kept out, so the server can run
+the same code.
 
 ## Interfaces
 
@@ -32,13 +34,15 @@ Core of Hangar without Electron (Phase 8): the desktop app and later the server
   `workspaceAction(ws, bus, action, args)`: the actions of "Settings → Workspaces"
   by name (`view` with the shareable functions), for the app's IPC and the bridge of the
   local server (ADR 0036, item 11).
-- `.bay` packages (ADR 0033): `packBay`, `verifyPackage`, `unpackBay`, `writeTar`
+- `.bay` packages (ADR 0033): `packBay` (only ids `dev.hangar.<…>`), `verifyPackage`, `unpackBay`, `writeTar`
   (`bay-package.ts`, only `node:` imports, because `scripts/pack-bay.ts` loads the file
   directly with Node); `signIndex`, `verifyIndex` (`bay-index.ts`).
 - `BayStore` (`bay-store.ts`, ADR 0034): `catalog(channel)`, `prepare(id, version)` →
   permission diff (`rightsDiff`), `confirm`/`cancel`, `rollback`, `applyPending(resetGrant)`
   at start before loading, `bayDirs()` for `discoverBays` (`BaySource` `{ bay }`:
   an installed bay replaces a later one with the same id without an error).
+- `keysWithoutKeychain(passphrase?)` (`key-protection.ts`) – `protect` for `Workspaces` without a
+  keychain: `pass:` (scrypt + AES-256-GCM) with a passphrase, else `plain:`; reads both.
 - `writeCliShim(dir, execPath, cliPath)` (`cli-shim.ts`) – `hangar` launcher for the
   `PATH` of the sessions.
 

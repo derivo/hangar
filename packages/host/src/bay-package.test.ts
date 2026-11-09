@@ -61,6 +61,15 @@ describe('.bay packages (phase 19, ADR 0033)', () => {
     expect(existsSync(join(dest, 'src'))).toBe(false);
   });
 
+  it('packs only bays whose id starts with dev.hangar.', () => {
+    const dir = bayDir();
+    const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'));
+    for (const id of ['evil.com.hangar', 'dev.hangarx.notes', 'dev.hangar']) {
+      writeFileSync(join(dir, 'manifest.json'), JSON.stringify({ ...manifest, id }));
+      expect(() => packBay(dir, keys().privateKey)).toThrow(`Invalid id in manifest: ${id}`);
+    }
+  });
+
   it('builds the same bytes twice', () => {
     const { privateKey } = keys();
     const dir = bayDir();
@@ -95,6 +104,11 @@ describe('.bay packages (phase 19, ADR 0033)', () => {
     ['a backslash', 'dist\\..\\escape.txt'],
     ['a drive letter', 'C:/escape.txt'],
     ['an empty segment', 'dist//x'],
+    // 'ascii' decoding would drop the high bit and read 0xAE 0xAE as '..'
+    ['bytes outside ASCII', '\u00ae\u00ae/escape.txt'],
+    // Harmless, yet 'ascii' decoding wrote it under another name (0xE9 as 'i': cafi.txt).
+    ['a single byte outside ASCII', 'dist/caf\u00e9.txt'],
+    ['a control character', 'dist/x\u0007.txt'],
   ])('rejects %s in the archive', (_label, path) => {
     const bytes = gzipSync(writeTar([{ path, data: Buffer.from('x') }]));
     const dest = unpackTo();

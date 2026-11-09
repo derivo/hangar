@@ -39,7 +39,7 @@ const octal = (n: number, length: number) => `${n.toString(8).padStart(length - 
 
 function header(entry: TarEntry, size: number): Buffer {
   const h = Buffer.alloc(BLOCK);
-  // ponytail: ASCII paths only (bundled bays); non-ASCII would need pax headers.
+  // ASCII paths only (bundled bays); non-ASCII would need pax headers.
   let name = entry.path;
   let prefix = '';
   if (name.length > 100) {
@@ -79,7 +79,8 @@ export function writeTar(entries: TarEntry[]): Buffer {
 const text = (h: Buffer, start: number, length: number) =>
   h
     .subarray(start, start + length)
-    .toString('ascii')
+    // latin1 keeps every byte as it is; 'ascii' would drop the high bit (0xAE → '.')
+    .toString('latin1')
     .replace(/\0.*$/s, '');
 
 function readTar(tar: Buffer): TarEntry[] {
@@ -110,6 +111,8 @@ function readTar(tar: Buffer): TarEntry[] {
 }
 
 const unsafePath = (p: string) =>
+  // Packages carry ASCII paths only: no other bytes, no control characters.
+  /[^\x20-\x7e]/.test(p) ||
   p.startsWith('/') ||
   p.includes('\\') ||
   /^[a-zA-Z]:/.test(p) ||
@@ -179,8 +182,9 @@ export function packBay(dir: string, privateKey: KeyObject): BayPackage {
     version: string;
     icon: string;
   };
-  // Both name the output file (`dist/bays/<id>/<version>.bay`).
-  if (!/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/.test(manifest.id)) {
+  // Both name the output file (`dist/bays/<id>/<version>.bay`). Only Hangar's own bays are
+  // packed, so a package can never claim an id that looks like another publisher's.
+  if (!/^dev\.hangar(\.[a-z][a-z0-9-]*)+$/.test(manifest.id)) {
     throw new Error(`Invalid id in manifest: ${manifest.id}`);
   }
   if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]*)?$/.test(manifest.version)) {

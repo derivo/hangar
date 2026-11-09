@@ -25,7 +25,7 @@ otherwise write outside it.
 - **Unpacking** (`unpackBay`) only after verification and only into a new
   folder. Before the first write the whole archive is checked: only files and
   folders (type `0`, `5`), no links, devices or pax headers; no absolute paths,
-  no `\`, no drive, no segments `..`, `.` or empty; no path twice; header
+  no `\`, no drive, no segments `..`, `.` or empty, only printable ASCII; no path twice; header
   checksums match, archive not truncated. Files are created with `wx` (never
   through something that is already there), mode 644 or 755. At most 256 MiB
   unpacked, 10,000 entries and 32 path segments (folders cost no bytes in the

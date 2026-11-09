@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { Bus } from '@hangar/bus';
-import { startMcpServer, type RunningMcpServer } from './server';
+import { rateLimiter, startMcpServer, type RunningMcpServer } from './server';
 import { TokenRegistry } from './tokens';
 
 let server: RunningMcpServer;
@@ -144,5 +144,49 @@ describe('MCP server', () => {
     const bad = await post('{nope', auth);
     expect(bad.status).toBe(400);
     expect((await post('x'.repeat(1_100_000), auth)).status).toBe(400);
+  });
+
+  it('answers 429 once a session exceeds its rate limit, other sessions unaffected', async () => {
+    vi.useFakeTimers({ toFake: ['performance'] });
+    try {
+      const a = { authorization: `Bearer ${tokens.issue('dev.hangar.agents', 'a')}` };
+      const b = { authorization: `Bearer ${tokens.issue('dev.hangar.agents', 'b')}` };
+      const statuses = [];
+      for (let i = 0; i < 101; i++) statuses.push((await post('{nope', a)).status);
+      expect(statuses.slice(0, 100).every((s) => s === 400)).toBe(true);
+      expect(statuses[100]).toBe(429);
+      expect((await post('{nope', b)).status).toBe(400);
+      // 600 requests per minute: 0.1 s brings one back.
+      vi.advanceTimersByTime(100);
+      expect((await post('{nope', a)).status).toBe(400);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('rateLimiter', () => {
+  it('keeps its budget when the system clock is set back', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const auth = { authorization: `Bearer ${tokens.issue('dev.hangar.agents', 'c')}` };
+      expect((await post('{nope', auth)).status).toBe(400);
+      vi.setSystemTime(Date.now() - 3_600_000);
+      expect((await post('{nope', auth)).status).toBe(400);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('forgets buckets that are full again once it holds 1000', () => {
+    let clock = 0;
+    const limiter = rateLimiter(() => clock);
+    for (let i = 0; i < 1000; i++) limiter.allow(`old-${i}`);
+    expect(limiter.size).toBe(1000);
+    // 600 per minute refill a bucket of 100 within 10 s.
+    clock += 10_000;
+    limiter.allow('active');
+    limiter.allow('new');
+    expect(limiter.size).toBe(2);
   });
 });

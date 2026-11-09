@@ -125,10 +125,10 @@ server listens only on loopback; the desktop reaches it through an SSH tunnel.
   terminal; an unknown host key is rejected, not accepted.
 - The tunnel needs a shell with `cat` on the server; a key that allows only
   forwarding (`restrict,port-forwarding` without a command) is not enough.
-- `StdinNull yes` in the ssh config makes `cat` end immediately; the tunnel then
-  ends early or hangs, as long as a forwarded connection is open, no longer tied
-  to the app's life. OpenSSH knows `-o StdinNull=no` only from 8.7 (Windows 10 has
-  8.1).
+- `StdinNull yes` in the ssh config would make `cat` end immediately. The desktop
+  reads `ssh -V` before each tunnel and passes `-o StdinNull=no` from OpenSSH 8.7
+  on; older versions (Windows 10 has 8.1) reject the option, but then cannot have it
+  in their config either. An ssh whose version it cannot read gets no override.
 - If another process keeps a connection over the local port open, ssh lives on
   after a crash of the app as long as that connection.
 - The forwarded port lies on the desktop's loopback; other users of this machine

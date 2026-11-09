@@ -241,7 +241,7 @@ export class ServerConnections {
     const { local } = this.listeners;
     // Never to a server elsewhere: its agents would reach this desktop (ADR 0036).
     if (!server.local || !local || connection.version < 3) return;
-    // ponytail: a failed offer leaves the last one; the next connect offers again.
+    // A failed offer leaves the last one; the next connect offers again.
     connection.offer(local.functions()).catch(() => undefined);
   }
 

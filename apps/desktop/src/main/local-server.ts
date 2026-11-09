@@ -322,7 +322,7 @@ async function followWorktrees(
   for (const s of sessions) {
     if (!s.worktreePath?.startsWith(from + sep)) continue;
     s.worktreePath = to + s.worktreePath.slice(from.length);
-    // ponytail: a failed repair leaves only git in that worktree broken, the session restores.
+    // A failed repair leaves only git in that worktree broken, the session restores.
     await o.run('git', ['-C', s.worktreePath, 'worktree', 'repair']);
     changed = true;
   }

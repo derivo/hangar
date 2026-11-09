@@ -1,4 +1,4 @@
-import { generateKeyPairSync, type KeyObject } from 'node:crypto';
+import { createHash, generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
@@ -9,11 +9,12 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { gzipSync } from 'node:zlib';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { BayManifest } from '@hangar/sdk';
 import { signIndex, type BayIndexEntry } from './bay-index';
-import { packBay } from './bay-package';
+import { packBay, writeTar } from './bay-package';
 import { BayStore, rightsDiff } from './bay-store';
 
 const temp = (prefix: string) => mkdtempSync(join(tmpdir(), prefix));
@@ -29,6 +30,20 @@ const manifest = (over: Partial<BayManifest> = {}): BayManifest => ({
 });
 
 /** A local index folder signed with `key`: `index.json` and `v1/bays/<id>/<version>.bay`. */
+/** A package that `packBay` refuses (id outside `dev.hangar.`), as a hostile index could carry it. */
+function packForeign(src: string, key: KeyObject) {
+  const path = (p: string) => ({ path: p, data: readFileSync(join(src, p)), mode: 0o644 });
+  const tar = writeTar(['dist/index.html', 'icon.svg', 'manifest.json'].map(path));
+  const bytes = gzipSync(tar);
+  const sha256 = createHash('sha256').update(bytes).digest('hex');
+  return {
+    bytes,
+    sha256,
+    size: bytes.length,
+    signature: sign(null, bytes, key).toString('base64'),
+  };
+}
+
 function publish(
   dir: string,
   key: KeyObject,
@@ -42,7 +57,7 @@ function publish(
     writeFileSync(join(src, 'icon.svg'), '<svg/>');
     mkdirSync(join(src, 'dist'));
     writeFileSync(join(src, 'dist', 'index.html'), `<p>${m.version}</p>`);
-    const pkg = packBay(src, key);
+    const pkg = m.id.startsWith('dev.hangar.') ? packBay(src, key) : packForeign(src, key);
     const url = `v1/bays/${m.id}/${m.version}.bay`;
     mkdirSync(join(dir, 'v1', 'bays', m.id), { recursive: true });
     writeFileSync(join(dir, url), pkg.bytes);

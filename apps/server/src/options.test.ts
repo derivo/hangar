@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, realpathSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { checkedFolder, parseOptions } from './options';
+import { checkedFolder, parseOptions, withoutGitVars } from './options';
 
 describe('parseOptions', () => {
   it('reads data folder, address, roots and bay folders', () => {
@@ -135,5 +135,13 @@ describe('checkedFolder', () => {
     await expect(checkedFolder(join(root, 'missing'), [root])).rejects.toThrow(
       `Folder not found: ${join(root, 'missing')}`,
     );
+  });
+});
+
+describe('withoutGitVars', () => {
+  it('drops GIT_ variables in any case (Windows reads names case-insensitively)', () => {
+    expect(
+      withoutGitVars({ GIT_DIR: 'a', git_dir: 'b', Git_Config_Count: '1', PATH: '/bin' }),
+    ).toEqual({ PATH: '/bin' });
   });
 });

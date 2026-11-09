@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -10,6 +10,24 @@ import { createBay } from './create-bay.mjs';
 const root = () => mkdtempSync(join(tmpdir(), 'hangar-create-bay-'));
 
 describe('create-bay', () => {
+  it('enters the new bay in the files of electron-builder.yml', () => {
+    const dir = root();
+    const builder = join(dir, 'apps', 'desktop', 'electron-builder.yml');
+    mkdirSync(join(dir, 'apps', 'desktop'), { recursive: true });
+    writeFileSync(
+      builder,
+      'files:\n  - out/**\n  - from: ../../bays/agents\n    to: bays/agents\n' +
+        '    filter: [manifest.json, icon.svg, dist/**]\nextraResources:\n  - from: x\n',
+    );
+    createBay('dev.example.notes', { root: dir });
+    expect(readFileSync(builder, 'utf8')).toBe(
+      'files:\n  - out/**\n  - from: ../../bays/agents\n    to: bays/agents\n' +
+        '    filter: [manifest.json, icon.svg, dist/**]\n' +
+        '  - from: ../../bays/notes\n    to: bays/notes\n' +
+        '    filter: [manifest.json, icon.svg, dist/**]\nextraResources:\n  - from: x\n',
+    );
+  });
+
   it('scaffolds a bay with a valid manifest and a working main part', async () => {
     const dir: string = createBay('dev.example.notes', { root: root(), name: 'Notizen' });
     expect(dir).toMatch(/bays[\\/]notes$/);

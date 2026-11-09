@@ -30,6 +30,9 @@ function lastLine(output: string): string {
   return (lines.at(-1) ?? '').slice(0, 200);
 }
 
+/** How long a killed run may take to close its output before Hangar closes it. */
+const CLOSE_GRACE_MS = 2000;
+
 export interface JobProcess {
   done: Promise<{ exitCode: number; lastLine: string }>;
   kill(): void;
@@ -54,11 +57,24 @@ export function startJobProcess(options: {
     windowsVerbatimArguments: verbatim,
     windowsHide: true,
   });
+  let killed = false;
   const kill = () => {
+    killed = true;
+    // A child the kill missed (taskkill failed, or one that left the group) can hold the output
+    // pipes open; `close` waits for them. Closing our ends lets the run end anyway.
+    setTimeout(() => {
+      child.stdout!.destroy();
+      child.stderr!.destroy();
+    }, CLOSE_GRACE_MS).unref();
     try {
-      // ponytail: Windows ends only the shell; taskkill /T if children must go too
       if (group && child.pid) process.kill(-child.pid, 'SIGKILL');
-      else child.kill();
+      else if (child.pid) {
+        // Windows has no process groups: taskkill /T ends the command's children too.
+        spawn('taskkill', ['/T', '/F', '/PID', String(child.pid)], { windowsHide: true }).on(
+          'error',
+          () => child.kill(),
+        );
+      }
     } catch {
       // already gone
     }
@@ -80,7 +96,7 @@ export function startJobProcess(options: {
     child.on('close', (code) => {
       clearTimeout(timer);
       if (timedOut) reject(new Error(t.jobTimedOut(Math.ceil(options.timeoutMs / 60_000))));
-      else if (code === null) reject(new Error(t.jobStopped));
+      else if (code === null || killed) reject(new Error(t.jobStopped));
       else resolve({ exitCode: code, lastLine: lastLine(output) });
     });
   });

@@ -21,8 +21,8 @@ description: Create a new Hangar bay (manifest, main part, UI, tests, docs). Use
 4. UI in `src/ui/`: only `window.hangar.invoke/on`, no Node. Colors, font and
    spacing via `--hangar-*` variables (injected, light and dark).
 5. Fill in the bay's `CLAUDE.md` (purpose, functions, pitfalls).
-6. Delivery: add the bay to `apps/desktop/electron-builder.yml` under `files`
-   (pattern: the entry `../../bays/agents`).
+6. Delivery: `pnpm create:bay` adds the bay to `apps/desktop/electron-builder.yml`
+   under `files`; check the entry.
 7. At least one E2E test (skill `write-e2e-test`), then the gates:
    `pnpm lint && pnpm typecheck && pnpm test && pnpm test:e2e`.
 8. CHANGELOG entry under `Unreleased`, commit `feat(<slug>): …`.

@@ -8,6 +8,7 @@ All notable changes to this project. Format based on
 
 ### Added
 
+- Workspaces without a keychain (Linux without Secret Service, the server): with `HANGAR_KEY_PASSPHRASE` set, new relay keys are stored encrypted with it (`pass:`, scrypt + AES-256-GCM) instead of plain; existing `plain:` keys are still read. App and server drop the variable from their environment, so session shells and jobs do not inherit it. This is no isolation: on Linux a process of the same user can still read Hangar's original environment in `/proc/<pid>/environ`, and the key file is readable to the same user anyway; the passphrase protects keys at rest (backups, a copied disk), not against agents running as the same user.
 - Agent bay: the footer with the usage limits also shows the weekly limit of Claude and Codex, if they report one: "7d", share free and the reset with date and time.
 - License: MIT (`LICENSE`), copyright Derivo; also in `package.json` and the app's copyright.
 - Browser bay: the page zoom of the selected tab shows next to the address ("110 %") once it is not 100 %; a click sets it back. Cmd/Ctrl +, - and 0 in the page change it. Bays get `zoom` in `BrowserTab` and `ctx.browser.resetZoom(id)`.
@@ -87,6 +88,7 @@ All notable changes to this project. Format based on
 
 ### Changed
 
+- `pnpm create:bay` adds the new bay to the bundled bays in `apps/desktop/electron-builder.yml`; it no longer has to be entered by hand.
 - README: one-line pitch, screenshot (light and dark, rendered by `apps/desktop/e2e/readme-screenshots.spec.ts` with `HANGAR_SCREENSHOTS=1`), "Why", features with board, password bay and local server, status, "How it works" and "For AI agents". Sessions are described as shells in the project folder (ADR 0022), no longer in their own worktree.
 - Agent bay: "Add project" stays at the top of the project tree and the session counts at the bottom; only the projects scroll between them. Keyboard focus scrolls clear of both.
 - Board: a new task is created like a card in a list: "Add a task" at the end of the column "Open" opens a small form (title, optional description, Esc cancels), instead of a form across the page.
@@ -116,6 +118,18 @@ All notable changes to this project. Format based on
 
 ### Fixed
 
+- MCP server: the rate limit measures time with a monotonic clock; a system clock set back no longer answers every request with 429.
+- MCP server: the rate limit forgets buckets that are full again once it holds 1000, instead of keeping one per token ever used.
+- Desktop: relay keys that `HANGAR_KEY_PASSPHRASE` cannot open (missing or wrong) no longer stop the start without a word; an error box names the reason and Hangar starts without workspaces, the encrypted identity untouched. The in-app relaunch keeps the passphrase.
+- Agent bay: a job that timed out or was stopped now ends even when the kill misses a child that keeps its output open (a failed `taskkill` on Windows, a child outside the process group); after 2 s Hangar closes the pipes itself.
+- Agent bay and server: git calls drop `GIT_*` variables in any case (`git_dir`, `Git_Config_Count`); Windows reads environment names case-insensitively, so they still reached git there.
+- Server tunnels: `StdinNull yes` in the person's ssh config no longer ends the tunnel at once. The desktop reads `ssh -V` and passes `-o StdinNull=no` from OpenSSH 8.7 on; older versions, which reject the option, get the arguments as before.
+- MCP server: each session token is rate limited (bursts of 100, 600 requests per minute, enough for the statusline's quota reports); beyond that the server answers HTTP 429 `Too many requests`. Other sessions are not affected.
+- Agent bay: when 100 creations or removals of sessions and projects already wait, a new one is refused with "The agent bay is busy" instead of queueing without limit.
+- Agent bay: its own git calls (worktrees, branches, state) run without any `GIT_*` variable of Hangar's environment, as the server already does; before, only the variables that redirect git to another repository were removed. Session shells keep them.
+- `.bay` packages: `unpackBay` accepts only printable ASCII in paths. It decoded the header as ASCII and dropped the high bit, so a byte like `0xE9` (`é`) was written under another name (`i`); `0xAE 0xAE` became `..`, which the path check already refused, so this was no traversal.
+- `.bay` packages: `packBay` packs only bays whose id starts with `dev.hangar.`; an id such as `evil.com.hangar` is refused.
+- Agent bay, Windows: a job that times out or whose session closes now ends the whole process tree of its command (`taskkill /T /F`), not only `cmd.exe`.
 - Tests: the relay test "a function shared in two workspaces stays …" waits up to 5 s for the join instead of 1 s; on the Windows CI runner it failed now and then.
 - Relay: an instance publishes its own member list changes one after another. A renewal at the same time as adding or removing a member no longer makes the relay refuse one of them with "Not newer than the stored list".
 - Local server: while it restarts, the hint "New version ready" shows "Local server is starting …" instead of the button, also while the old server is still connected; before, nothing changed until it was down, so the restart looked like it did not start.

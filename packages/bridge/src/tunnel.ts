@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { connect, createServer } from 'node:net';
 
 /** A server reached through `ssh -L`: its bridge listens on `port` on its own loopback. */
@@ -41,22 +41,36 @@ function validPort(port: string, invalid: Error): number {
  * Arguments for `ssh`: forward, no prompts (no terminal to answer them). `cat` on the server
  * ends at the end of stdin, so ssh ends with the desktop, even after a crash (no `-N`).
  */
-export function sshArgs(target: SshTarget, localPort: number): string[] {
+export function sshArgs(target: SshTarget, localPort: number, stdinNull = false): string[] {
   return [
     '-T',
     ...['-o', 'BatchMode=yes', '-o', 'ExitOnForwardFailure=yes', '-o', 'ServerAliveInterval=15'],
     // Settings of the user's ssh config that would break the tunnel or detach it from the app:
     // a command of their own, a shared master connection that owns the forward and outlives
-    // this process. Not `StdinNull=no`: OpenSSH before 8.7 (Windows 10) rejects the option;
-    // with `StdinNull yes` in the config the tunnel may end early or, with an open forward,
-    // outlive the app (known limit, ADR 0019).
+    // this process, `StdinNull yes` (stdin is how the tunnel ends with the app). `StdinNull=no`
+    // only where ssh knows it: OpenSSH before 8.7 (Windows 10) rejects the option, and there
+    // the config cannot set it either.
     ...['-o', 'RemoteCommand=none'],
+    ...(stdinNull ? ['-o', 'StdinNull=no'] : []),
     ...['-o', 'ControlMaster=no', '-o', 'ControlPath=none'],
     ...['-L', `127.0.0.1:${localPort}:127.0.0.1:${target.port}`],
     '--',
     target.user ? `${target.user}@${target.host}` : target.host,
     'cat',
   ];
+}
+
+/** Whether the output of `ssh -V` names OpenSSH 8.7 or newer, which knows `StdinNull`. */
+export function stdinNullSupported(version: string): boolean {
+  const m = /OpenSSH_(?:for_Windows_)?(\d+)\.(\d+)/.exec(version);
+  return !!m && Number(m[1]) * 100 + Number(m[2]) >= 807;
+}
+
+/** `ssh -V` prints to stderr; an ssh that fails or is not OpenSSH yields no version. */
+function sshVersion(ssh: string): Promise<string> {
+  return new Promise((resolve) => {
+    execFile(ssh, ['-V'], { timeout: 5000 }, (_, stdout, stderr) => resolve(`${stdout}${stderr}`));
+  });
 }
 
 export interface Tunnel {
@@ -70,7 +84,8 @@ const READY_TIMEOUT_MS = 20_000;
 /** Starts `ssh -L` and resolves once the local port accepts connections. */
 export async function openTunnel(target: SshTarget, ssh = 'ssh'): Promise<Tunnel> {
   const port = await freePort();
-  const child = spawn(ssh, sshArgs(target, port), { stdio: ['pipe', 'ignore', 'pipe'] });
+  const stdinNull = stdinNullSupported(await sshVersion(ssh));
+  const child = spawn(ssh, sshArgs(target, port, stdinNull), { stdio: ['pipe', 'ignore', 'pipe'] });
   let stderr = '';
   child.stderr.on('data', (chunk) => (stderr += String(chunk)));
   const failed = new Promise<never>((_, reject) => {
@@ -88,7 +103,7 @@ export async function openTunnel(target: SshTarget, ssh = 'ssh'): Promise<Tunnel
   return { port, close };
 }
 
-// ponytail: the port may be taken between closing and ssh binding it; ssh then exits
+// The port may be taken between closing and ssh binding it; ssh then exits
 // (ExitOnForwardFailure) and the connection fails with that message. Retry if it ever matters.
 function freePort(): Promise<number> {
   return new Promise((resolve) => {

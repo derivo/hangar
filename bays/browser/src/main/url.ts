@@ -7,6 +7,6 @@ export function normalizeUrl(input: string): string | undefined {
   if (/^[a-z][a-z\d+.-]*:/i.test(text)) return undefined;
   const host = text.split('/')[0]!;
   if (host === 'localhost' || /^\d+(\.\d+){3}$/.test(host)) return `http://${text}`;
-  // ponytail: no search engine; an entry without a dot is not an address.
+  // No search engine; an entry without a dot is not an address.
   return host.includes('.') ? `https://${text}` : undefined;
 }

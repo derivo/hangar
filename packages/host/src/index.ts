@@ -8,3 +8,4 @@ export * from './workspaces';
 export * from './bay-index';
 export * from './bay-package';
 export * from './bay-store';
+export * from './key-protection';

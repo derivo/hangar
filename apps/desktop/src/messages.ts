@@ -186,6 +186,7 @@ const de = {
         : `${n} laufende Shells enden; ihr Verlauf bleibt.`,
   restartLocalServerFailed: 'Lokaler Server ließ sich nicht neu starten',
   noKeychain: 'Kein Schlüsselbund verfügbar: Passwörter werden nicht im Klartext gespeichert',
+  workspacesUnavailable: 'Arbeitsbereiche nicht verfügbar: Hangar startet ohne sie',
   restart: 'Neu starten',
   openLog: 'Log öffnen',
   localServerShells: (n: number) =>
@@ -481,6 +482,7 @@ const en: typeof de = {
         : `${n} running shells end; their history stays.`,
   restartLocalServerFailed: 'The local server could not be restarted',
   noKeychain: 'No keychain available: passwords are never stored as plain text',
+  workspacesUnavailable: 'Workspaces not available: Hangar starts without them',
   restart: 'Restart',
   openLog: 'Open log',
   localServerShells: (n) =>

@@ -26,6 +26,8 @@ export default defineConfig({
         '**/test-*.ts',
         'apps/server/src/main.ts',
         'apps/relay/src/main.ts',
+        // Entry point of the CLI; hangar.test.ts runs it as a child process.
+        'packages/cli/src/hangar.ts',
         // Wiring of the Electron app; covered by the E2E tests.
         'apps/desktop/src/main/index.ts',
       ],
