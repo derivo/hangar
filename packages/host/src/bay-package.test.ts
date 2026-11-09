@@ -104,6 +104,9 @@ describe('.bay packages (phase 19, ADR 0033)', () => {
     ['a backslash', 'dist\\..\\escape.txt'],
     ['a drive letter', 'C:/escape.txt'],
     ['an empty segment', 'dist//x'],
+    // 'ascii' decoding would drop the high bit and read 0xAE 0xAE as '..'
+    ['bytes outside ASCII', '\u00ae\u00ae/escape.txt'],
+    ['a control character', 'dist/x\u0007.txt'],
   ])('rejects %s in the archive', (_label, path) => {
     const bytes = gzipSync(writeTar([{ path, data: Buffer.from('x') }]));
     const dest = unpackTo();

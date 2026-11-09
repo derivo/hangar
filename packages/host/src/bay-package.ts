@@ -79,7 +79,8 @@ export function writeTar(entries: TarEntry[]): Buffer {
 const text = (h: Buffer, start: number, length: number) =>
   h
     .subarray(start, start + length)
-    .toString('ascii')
+    // latin1 keeps every byte as it is; 'ascii' would drop the high bit (0xAE → '.')
+    .toString('latin1')
     .replace(/\0.*$/s, '');
 
 function readTar(tar: Buffer): TarEntry[] {
@@ -110,6 +111,8 @@ function readTar(tar: Buffer): TarEntry[] {
 }
 
 const unsafePath = (p: string) =>
+  // Packages carry ASCII paths only: no other bytes, no control characters.
+  /[^\x20-\x7e]/.test(p) ||
   p.startsWith('/') ||
   p.includes('\\') ||
   /^[a-zA-Z]:/.test(p) ||
