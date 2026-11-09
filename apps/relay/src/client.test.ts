@@ -514,8 +514,13 @@ describe('RelayClient', () => {
     expect(await b.client.join('two', await a.client.invite('two'), anna.fingerprint)).toBe(
       'waiting',
     );
-    await vi.waitFor(() => expect(a.client.isMember('two', ben.fingerprint)).toBe(true));
-    await vi.waitFor(() => expect(b.client.isMember('two', anna.fingerprint)).toBe(true));
+    // The join takes longer than the default 1 s on the Windows CI runner.
+    await vi.waitFor(() => expect(a.client.isMember('two', ben.fingerprint)).toBe(true), {
+      timeout: 5000,
+    });
+    await vi.waitFor(() => expect(b.client.isMember('two', anna.fingerprint)).toBe(true), {
+      timeout: 5000,
+    });
     shared.team = [];
     a.client.announceAll('team');
     await new Promise((r) => setTimeout(r, 200));
