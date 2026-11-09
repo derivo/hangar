@@ -1,6 +1,9 @@
+import { spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import {
   Endpoint,
@@ -487,5 +490,50 @@ describe('Workspace member list', () => {
     expect(() => new Workspace({ ...list, version: 9 })).toThrow(
       'Member list rejected: invalid signature',
     );
+  });
+});
+
+describe('ReplayGuard after a crash (S4)', () => {
+  // A separate process writes the state and is killed hard (SIGKILL) at an arbitrary point,
+  // possibly mid-write; it prints each number only once `accept` has returned.
+  it('starts from a valid state that refuses every message accepted before the kill', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hangar-replay-crash-'));
+    const { outputText } = ts.transpileModule(readFileSync(join(__dirname, 'replay.ts'), 'utf8'), {
+      compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+    });
+    writeFileSync(join(dir, 'replay.mjs'), outputText);
+    const file = join(dir, 'state.json');
+    const header = { from: anna.fingerprint, epoch: 'e'.repeat(16) };
+    const child = `
+      import { writeSync } from 'node:fs';
+      import { ReplayGuard } from ${JSON.stringify(pathToFileURL(join(dir, 'replay.mjs')).href)};
+      const guard = new ReplayGuard(${JSON.stringify(file)});
+      for (let seq = 1; ; seq++) {
+        guard.accept({ ...${JSON.stringify(header)}, seq, ts: Date.now() });
+        writeSync(1, seq + '\\n');
+      }`;
+    const accepted = await new Promise<number>((resolve) => {
+      const p = spawn(process.execPath, ['--input-type=module', '-e', child]);
+      let out = '';
+      p.stdout.on('data', (chunk: Buffer) => {
+        out += chunk.toString();
+        if (out.split('\n').length > 50) p.kill('SIGKILL');
+      });
+      p.on('exit', () => resolve(Math.max(...out.split('\n').filter(Boolean).map(Number))));
+    });
+    expect(accepted).toBeGreaterThanOrEqual(50);
+    expect(() => JSON.parse(readFileSync(file, 'utf8'))).not.toThrow();
+    const guard = new ReplayGuard(file);
+    const message = (seq: number) => ({
+      ...header,
+      v: 1,
+      workspace: 'team',
+      to: ben.fingerprint,
+      seq,
+      ts: Date.now(),
+    });
+    expect(() => guard.accept(message(accepted))).toThrow('Replayed message');
+    expect(() => guard.accept(message(1))).toThrow('Replayed message');
+    guard.accept(message(accepted + 1000));
   });
 });

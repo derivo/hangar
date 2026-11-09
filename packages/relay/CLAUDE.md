@@ -45,6 +45,8 @@ No Electron dependency.
   request to the relay; 10 open calls per instance in both directions; messages
   from the relay at most 2 MiB (`ws` with `maxPayload`).
 - `writeDurable(file, data, mode?)` – atomic and with `fsync` (replay state, `relay.json`).
+  `relay.test.ts` (S4) kills a writing process with SIGKILL and checks that the state stays
+  valid and refuses every accepted number; power loss itself is not simulated.
 
 ## Pitfalls
 
