@@ -712,8 +712,12 @@ export function validateEnv(env: Record<string, EnvValue>): void {
   }
 }
 
-/** How far trimming looks for the next line start before cutting mid-line. */
-const LINE_SEARCH = 4096;
+/**
+ * How far trimming looks for the next line start before cutting mid-line: 4 KiB is far more
+ * than a terminal line, so ordinary output always cuts at a line start, but a full-screen
+ * program without line breaks does not lose a large part of its scrollback.
+ */
+const SCROLLBACK_LINE_SEARCH_LIMIT = 4096;
 /** Keeps the newest output, cut at a line start so no escape sequence is split mid-line. */
 export function trimScrollback(text: string, limit = SCROLLBACK_LIMIT): string {
   if (text.length <= limit) return text;
@@ -721,5 +725,7 @@ export function trimScrollback(text: string, limit = SCROLLBACK_LIMIT): string {
   const nextLine = text.indexOf('\n', cut);
   // Full-screen programs (Claude Code) hardly write line breaks: the next one may be far
   // away, e.g. in the restart marker; then cut where the limit is.
-  return text.slice(nextLine === -1 || nextLine - cut > LINE_SEARCH ? cut : nextLine + 1);
+  return text.slice(
+    nextLine === -1 || nextLine - cut > SCROLLBACK_LINE_SEARCH_LIMIT ? cut : nextLine + 1,
+  );
 }
