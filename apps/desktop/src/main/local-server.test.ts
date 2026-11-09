@@ -396,6 +396,16 @@ describe('pairWhenReady', () => {
 });
 
 // The local server is a LaunchAgent, macOS only (ADR 0036, localServerWanted).
+/** A fake `run` for a loaded server: records calls, `launchctl print` finds it until `bootout`. */
+function runningUntilBootout(calls: string[][]) {
+  let loaded = true;
+  return async (cmd: string, args: string[]) => {
+    calls.push([cmd, ...args]);
+    if (args[0] === 'bootout') loaded = false;
+    return args[0] === 'print' && !loaded ? 113 : 0;
+  };
+}
+
 describe.skipIf(process.platform === 'win32')('migrateToLocalServer', () => {
   const ID = 'dev.hangar.agents';
   const json = (file: string) => JSON.parse(readFileSync(file, 'utf8'));
@@ -468,12 +478,13 @@ describe.skipIf(process.platform === 'win32')('migrateToLocalServer', () => {
     const label = localServerLabel(userData);
     const running = {
       ...options,
-      run: async (cmd: string, args: string[]) => (calls.push([cmd, ...args]), 0),
+      run: runningUntilBootout(calls),
     };
     await migrateToLocalServer(running, [ID]);
     expect(calls).toEqual([
       ['launchctl', 'print', `gui/501/${label}`],
       ['launchctl', 'bootout', `gui/501/${label}`],
+      ['launchctl', 'print', `gui/501/${label}`],
     ]);
     expect(json(join(data, 'bays', ID, 'state.json'))).toEqual({ projects: ['shop'] });
   });
@@ -595,7 +606,7 @@ describe.skipIf(process.platform === 'win32')('migrateToLocalServer', () => {
     const running = {
       ...options,
       keys: toServer,
-      run: async (cmd: string, args: string[]) => (calls.push([cmd, ...args]), 0),
+      run: runningUntilBootout(calls),
     };
     await migrateToLocalServer(running, [ID]);
     // Nothing to move: the server keeps running.
@@ -611,6 +622,7 @@ describe.skipIf(process.platform === 'win32')('migrateToLocalServer', () => {
     expect(calls).toEqual([
       ['launchctl', 'print', `gui/501/${label}`],
       ['launchctl', 'bootout', `gui/501/${label}`],
+      ['launchctl', 'print', `gui/501/${label}`],
     ]);
     expect(json(join(data, 'workspaces', 'relay-identity.json')).keys).toBe('plain:K');
   });
@@ -765,6 +777,7 @@ describe.skipIf(process.platform === 'win32')('migrateFromLocalServer', () => {
     expect(calls).toEqual([
       ['launchctl', 'print', service],
       ['launchctl', 'bootout', service],
+      ['launchctl', 'print', service],
     ]);
     // Else launchd would start it again at the next login.
     expect(existsSync(plistFile)).toBe(false);
@@ -904,6 +917,53 @@ describe.skipIf(process.platform === 'win32')('migrateFromLocalServer', () => {
     expect(json(join(data, 'jobs.json'))).toEqual([{ id: 'a', bayId: ID, label: 'Nightly' }]);
   });
 
+  it('moves the bay back only after the server has ended, not while it may still write', async () => {
+    const { options, calls, userData, data } = await onServer();
+    const service = `gui/501/${localServerLabel(userData)}`;
+    // `bootout` returns while the old server still ends: `print` finds it twice more.
+    const run = options.run;
+    let left = 0;
+    const untouched: boolean[] = [];
+    options.run = async (cmd, args) => {
+      if (args[0] === 'bootout') left = 2;
+      if (args[0] === 'print' && left > 0) {
+        left--;
+        calls.push([cmd, ...args]);
+        untouched.push(existsSync(join(data, 'bays', ID)));
+        return 0;
+      }
+      return run(cmd, args);
+    };
+    await migrateFromLocalServer(options, [ID]);
+    expect(calls).toEqual([
+      ['launchctl', 'print', service],
+      ['launchctl', 'bootout', service],
+      ['launchctl', 'print', service],
+      ['launchctl', 'print', service],
+      ['launchctl', 'print', service],
+    ]);
+    expect(untouched).toEqual([true, true]);
+    expect(existsSync(join(userData, 'bays', ID))).toBe(true);
+  });
+
+  it('moves nothing when the server has not ended after 30 s', async () => {
+    const { options, userData, dir, plistFile } = await onServer();
+    options.run = async () => 0;
+    vi.useFakeTimers();
+    try {
+      const result = expect(migrateFromLocalServer(options, [ID])).rejects.toThrow(
+        'Stopping the local server failed',
+      );
+      await vi.advanceTimersByTimeAsync(30_000);
+      await result;
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(existsSync(plistFile)).toBe(true);
+    expect(existsSync(join(dir, 'migrated'))).toBe(true);
+    expect(existsSync(join(userData, 'bays', ID))).toBe(false);
+  });
+
   it('moves nothing while the server cannot be stopped, and tries again next time', async () => {
     const { options, userData, dir, plistFile } = await onServer();
     let n = 0;
@@ -937,6 +997,7 @@ describe.skipIf(process.platform === 'win32')('migrateFromLocalServer', () => {
     expect(calls.map((c) => c.slice(0, 2))).toEqual([
       ['launchctl', 'print'],
       ['launchctl', 'bootout'],
+      ['launchctl', 'print'],
     ]);
     expect(
       existsSync(join(options.launchAgents, `${localServerLabel(options.userData)}.plist`)),

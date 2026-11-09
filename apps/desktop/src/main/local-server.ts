@@ -169,11 +169,11 @@ interface MovedKeys {
 }
 
 async function stop(o: Pick<LocalServerOptions, 'run'>, service: string): Promise<void> {
-  if (
-    (await o.run('launchctl', ['print', service])) === 0 &&
-    (await o.run('launchctl', ['bootout', service])) !== 0
-  )
+  if ((await o.run('launchctl', ['print', service])) !== 0) return;
+  if ((await o.run('launchctl', ['bootout', service])) !== 0)
     throw new Error('Stopping the local server failed');
+  // The old server would otherwise still write into the data being moved.
+  if (!(await unloaded(o, service))) throw new Error('Stopping the local server failed');
 }
 
 /** A relay or workspace was set up: `workspaces.json` exists only after that. */
@@ -407,12 +407,15 @@ export async function ensureLocalServer(
 /**
  * Waits until launchd no longer has the service: `bootout` returns while the old server still
  * ends (closing shells, at most launchd's ExitTimeOut of 20 s), and a `bootstrap` before that
- * fails with exit code 5.
+ * fails with exit code 5. False when it is still there after 30 s.
  */
-async function unloaded(o: LocalServerOptions, service: string): Promise<void> {
+async function unloaded(o: Pick<LocalServerOptions, 'run'>, service: string): Promise<boolean> {
   const until = Date.now() + 30_000;
-  while ((await o.run('launchctl', ['print', service])) === 0 && Date.now() < until)
+  while ((await o.run('launchctl', ['print', service])) === 0) {
+    if (Date.now() >= until) return false;
     await new Promise((r) => setTimeout(r, 100));
+  }
+  return true;
 }
 
 /**
