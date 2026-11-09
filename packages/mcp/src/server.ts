@@ -7,9 +7,13 @@ import type { Bus, Caller } from '@hangar/bus';
 import type { TokenRegistry } from './tokens';
 
 const MAX_BODY = 1_000_000;
-/** Token bucket per session token: bursts of 20, refilled at 100 requests per minute. */
-const BURST = 20;
-const REFILL_PER_MS = 100 / 60_000;
+/**
+ * Token bucket per session token: bursts of 100, refilled at 600 requests per minute. Claude
+ * Code's statusline runs `hangar statusline` several times a second while it writes, and each
+ * run reports the quota; a tighter limit would turn the agent's own tool calls into 429.
+ */
+const BURST = 100;
+const REFILL_PER_MS = 600 / 60_000;
 
 export interface McpServerOptions {
   bus: Bus;

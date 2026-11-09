@@ -37,8 +37,9 @@ The checks run in this order. The body is always JSON of the form
 | 400    | Body is not valid JSON or too large   | Message of the JSON parser or `Request too large` |
 | 500    | unexpected error during processing    | Error message                                     |
 
-Rate limit: each token has a bucket of 20 requests that refills at 100 requests
-per minute (`packages/mcp/src/server.ts`). Other sessions are not affected.
+Rate limit: each token has a bucket of 100 requests that refills at 600 requests
+per minute (`packages/mcp/src/server.ts`); Claude Code's statusline alone reports
+several times a second while it writes. Other sessions are not affected.
 
 Errors of a bay function are not HTTP errors. They come back as an MCP result
 with `isError: true` and the message as text.

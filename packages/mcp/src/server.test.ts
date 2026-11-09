@@ -152,12 +152,12 @@ describe('MCP server', () => {
       const a = { authorization: `Bearer ${tokens.issue('dev.hangar.agents', 'a')}` };
       const b = { authorization: `Bearer ${tokens.issue('dev.hangar.agents', 'b')}` };
       const statuses = [];
-      for (let i = 0; i < 21; i++) statuses.push((await post('{nope', a)).status);
-      expect(statuses.slice(0, 20).every((s) => s === 400)).toBe(true);
-      expect(statuses[20]).toBe(429);
+      for (let i = 0; i < 101; i++) statuses.push((await post('{nope', a)).status);
+      expect(statuses.slice(0, 100).every((s) => s === 400)).toBe(true);
+      expect(statuses[100]).toBe(429);
       expect((await post('{nope', b)).status).toBe(400);
-      // 100 requests per minute refill the bucket.
-      vi.setSystemTime(Date.now() + 60_000);
+      // 600 requests per minute: 0.1 s brings one back.
+      vi.setSystemTime(Date.now() + 100);
       expect((await post('{nope', a)).status).toBe(400);
     } finally {
       vi.useRealTimers();
