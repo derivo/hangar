@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { connect, createServer } from 'node:net';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseAddress, openTunnel, sshArgs } from './tunnel';
+import { parseAddress, openTunnel, sshArgs, stdinNullSupported } from './tunnel';
 
 const fakeSsh = join(__dirname, '../fixtures/fake-ssh.mjs');
 
@@ -78,6 +78,26 @@ describe('sshArgs', () => {
     expect(effective).not.toMatch(/^remotecommand /m);
     expect(effective).toMatch(/^controlmaster false$/m);
     expect(effective).not.toMatch(/^controlpath /m);
+  });
+
+  it('overrides `StdinNull yes` of the config where OpenSSH knows the option (8.7+)', () => {
+    const args = sshArgs({ host: 'heimserver', port: 7420 }, 50123, true);
+    expect(args.slice(0, args.indexOf('-L')).join(' ')).toContain('-o StdinNull=no');
+    expect(sshArgs({ host: 'heimserver', port: 7420 }, 50123, false)).not.toContain('StdinNull=no');
+  });
+});
+
+describe('stdinNullSupported', () => {
+  it('reads the OpenSSH version from `ssh -V`', () => {
+    expect(stdinNullSupported('OpenSSH_9.9p2, LibreSSL 3.3.6')).toBe(true);
+    expect(stdinNullSupported('OpenSSH_8.7p1, OpenSSL 1.1.1k')).toBe(true);
+    expect(stdinNullSupported('OpenSSH_10.0p2 Debian-5, OpenSSL 3.5.1')).toBe(true);
+    // Windows 10 ships 8.1, Ubuntu 20.04 8.2: they reject the option.
+    expect(stdinNullSupported('OpenSSH_for_Windows_8.1p1, LibreSSL 3.0.2')).toBe(false);
+    expect(stdinNullSupported('OpenSSH_8.2p1 Ubuntu-4ubuntu0.13, OpenSSL 1.1.1f')).toBe(false);
+    expect(stdinNullSupported('OpenSSH_7.9p1')).toBe(false);
+    // Unknown (another ssh, or it failed): leave the option out, as before.
+    expect(stdinNullSupported('')).toBe(false);
   });
 });
 
