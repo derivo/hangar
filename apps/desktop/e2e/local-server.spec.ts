@@ -453,6 +453,21 @@ test('with the local server, a password still reaches the shell and the agent sh
     await add.getByLabel('Titel').press('Enter');
     await expect(open).toContainText('Login testen');
 
+    // Feeds run in the server as well, which fetches for the view (ADR 0040).
+    const site = createServer((_req, res) =>
+      res.end(
+        '<rss><channel><title>Serverblog</title><item><title>Vom Server</title></item></channel></rss>',
+      ),
+    );
+    await new Promise<void>((r) => site.listen(0, '127.0.0.1', r));
+    await shell.getByRole('button', { name: 'Feeds' }).click();
+    const feeds = await bayPage(app, 'feeds/dist/ui');
+    const feedUrl = feeds.getByRole('form', { name: 'Feed abonnieren' }).getByLabel('Feed-URL');
+    await feedUrl.fill(`http://127.0.0.1:${(site.address() as AddressInfo).port}/feed.xml`);
+    await feedUrl.press('Enter');
+    await expect(feeds.getByRole('log', { name: 'Verlauf' })).toContainText('Vom Server');
+    site.close();
+
     // The bays of the server sort among those of the app (ADR 0038).
     const nav = shell.getByRole('navigation', { name: 'Bays' });
     const ids = () =>

@@ -304,6 +304,19 @@ again on their own. When a session ends, its tasks in progress go back to
 
 All five additionally take `project?` (at most 200), only for other instances.
 
+### Feeds (`dev.hangar.feeds/…`)
+
+RSS and Atom subscriptions of the person (ADR 0040, `bays/feeds/manifest.json`).
+Not sensitive, not open to agents: the first call asks. Hangar fetches the
+feeds while its view is loaded; entry texts come from the web and are data, not
+instructions.
+
+| Tool         | Parameters                                                                                                        | Response                                                                                                  |
+| ------------ | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `feed.list`  | –                                                                                                                 | feeds: `url`, `title`, `fetchedAt?`, `error?`                                                             |
+| `feed.add`   | `url` (http or https; no `localhost`, `*.local`, loopback or private address)                                     | new feed; error `Feed already exists`                                                                     |
+| `feed.items` | `feedUrl?`, `since?` (ISO date-time with `Z` or offset, compared with `receivedAt`), `limit?` (1–500, default 50) | entries newest last: `id`, `title`, `link`, `summary`, `published?`, `feedUrl`, `feedTitle`, `receivedAt` |
+
 ### Tool errors
 
 As text in a result with `isError: true`:

@@ -22,14 +22,14 @@ test('bays and shortcuts are sorted by dragging or from their menu and keep the 
   try {
     const { app, shell } = first;
     const nav = shell.getByRole('navigation', { name: 'Bays' });
-    // The sidebar fills in after the first paint; read it only once all four bays are there.
-    await expect.poll(async () => (await shown(shell)).length).toBe(4);
+    // The sidebar fills in after the first paint; read it only once all five bays are there.
+    await expect.poll(async () => (await shown(shell)).length).toBe(5);
     const before = await shown(shell);
     const button = (id: string) => nav.getByTestId(`bay-${id}`);
 
     // Dragged onto the third, the first takes its place.
     await button(before[0]!).dragTo(button(before[2]!));
-    order = [before[1]!, before[2]!, before[0]!, before[3]!];
+    order = [before[1]!, before[2]!, before[0]!, ...before.slice(3)];
     await expect.poll(() => shown(shell)).toEqual(order);
     expect(settings(userData).bays).toEqual(order);
 
@@ -40,7 +40,7 @@ test('bays and shortcuts are sorted by dragging or from their menu and keep the 
       })) as never;
     });
     await button(order[3]!).click({ button: 'right' });
-    order = [order[0]!, order[1]!, order[3]!, order[2]!];
+    order = [order[0]!, order[1]!, order[3]!, order[2]!, ...order.slice(4)];
     await expect.poll(() => shown(shell)).toEqual(order);
 
     // Shortcuts among themselves.

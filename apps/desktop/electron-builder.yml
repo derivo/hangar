@@ -23,6 +23,9 @@ files:
   - from: ../../bays/board
     to: bays/board
     filter: [manifest.json, icon.svg, dist/**]
+  - from: ../../bays/feeds
+    to: bays/feeds
+    filter: [manifest.json, icon.svg, dist/**]
 extraResources:
   - from: ../../packages/cli/dist/hangar.mjs
     to: cli/hangar.mjs
