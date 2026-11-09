@@ -232,6 +232,58 @@ describe('ServerConnections', () => {
     await expect(connections.invoke(id, 'dev.echo', 'echo', [3])).resolves.toBe(3);
   });
 
+  it('counts the reconnect attempts until it is connected again', async () => {
+    const s = await startEchoServer();
+    server = s.server;
+    const port = Number(s.address.split(':')[1]);
+    const { connections } = desktop(undefined, 20);
+    const probe = await connections.probe(s.address);
+    const id = await connections.pair(probe.id, 'Heimserver', s.code());
+    expect(connections.list()[0]!.retry).toBeUndefined();
+
+    await server.close();
+    server = undefined;
+    await until(() => (connections.list()[0]!.retry ?? 0) >= 3);
+    expect(connections.list()[0]!.retry).toBeGreaterThanOrEqual(3);
+    expect(connections.list()[0]!.status).not.toBe('connected');
+
+    server = (await startEchoServer(s.data, port)).server;
+    await until(() => connections.list()[0]!.status === 'connected');
+    expect(connections.list()[0]!.retry).toBeUndefined();
+    connections.disconnect(id);
+    expect(connections.list()[0]!.retry).toBeUndefined();
+  });
+
+  it('names the next attempt while it waits, and none once it gives up (Codex review)', async () => {
+    const s = await startEchoServer();
+    server = s.server;
+    const port = Number(s.address.split(':')[1]);
+    const { connections, changed } = desktop(undefined, 20);
+    const probe = await connections.probe(s.address);
+    await connections.pair(probe.id, 'Heimserver', s.code());
+    const seen: { status: string; retry?: number }[] = [];
+    changed.mockImplementation(() => {
+      const { status, retry } = connections.list()[0]!;
+      seen.push({ status, retry });
+    });
+
+    await server.close();
+    server = undefined;
+    await until(() => seen.filter((v) => v.status === 'connecting').length >= 3);
+    // Every pause already names the attempt that follows it.
+    const down = seen.slice(seen.findIndex((v) => v.status !== 'connected'));
+    expect(down[0]).toEqual({ status: 'disconnected', retry: 1 });
+    for (const [i, view] of down.entries()) {
+      if (view.status === 'connecting') expect(view.retry).toBe(down[i - 1]!.retry);
+    }
+
+    // Another server on the port: rejected for good, no attempt follows.
+    server = (await startEchoServer(undefined, port)).server;
+    await until(() => connections.list()[0]!.error?.startsWith('Server fingerprint') ?? false);
+    expect(connections.list()[0]).toMatchObject({ status: 'failed' });
+    expect(connections.list()[0]!.retry).toBeUndefined();
+  });
+
   it('tries no more after a disconnect, a remove or a rejected key', async () => {
     const s = await startEchoServer();
     server = s.server;

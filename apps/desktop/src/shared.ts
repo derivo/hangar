@@ -66,6 +66,10 @@ export interface SidebarLocalServer {
   update?: { running: string; ready: string };
   /** A restart runs; the old server may still be connected until it stops. */
   restarting?: true;
+  /** Number of the reconnect attempt running or waiting while it is not connected. */
+  retry?: number;
+  /** The last lines of its log, followed while the page of a selected bay says it is down. */
+  log?: string[];
 }
 
 /** Height of the hint „Neue Version bereit“ above a bay of the local server. */

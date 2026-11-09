@@ -36,6 +36,7 @@ import {
   type LoadedBay,
 } from '@hangar/host';
 import { BrowserTabs, type Placement } from './browser-tabs';
+import { tailFile } from './log-tail';
 import { t } from '../messages';
 import { gitIdentity } from './overview';
 import { askWithDialog } from './prompter';
@@ -57,6 +58,8 @@ import {
 } from '../shared';
 
 const SIDEBAR_WIDTH = 64;
+/** Lines of the local server's log on its page while it is down. */
+const LOG_LINES = 200;
 
 /** What a bay view talks to: a bay running here, or one on a server (ADR 0019). */
 interface BayTarget {
@@ -162,6 +165,8 @@ export class Host {
   private localError?: string;
   private localRestarting?: Promise<void>;
   private localStarting = false;
+  /** The local server's log, followed while its page says it is down. */
+  private logTail?: { lines: string[]; stop(): void };
   /** The status line of the tray menu as last built; `''` without a local server. */
   private trayShown?: string;
   /** System icons of shortcut paths as data URLs, loaded once (ADR 0027). */
@@ -501,7 +506,32 @@ export class Host {
       })),
       ...(update && { update }),
       ...(this.localStarting && { restarting: true as const }),
+      ...(status !== 'connected' && server?.retry && { retry: server.retry }),
+      ...(this.logTail && { log: this.logTail.lines }),
     };
+  }
+
+  /** Follows the log while the page of a selected bay of the local server says it is down. */
+  private followLog(): void {
+    const local = this.localServerState();
+    const wanted =
+      !!this.localServer.log &&
+      !!local &&
+      local.status !== 'connected' &&
+      local.bays.some((b) => b.id === this.selected);
+    if (wanted === !!this.logTail) return;
+    if (!wanted) return this.stopLog();
+    const tail = { lines: [] as string[], stop: () => {} };
+    this.logTail = tail;
+    tail.stop = tailFile(this.localServer.log!, LOG_LINES, (lines) => {
+      tail.lines = lines;
+      if (this.logTail === tail) this.pushState();
+    });
+  }
+
+  private stopLog(): void {
+    this.logTail?.stop();
+    this.logTail = undefined;
   }
 
   private isLocalKey(key: string | null | undefined): boolean {
@@ -745,6 +775,7 @@ export class Host {
       selected: this.selected,
       windows: [...this.bayWindows].map(([win, w]) => ({ ...w, bounds: win.getNormalBounds() })),
     });
+    this.stopLog();
     this.servers.closeAll();
     for (const runtime of this.runtimes.values()) await runtime.deactivate();
   }
@@ -944,8 +975,9 @@ export class Host {
 
   pushState(): void {
     // Bays may set badges while they activate, before the window exists.
-    if (this.window && !this.window.isDestroyed())
-      this.window.webContents.send('shell:state', this.state());
+    if (!this.window || this.window.isDestroyed()) return;
+    this.followLog();
+    this.window.webContents.send('shell:state', this.state());
   }
 
   private createWindow(saved: Bounds | undefined, maximized: boolean): void {

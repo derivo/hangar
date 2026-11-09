@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -205,6 +205,7 @@ class FakeConnections {
     badges: Record<string, number>;
     local?: true;
     sessions?: number;
+    retry?: number;
   }[] = [];
   list = () => this.servers;
   connectAll = vi.fn(async () => undefined);
@@ -1553,10 +1554,12 @@ describe('Host: the local server in sidebar, tray and notifications (ADR 0036, s
     servers.events.changed();
     // Selected still: the page there says it is down.
     expect(host.state().selected).toBe(KEY);
+    // Its page follows the log, here one not written yet.
     expect(host.state().localServer).toEqual({
       status: 'failed',
       error: 'kaputt',
       bays: [{ id: KEY, name: 'Gamma', icon: expect.any(String), badge: 0 }],
+      log: [],
     });
   });
 
@@ -1689,6 +1692,44 @@ describe('Host: the local server in sidebar, tray and notifications (ADR 0036, s
     servers.servers = [local({ status: 'connecting', bays: [] })];
     servers.events.changed();
     expect(status()).toEqual({ status: 'connecting', error: undefined });
+  });
+
+  it('follows its log while its page says it is down, and names the reconnect attempt', async () => {
+    const log = join(mkdtempSync(join(tmpdir(), 'hangar-log-')), 'server.log');
+    writeFileSync(log, 'eins\nzwei\n');
+    const { host, servers, shellState, window } = await started(options({ log }));
+    servers.servers = [local({ status: 'failed', error: 'weg', bays: [], retry: 3 })];
+    servers.events.changed();
+    // Another page: the attempt counts, the log is not followed.
+    expect(host.state().localServer).toMatchObject({ status: 'failed', retry: 3 });
+    expect(host.state().localServer!.log).toBeUndefined();
+    host.select(KEY);
+    expect(shellState().localServer!.log).toEqual(['eins', 'zwei']);
+    appendFileSync(log, 'drei\n');
+    await vi.waitFor(
+      () => expect(shellState().localServer!.log).toEqual(['eins', 'zwei', 'drei']),
+      {
+        timeout: 3000,
+      },
+    );
+    // Connected: no attempt, the page goes away and the log is no longer followed.
+    servers.servers = [local({ retry: 3 })];
+    servers.events.changed();
+    expect(host.state().localServer).not.toHaveProperty('retry');
+    expect(host.state().localServer).not.toHaveProperty('log');
+    const pushed = window().webContents.send.mock.calls.length;
+    appendFileSync(log, 'vier\n');
+    await new Promise((r) => setTimeout(r, 600));
+    expect(window().webContents.send.mock.calls.length).toBe(pushed);
+    // Down again on another page, and on quit: nothing followed.
+    servers.servers = [local({ status: 'failed', bays: [] })];
+    host.select(KEY);
+    expect(host.state().localServer!.log).toEqual(['eins', 'zwei', 'drei', 'vier']);
+    host.select('overview');
+    expect(host.state().localServer).not.toHaveProperty('log');
+    host.select(KEY);
+    await host.stop();
+    expect(host.state().localServer).not.toHaveProperty('log');
   });
 
   it('says it restarts while the old server is still connected', async () => {

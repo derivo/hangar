@@ -64,6 +64,13 @@ test('starts the local server as a LaunchAgent, pairs without a code and outlive
     await expect(
       content.getByRole('heading', { name: 'Lokaler Server läuft nicht' }),
     ).toBeVisible();
+    // Its log follows on the page, and the app says which reconnect attempt runs.
+    await expect(content.getByRole('log', { name: 'Log des lokalen Servers' })).toContainText(
+      'fingerprint SHA256:',
+    );
+    await expect(content.getByRole('status')).toHaveText(/^Verbinde erneut … \(Versuch \d+\)$/, {
+      timeout: 30_000,
+    });
     // Down, the count of shells is unknown: it asks first.
     await answerDialog(first.app, 'Neu starten');
     await content.getByRole('button', { name: 'Neu starten' }).click();
