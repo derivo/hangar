@@ -104,9 +104,9 @@ manual step is needed. pnpm reports ignored build scripts of
   Unchecked are shell start (`defaultShell`), `hangar.cmd` and the app itself.
   Skipped under Windows: the integration tests with `/bin/sh`, the SSH tunnel
   with the fake ssh (shebang script), POSIX file modes, the local server
-  (macOS only) and the POSIX job tests; one job test runs through cmd.exe. A
-  job that times out or whose session closes ends only its shell under
-  Windows, not the shell's children (`job-process.ts`, `taskkill /T` missing). `writeDurable` flushes
+  (macOS only) and the POSIX job tests; two job tests run through cmd.exe. A
+  job that times out or whose session closes ends its whole process tree under
+  Windows too (`taskkill /T /F`, `job-process.test.ts`, Windows runner only). `writeDurable` flushes
   the file instead of the folder; whether that makes the rename durable on NTFS
   is not proven.
 - **Linux**: Packages are only built in CI (node-pty has no Linux prebuilds and

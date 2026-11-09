@@ -56,9 +56,14 @@ export function startJobProcess(options: {
   });
   const kill = () => {
     try {
-      // ponytail: Windows ends only the shell; taskkill /T if children must go too
       if (group && child.pid) process.kill(-child.pid, 'SIGKILL');
-      else child.kill();
+      else if (child.pid) {
+        // Windows has no process groups: taskkill /T ends the command's children too.
+        spawn('taskkill', ['/T', '/F', '/PID', String(child.pid)], { windowsHide: true }).on(
+          'error',
+          () => child.kill(),
+        );
+      }
     } catch {
       // already gone
     }

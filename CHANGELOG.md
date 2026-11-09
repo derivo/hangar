@@ -116,6 +116,7 @@ All notable changes to this project. Format based on
 
 ### Fixed
 
+- Agent bay, Windows: a job that times out or whose session closes now ends the whole process tree of its command (`taskkill /T /F`), not only `cmd.exe`.
 - Tests: the relay test "a function shared in two workspaces stays …" waits up to 5 s for the join instead of 1 s; on the Windows CI runner it failed now and then.
 - Relay: an instance publishes its own member list changes one after another. A renewal at the same time as adding or removing a member no longer makes the relay refuse one of them with "Not newer than the stored list".
 - Local server: while it restarts, the hint "New version ready" shows "Local server is starting …" instead of the button, also while the old server is still connected; before, nothing changed until it was down, so the restart looked like it did not start.
