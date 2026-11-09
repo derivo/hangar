@@ -51,7 +51,7 @@ describe('QuotaBar (ADR 0024)', () => {
     const week = within(bar).getByRole('meter', { name: 'Claude 7d' });
     expect(week).toHaveAttribute('aria-valuenow', '85');
     expect(week).toHaveAttribute('aria-valuetext', '85 % frei, Reset 03.11. 09:00');
-    expect(bar).toHaveTextContent('Reset 20:407d85 %Reset 03.11. 09:00');
+    expect(bar).toHaveTextContent('Reset 20:407d85 % freiReset 03.11. 09:00');
     // A passed weekly reset counts as free, without a reset.
     expect(within(bar).getByRole('meter', { name: 'Codex 7d' })).toHaveAttribute(
       'aria-valuetext',
