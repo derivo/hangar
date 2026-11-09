@@ -8,7 +8,7 @@ All notable changes to this project. Format based on
 
 ### Added
 
-- Workspaces without a keychain (Linux without Secret Service, the server): with `HANGAR_KEY_PASSPHRASE` set, new relay keys are stored encrypted with it (`pass:`, scrypt + AES-256-GCM) instead of plain; existing `plain:` keys are still read. App and server drop the variable from their environment, so agents in session shells do not see it.
+- Workspaces without a keychain (Linux without Secret Service, the server): with `HANGAR_KEY_PASSPHRASE` set, new relay keys are stored encrypted with it (`pass:`, scrypt + AES-256-GCM) instead of plain; existing `plain:` keys are still read. App and server drop the variable from their environment, so session shells and jobs do not inherit it. This is no isolation: on Linux a process of the same user can still read Hangar's original environment in `/proc/<pid>/environ`, and the key file is readable to the same user anyway; the passphrase protects keys at rest (backups, a copied disk), not against agents running as the same user.
 - Agent bay: the footer with the usage limits also shows the weekly limit of Claude and Codex, if they report one: "7d", share free and the reset with date and time.
 - License: MIT (`LICENSE`), copyright Derivo; also in `package.json` and the app's copyright.
 - Browser bay: the page zoom of the selected tab shows next to the address ("110 %") once it is not 100 %; a click sets it back. Cmd/Ctrl +, - and 0 in the page change it. Bays get `zoom` in `BrowserTab` and `ctx.browser.resetZoom(id)`.

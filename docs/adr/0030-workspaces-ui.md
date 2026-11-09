@@ -64,7 +64,11 @@ working on: instance, project, session, status, description.
   `keysWithoutKeychain` in `@hangar/host`); `plain:` is still read. It applies
   when the keys are written, i.e. to a new identity; an existing `plain:` file
   stays as it is. App and server remove the variable from their environment after
-  reading it, so session shells and jobs do not inherit it. The local server
+  reading it, so session shells and jobs do not inherit it. That only stops
+  inheritance: on Linux `/proc/<pid>/environ` keeps the original environment,
+  readable to every process of the same user, agents included. The passphrase
+  protects keys at rest (backups, a copied disk), not against processes of the same
+  user; that would need a separate user or process isolation. The local server
   (ADR 0036) still gets the keys as `plain:` from the app. If the desktop cannot
   open `pass:` keys (passphrase missing or wrong), it shows an error box and starts
   without workspaces; the identity file stays untouched. The in-app relaunch puts

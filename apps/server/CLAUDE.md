@@ -68,7 +68,8 @@ node apps/server/dist/hangar-server.mjs --data ~/hangar-data --root ~/repos
 - Bays with `hostModules: ["browser"]` or `["secrets"]` are not loaded by the server (error in `/health`);
   `workspaces` is always available (ADR 0036, item 11): `Workspaces` in
   `<data>/workspaces`, keys without a keychain (`plain:`, mode 600; new keys `pass:` with
-  `HANGAR_KEY_PASSPHRASE`, which `startServer` then removes from its environment);
+  `HANGAR_KEY_PASSPHRASE`, which `startServer` then removes from its environment: no
+  inheritance by shells and jobs, but `/proc/<pid>/environ` still shows it to the same user);
   `safe:` keys (still in the keychain of the app) → log `workspaces not
 available: …`, the bay runs without `ctx.workspaces`. A paired desktop
   controls them with the message `workspaces` (`workspaceAction`); every change
