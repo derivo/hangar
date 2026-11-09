@@ -34,18 +34,36 @@ export interface RunningMcpServer {
  * `Authorization: Bearer <session token>`; the token decides the caller.
  * Stateless: each POST gets its own MCP server instance (no MCP session ids).
  */
-export async function startMcpServer(options: McpServerOptions): Promise<RunningMcpServer> {
+/** Buckets kept before full ones are swept: one per token ever used would only grow. */
+const MAX_BUCKETS = 1000;
+
+/** The token buckets of one server; `now` in milliseconds. */
+export function rateLimiter(now = () => Date.now()) {
   const buckets = new Map<string, { tokens: number; at: number }>();
-  const allow = (token: string) => {
-    const now = Date.now();
-    const bucket = buckets.get(token) ?? { tokens: BURST, at: now };
-    bucket.tokens = Math.min(BURST, bucket.tokens + (now - bucket.at) * REFILL_PER_MS);
-    bucket.at = now;
-    buckets.set(token, bucket);
-    if (bucket.tokens < 1) return false;
-    bucket.tokens -= 1;
-    return true;
+  const level = (b: { tokens: number; at: number }, t: number) =>
+    Math.min(BURST, b.tokens + (t - b.at) * REFILL_PER_MS);
+  return {
+    get size() {
+      return buckets.size;
+    },
+    allow(token: string): boolean {
+      const t = now();
+      // A full bucket is the same as none: drop them (revoked tokens, ended sessions).
+      if (buckets.size >= MAX_BUCKETS)
+        for (const [key, b] of buckets) if (level(b, t) >= BURST) buckets.delete(key);
+      const bucket = buckets.get(token) ?? { tokens: BURST, at: t };
+      bucket.tokens = level(bucket, t);
+      bucket.at = t;
+      buckets.set(token, bucket);
+      if (bucket.tokens < 1) return false;
+      bucket.tokens -= 1;
+      return true;
+    },
   };
+}
+
+export async function startMcpServer(options: McpServerOptions): Promise<RunningMcpServer> {
+  const { allow } = rateLimiter();
   const http = createServer((req, res) => {
     handle(req, res, options, allow).catch((e: Error) => reply(res, 500, e.message));
   });

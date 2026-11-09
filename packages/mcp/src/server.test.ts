@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { Bus } from '@hangar/bus';
-import { startMcpServer, type RunningMcpServer } from './server';
+import { rateLimiter, startMcpServer, type RunningMcpServer } from './server';
 import { TokenRegistry } from './tokens';
 
 let server: RunningMcpServer;
@@ -162,5 +162,19 @@ describe('MCP server', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('rateLimiter', () => {
+  it('forgets buckets that are full again once it holds 1000', () => {
+    let clock = 0;
+    const limiter = rateLimiter(() => clock);
+    for (let i = 0; i < 1000; i++) limiter.allow(`old-${i}`);
+    expect(limiter.size).toBe(1000);
+    // 600 per minute refill a bucket of 100 within 10 s.
+    clock += 10_000;
+    limiter.allow('active');
+    limiter.allow('new');
+    expect(limiter.size).toBe(2);
   });
 });

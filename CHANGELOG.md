@@ -118,6 +118,7 @@ All notable changes to this project. Format based on
 
 ### Fixed
 
+- MCP server: the rate limit forgets buckets that are full again once it holds 1000, instead of keeping one per token ever used.
 - Desktop: relay keys that `HANGAR_KEY_PASSPHRASE` cannot open (missing or wrong) no longer stop the start without a word; an error box names the reason and Hangar starts without workspaces, the encrypted identity untouched. The in-app relaunch keeps the passphrase.
 - Agent bay: a job that timed out or was stopped now ends even when the kill misses a child that keeps its output open (a failed `taskkill` on Windows, a child outside the process group); after 2 s Hangar closes the pipes itself.
 - Agent bay and server: git calls drop `GIT_*` variables in any case (`git_dir`, `Git_Config_Count`); Windows reads environment names case-insensitively, so they still reached git there.
