@@ -179,8 +179,9 @@ export function packBay(dir: string, privateKey: KeyObject): BayPackage {
     version: string;
     icon: string;
   };
-  // Both name the output file (`dist/bays/<id>/<version>.bay`).
-  if (!/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/.test(manifest.id)) {
+  // Both name the output file (`dist/bays/<id>/<version>.bay`). Only Hangar's own bays are
+  // packed, so a package can never claim an id that looks like another publisher's.
+  if (!/^dev\.hangar(\.[a-z][a-z0-9-]*)+$/.test(manifest.id)) {
     throw new Error(`Invalid id in manifest: ${manifest.id}`);
   }
   if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]*)?$/.test(manifest.version)) {

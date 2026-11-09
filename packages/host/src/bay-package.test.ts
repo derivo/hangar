@@ -61,6 +61,15 @@ describe('.bay packages (phase 19, ADR 0033)', () => {
     expect(existsSync(join(dest, 'src'))).toBe(false);
   });
 
+  it('packs only bays whose id starts with dev.hangar.', () => {
+    const dir = bayDir();
+    const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'));
+    for (const id of ['evil.com.hangar', 'dev.hangarx.notes', 'dev.hangar']) {
+      writeFileSync(join(dir, 'manifest.json'), JSON.stringify({ ...manifest, id }));
+      expect(() => packBay(dir, keys().privateKey)).toThrow(`Invalid id in manifest: ${id}`);
+    }
+  });
+
   it('builds the same bytes twice', () => {
     const { privateKey } = keys();
     const dir = bayDir();

@@ -42,6 +42,8 @@ describe('parseManifest', () => {
     ['id with the reserved prefix remote.', { id: 'remote.anna.agents' }, 'id'],
     ['uses without a function', { uses: ['dev.hangar.browser'] }, 'uses'],
     ['uses with a bad bay id', { uses: ['browser/page.open'] }, 'uses'],
+    ['uses with a wildcard', { uses: ['*'] }, 'uses'],
+    ['uses with a wildcard function', { uses: ['dev.hangar.browser/*'] }, 'uses'],
     ['agentSessions not a boolean', { agentSessions: 'yes' }, 'agentSessions'],
     ['dataVersion not an integer', { dataVersion: 1.5 }, 'dataVersion'],
     ['negative dataVersion', { dataVersion: -1 }, 'dataVersion'],

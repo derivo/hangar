@@ -32,7 +32,7 @@ Core of Hangar without Electron (Phase 8): the desktop app and later the server
   `workspaceAction(ws, bus, action, args)`: the actions of "Settings → Workspaces"
   by name (`view` with the shareable functions), for the app's IPC and the bridge of the
   local server (ADR 0036, item 11).
-- `.bay` packages (ADR 0033): `packBay`, `verifyPackage`, `unpackBay`, `writeTar`
+- `.bay` packages (ADR 0033): `packBay` (only ids `dev.hangar.<…>`), `verifyPackage`, `unpackBay`, `writeTar`
   (`bay-package.ts`, only `node:` imports, because `scripts/pack-bay.ts` loads the file
   directly with Node); `signIndex`, `verifyIndex` (`bay-index.ts`).
 - `BayStore` (`bay-store.ts`, ADR 0034): `catalog(channel)`, `prepare(id, version)` →
