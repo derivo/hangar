@@ -758,6 +758,24 @@ describe('restore after restart', () => {
     await expect(manager.createSession(project.id)).rejects.toThrow('Agent-Bay wird beendet');
   });
 
+  it('refuses new work once 100 tasks wait, instead of letting the queue grow', async () => {
+    const manager = new SessionManager(deps);
+    const project = await manager.addProject(repo);
+    let release: (port: number) => void = () => {};
+    deps.allocatePort.mockImplementationOnce(() => new Promise((r) => (release = r)));
+    const first = manager.createSession(project.id);
+    await vi.waitFor(() => expect(deps.allocatePort).toHaveBeenCalled());
+    const waiting = Array.from({ length: 99 }, () =>
+      manager.removeProject('nope').catch(() => undefined),
+    );
+    await expect(manager.removeProject('nope')).rejects.toThrow('Agent-Bay ist ausgelastet');
+    release(40_100);
+    await first;
+    await Promise.all(waiting);
+    // Room again once the queue drained.
+    await expect(manager.removeProject('nope')).resolves.toBeUndefined();
+  });
+
   it('does not start sessions whose worktree is gone', async () => {
     const { manager, session } = await withSession();
     manager.shutdown();

@@ -131,6 +131,8 @@ export class SessionManager {
   private stopped = false;
   /** Creating sessions and removing projects run one at a time (ports, project lookups). */
   private queue: Promise<unknown> = Promise.resolve();
+  /** Tasks in `queue` not finished yet; more than `MAX_QUEUED` are refused. */
+  private queued = 0;
 
   constructor(private readonly deps: ManagerDeps) {
     this.stateFile = join(deps.dataDir, 'state.json');
@@ -532,7 +534,10 @@ export class SessionManager {
   // --- internals ------------------------------------------------------------
 
   private serial<T>(task: () => Promise<T>): Promise<T> {
-    const run = this.queue.then(task, task);
+    // Refused with an error, never dropped: a lost create or remove would go unnoticed.
+    if (this.queued >= MAX_QUEUED) return Promise.reject(new Error(t.busy));
+    this.queued++;
+    const run = this.queue.then(task, task).finally(() => this.queued--);
     this.queue = run.catch(() => undefined);
     return run;
   }
@@ -711,6 +716,9 @@ export function validateEnv(env: Record<string, EnvValue>): void {
     if (typeof value !== 'string' && !isSecretRef(value)) throw new Error(t.envValueNotText(key));
   }
 }
+
+/** Creating and removing wait for each other; past this many something is stuck or flooding. */
+const MAX_QUEUED = 100;
 
 /**
  * How far trimming looks for the next line start before cutting mid-line: 4 KiB is far more
