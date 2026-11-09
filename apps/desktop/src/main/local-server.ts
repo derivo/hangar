@@ -387,8 +387,14 @@ export async function ensureLocalServer(
   const domain = `gui/${o.uid}`;
   const loaded = (await o.run('launchctl', ['print', `${domain}/${label}`])) === 0;
   // A loaded service keeps the program it was loaded with: a new plist needs a new load.
-  if (loaded && !kept) await o.run('launchctl', ['bootout', `${domain}/${label}`]);
-  if (!loaded || !kept) await o.run('launchctl', ['bootstrap', domain, plistFile]);
+  if (loaded && !kept) {
+    await o.run('launchctl', ['bootout', `${domain}/${label}`]);
+    await unloaded(o, `${domain}/${label}`);
+  }
+  if (!loaded || !kept) {
+    const code = await o.run('launchctl', ['bootstrap', domain, plistFile]);
+    if (code !== 0) throw new Error(`launchctl bootstrap ${label} failed (exit code ${code})`);
+  }
   const version = new RegExp(`<string>${escapeRegExp(escape(runtime + sep))}([^/<]+)/`).exec(used);
   return {
     data,
@@ -396,6 +402,17 @@ export async function ensureLocalServer(
     ...(version && { version: unescape(version[1]!) }),
     ...('app' in o.source && { ready: name }),
   };
+}
+
+/**
+ * Waits until launchd no longer has the service: `bootout` returns while the old server still
+ * ends (closing shells, at most launchd's ExitTimeOut of 20 s), and a `bootstrap` before that
+ * fails with exit code 5.
+ */
+async function unloaded(o: LocalServerOptions, service: string): Promise<void> {
+  const until = Date.now() + 30_000;
+  while ((await o.run('launchctl', ['print', service])) === 0 && Date.now() < until)
+    await new Promise((r) => setTimeout(r, 100));
 }
 
 /**

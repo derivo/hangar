@@ -120,6 +120,7 @@ All notable changes to this project. Format based on
 ### Fixed
 
 - Agent bay: the weekly limit in the footer says the share is free ("85 % frei"), like the 5-hour limit.
+- Local server: after "Restart local server" it could stay stopped without any message. `launchctl bootout` returns while the old server is still ending, launchd refuses the new load until then (exit code 5), and the exit code was ignored. Hangar now waits until launchd has unloaded the old service (at most 30 s) and reports a refused load ("Restart local server" shows the error).
 - Dependencies: `minimatch` 7 to 11.0.0 (pulled in by electron-builder, ESLint and typedoc) is replaced by 11.0.5 through a pnpm override; Dependabot GHSA-g3hv-75wg-m249 (denial of service via glob patterns).
 - MCP server: the rate limit measures time with a monotonic clock; a system clock set back no longer answers every request with 429.
 - MCP server: the rate limit forgets buckets that are full again once it holds 1000, instead of keeping one per token ever used.

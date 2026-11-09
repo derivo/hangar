@@ -15,7 +15,7 @@ import {
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   ensureLocalServer,
   bayInLocalServer,
@@ -192,6 +192,7 @@ describe.skipIf(process.platform === 'win32')('ensureLocalServer', () => {
     expect(calls.filter(([cmd]) => cmd === 'launchctl')).toEqual([
       ['launchctl', 'print', service],
       ['launchctl', 'bootout', service],
+      ['launchctl', 'print', service],
       ['launchctl', 'bootstrap', 'gui/501', expect.stringContaining('.plist')],
     ]);
   });
@@ -252,7 +253,7 @@ describe.skipIf(process.platform === 'win32')('ensureLocalServer', () => {
     expect((await ensureLocalServer(options)).version).toBeUndefined();
     calls.length = 0;
     await ensureLocalServer(options, true);
-    expect(calls.map(([, sub]) => sub)).toEqual(['print', 'bootout', 'bootstrap']);
+    expect(calls.map(([, sub]) => sub)).toEqual(['print', 'bootout', 'print', 'bootstrap']);
   });
 
   it('writes the LaunchAgent anew when the copy it runs from is gone', async () => {
@@ -268,8 +269,80 @@ describe.skipIf(process.platform === 'win32')('ensureLocalServer', () => {
     // launchd still holds the old path while the service is loaded: it is loaded anew.
     expect(calls.slice(2)).toEqual([
       ['launchctl', 'bootout', `gui/501/${label}`],
+      ['launchctl', 'print', `gui/501/${label}`],
       ['launchctl', 'bootstrap', 'gui/501', join(options.launchAgents, `${label}.plist`)],
     ]);
+  });
+
+  /** `bootout` returns while the old server still ends: `print` finds it `ending` more times. */
+  function unloading(options: LocalServerOptions, calls: string[][], ending: number) {
+    let left = 0;
+    return {
+      ...options,
+      run: async (cmd: string, args: string[]) => {
+        if (cmd === 'launchctl' && args[0] === 'bootout') left = ending;
+        if (cmd === 'launchctl' && args[0] === 'print' && left > 0) {
+          left--;
+          calls.push([cmd, ...args]);
+          return 0;
+        }
+        // launchd refuses a load while the old service is still there.
+        if (cmd === 'launchctl' && args[0] === 'bootstrap' && left > 0) {
+          calls.push([cmd, ...args]);
+          return 5;
+        }
+        return options.run(cmd, args);
+      },
+    };
+  }
+
+  it('loads the service only after launchd has unloaded the old one', async () => {
+    const { options, calls } = setup();
+    await ensureLocalServer(options);
+    calls.length = 0;
+    await ensureLocalServer(unloading(options, calls, 2), true);
+    expect(calls.map(([, sub]) => sub)).toEqual([
+      'print',
+      'bootout',
+      'print',
+      'print',
+      'print',
+      'bootstrap',
+    ]);
+  });
+
+  it('gives up waiting after 30 s and reports the refused load', async () => {
+    const { options, calls } = setup();
+    await ensureLocalServer(options);
+    calls.length = 0;
+    vi.useFakeTimers();
+    try {
+      const result = expect(
+        ensureLocalServer(unloading(options, calls, Infinity), true),
+      ).rejects.toThrow(
+        `launchctl bootstrap ${localServerLabel(options.userData)} failed (exit code 5)`,
+      );
+      await vi.advanceTimersByTimeAsync(30_000);
+      await result;
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(calls.at(-1)?.[1]).toBe('bootstrap');
+  });
+
+  it('fails when launchd does not load the service, instead of waiting for a server', async () => {
+    const { options, calls } = setup();
+    const failing = {
+      ...options,
+      run: async (cmd: string, args: string[]) =>
+        cmd === 'launchctl' && args[0] === 'bootstrap'
+          ? (calls.push([cmd, ...args]), 5)
+          : options.run(cmd, args),
+    };
+    await expect(ensureLocalServer(failing)).rejects.toThrow(
+      `launchctl bootstrap ${localServerLabel(options.userData)} failed (exit code 5)`,
+    );
+    expect(calls.filter(([, sub]) => sub === 'bootstrap')).toHaveLength(1);
   });
 
   it('starts nothing when the copy fails, and leaves no half copy as a version', async () => {
