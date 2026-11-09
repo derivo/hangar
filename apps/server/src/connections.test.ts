@@ -451,6 +451,28 @@ describe('ServerConnections: the local server (ADR 0036)', () => {
     }
   });
 
+  it('keeps servers.json valid and every change when pairing and connecting run in parallel', async () => {
+    const local = await startEchoServer();
+    server = local.server;
+    const remote = await startEchoServer();
+    try {
+      const { file } = desktop();
+      const saved = { id: 'old', name: 'Alt', url: 'ws://127.0.0.1:9/connect' };
+      writeFileSync(file, JSON.stringify([{ ...saved, fingerprint: 'SHA256:x', token: 't' }]));
+      const { connections } = desktop(file);
+      const probe = await connections.probe(remote.address);
+      const [, paired, pairedLocal] = await Promise.all([
+        connections.connectAll(),
+        connections.pair(probe.id, 'Heimserver', remote.code()),
+        connections.pairLocal(local.data, 'Lokal'),
+      ]);
+      const ids = JSON.parse(readFileSync(file, 'utf8')).map((s: { id: string }) => s.id);
+      expect(ids.sort()).toEqual(['old', paired, pairedLocal].sort());
+    } finally {
+      await remote.server.close();
+    }
+  });
+
   it('connects again when paired already but no attempt runs, e.g. after a rejected version', async () => {
     // A rejected protocol version ends the retries; restarting the server pairs again (Codex 4a).
     const s = await startEchoServer();

@@ -72,6 +72,10 @@ under Node (built-in `WebSocket`).
   stdin must remain a pipe (`stdio[0] = 'pipe'`). Do not remove `RemoteCommand=none`,
   `ControlMaster=no`, `ControlPath=none` (the person's ssh config);
   no `StdinNull=no` (OpenSSH < 8.7 rejects it).
+- `servers.json` is written only by `save()`, synchronously (temp file + rename) and from the
+  current `this.saved`; keep every caller free of an `await` between reading `this.saved` and
+  `save()`, then parallel `pair`/`pairLocal`/`remove` cannot lose an entry (no lock needed;
+  `apps/server/src/connections.test.ts` pins it).
 - `ServerConnections` numbers connection attempts: disconnect, remove or
   `closeAll` while connecting wins, the late attempt closes.
 - `onClose` of an old connection sets the status only if it is still the
