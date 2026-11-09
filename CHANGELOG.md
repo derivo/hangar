@@ -127,7 +127,7 @@ All notable changes to this project. Format based on
 - MCP server: each session token is rate limited (bursts of 100, 600 requests per minute, enough for the statusline's quota reports); beyond that the server answers HTTP 429 `Too many requests`. Other sessions are not affected.
 - Agent bay: when 100 creations or removals of sessions and projects already wait, a new one is refused with "The agent bay is busy" instead of queueing without limit.
 - Agent bay: its own git calls (worktrees, branches, state) run without any `GIT_*` variable of Hangar's environment, as the server already does; before, only the variables that redirect git to another repository were removed. Session shells keep them.
-- `.bay` packages: `unpackBay` refuses paths with bytes outside printable ASCII. It read the header as ASCII and dropped the high bit, so `0xAE 0xAE` came out as `..`.
+- `.bay` packages: `unpackBay` accepts only printable ASCII in paths. It decoded the header as ASCII and dropped the high bit, so a byte like `0xE9` (`é`) was written under another name (`i`); `0xAE 0xAE` became `..`, which the path check already refused, so this was no traversal.
 - `.bay` packages: `packBay` packs only bays whose id starts with `dev.hangar.`; an id such as `evil.com.hangar` is refused.
 - Agent bay, Windows: a job that times out or whose session closes now ends the whole process tree of its command (`taskkill /T /F`), not only `cmd.exe`.
 - Tests: the relay test "a function shared in two workspaces stays …" waits up to 5 s for the join instead of 1 s; on the Windows CI runner it failed now and then.

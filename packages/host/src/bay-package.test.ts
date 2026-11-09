@@ -106,6 +106,8 @@ describe('.bay packages (phase 19, ADR 0033)', () => {
     ['an empty segment', 'dist//x'],
     // 'ascii' decoding would drop the high bit and read 0xAE 0xAE as '..'
     ['bytes outside ASCII', '\u00ae\u00ae/escape.txt'],
+    // Harmless, yet 'ascii' decoding wrote it under another name (0xE9 as 'i': cafi.txt).
+    ['a single byte outside ASCII', 'dist/caf\u00e9.txt'],
     ['a control character', 'dist/x\u0007.txt'],
   ])('rejects %s in the archive', (_label, path) => {
     const bytes = gzipSync(writeTar([{ path, data: Buffer.from('x') }]));
