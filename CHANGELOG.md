@@ -117,6 +117,7 @@ All notable changes to this project. Format based on
 
 ### Fixed
 
+- MCP server: each session token is rate limited (bursts of 20, 100 requests per minute); beyond that the server answers HTTP 429 `Too many requests`. Other sessions are not affected.
 - Agent bay: when 100 creations or removals of sessions and projects already wait, a new one is refused with "The agent bay is busy" instead of queueing without limit.
 - Agent bay: its own git calls (worktrees, branches, state) run without any `GIT_*` variable of Hangar's environment, as the server already does; before, only the variables that redirect git to another repository were removed. Session shells keep them.
 - `.bay` packages: `unpackBay` refuses paths with bytes outside printable ASCII. It read the header as ASCII and dropped the high bit, so `0xAE 0xAE` came out as `..`.

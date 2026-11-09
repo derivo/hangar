@@ -145,4 +145,22 @@ describe('MCP server', () => {
     expect(bad.status).toBe(400);
     expect((await post('x'.repeat(1_100_000), auth)).status).toBe(400);
   });
+
+  it('answers 429 once a session exceeds its rate limit, other sessions unaffected', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const a = { authorization: `Bearer ${tokens.issue('dev.hangar.agents', 'a')}` };
+      const b = { authorization: `Bearer ${tokens.issue('dev.hangar.agents', 'b')}` };
+      const statuses = [];
+      for (let i = 0; i < 21; i++) statuses.push((await post('{nope', a)).status);
+      expect(statuses.slice(0, 20).every((s) => s === 400)).toBe(true);
+      expect(statuses[20]).toBe(429);
+      expect((await post('{nope', b)).status).toBe(400);
+      // 100 requests per minute refill the bucket.
+      vi.setSystemTime(Date.now() + 60_000);
+      expect((await post('{nope', a)).status).toBe(400);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

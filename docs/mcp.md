@@ -32,9 +32,13 @@ The checks run in this order. The body is always JSON of the form
 | ------ | ------------------------------------- | ------------------------------------------------- |
 | 404    | Path is not `/mcp` (query is ignored) | `Nicht gefunden`                                  |
 | 401    | Token missing or unknown              | `Invalid or missing token`                        |
+| 429    | Token over its rate limit (see below) | `Too many requests`                               |
 | 405    | Method is not `POST`                  | `Nur POST`                                        |
 | 400    | Body is not valid JSON or too large   | Message of the JSON parser or `Request too large` |
 | 500    | unexpected error during processing    | Error message                                     |
+
+Rate limit: each token has a bucket of 20 requests that refills at 100 requests
+per minute (`packages/mcp/src/server.ts`). Other sessions are not affected.
 
 Errors of a bay function are not HTTP errors. They come back as an MCP result
 with `isError: true` and the message as text.
