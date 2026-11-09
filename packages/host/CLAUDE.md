@@ -41,6 +41,8 @@ the same code.
   permission diff (`rightsDiff`), `confirm`/`cancel`, `rollback`, `applyPending(resetGrant)`
   at start before loading, `bayDirs()` for `discoverBays` (`BaySource` `{ bay }`:
   an installed bay replaces a later one with the same id without an error).
+- `keysWithoutKeychain(passphrase?)` (`key-protection.ts`) – `protect` for `Workspaces` without a
+  keychain: `pass:` (scrypt + AES-256-GCM) with a passphrase, else `plain:`; reads both.
 - `writeCliShim(dir, execPath, cliPath)` (`cli-shim.ts`) – `hangar` launcher for the
   `PATH` of the sessions.
 

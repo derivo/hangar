@@ -67,7 +67,8 @@ node apps/server/dist/hangar-server.mjs --data ~/hangar-data --root ~/repos
 - Dev server with real SSH in Docker: `pnpm dev:server`, check `pnpm test:ssh` (`docker/dev-server/`, ADR 0020). The container mounts `dist/` of server, CLI and agent bay; `pnpm dev:server` rebuilds and recreates it (volumes stay).
 - Bays with `hostModules: ["browser"]` or `["secrets"]` are not loaded by the server (error in `/health`);
   `workspaces` is always available (ADR 0036, item 11): `Workspaces` in
-  `<data>/workspaces`, keys without a keychain (`plain:`, mode 600);
+  `<data>/workspaces`, keys without a keychain (`plain:`, mode 600; new keys `pass:` with
+  `HANGAR_KEY_PASSPHRASE`, which `startServer` then removes from its environment);
   `safe:` keys (still in the keychain of the app) → log `workspaces not
 available: …`, the bay runs without `ctx.workspaces`. A paired desktop
   controls them with the message `workspaces` (`workspaceAction`); every change

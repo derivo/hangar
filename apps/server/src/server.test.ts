@@ -296,6 +296,21 @@ describe('local server (ADR 0036)', () => {
     }
   });
 
+  it('encrypts its relay keys with HANGAR_KEY_PASSPHRASE and keeps it out of shells and jobs', async () => {
+    process.env.HANGAR_KEY_PASSPHRASE = 'correct horse';
+    try {
+      const data = mkdtempSync(join(tmpdir(), 'hangar-local-'));
+      server = await start(data);
+      expect(process.env.HANGAR_KEY_PASSPHRASE).toBeUndefined();
+      const { keys } = JSON.parse(
+        readFileSync(join(data, 'workspaces', 'relay-identity.json'), 'utf8'),
+      );
+      expect(keys).toMatch(/^pass:/);
+    } finally {
+      delete process.env.HANGAR_KEY_PASSPHRASE;
+    }
+  });
+
   it('takes the port from listen.json again, and a free one when it is taken', async () => {
     const data = mkdtempSync(join(tmpdir(), 'hangar-local-'));
     server = await start(data);

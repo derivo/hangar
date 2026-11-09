@@ -8,6 +8,7 @@ import { catalogFor } from '@hangar/sdk/i18n';
 import {
   BayStore,
   baySetting,
+  keysWithoutKeychain,
   readSettings,
   startCore,
   themeSetting,
@@ -45,16 +46,22 @@ let host: Host | undefined;
 let core: Core | undefined;
 let workspaces: Workspaces | undefined;
 
-/** Private keys at rest: safeStorage, or plain (file mode 600) where the system has no keyring. */
+/**
+ * Private keys at rest: safeStorage; where the system has no keyring, encrypted with
+ * `HANGAR_KEY_PASSPHRASE` (`pass:`) or else plain (`plain:`, file mode 600).
+ */
+const noKeychain = keysWithoutKeychain(process.env.HANGAR_KEY_PASSPHRASE);
+// Session shells and jobs inherit this environment: agents must not read the passphrase.
+delete process.env.HANGAR_KEY_PASSPHRASE;
 const protect = {
   encrypt: (text: string) =>
     safeStorage.isEncryptionAvailable()
       ? `safe:${safeStorage.encryptString(text).toString('base64')}`
-      : `plain:${text}`,
+      : noKeychain.encrypt(text),
   decrypt: (text: string) =>
     text.startsWith('safe:')
       ? safeStorage.decryptString(Buffer.from(text.slice(5), 'base64'))
-      : text.slice(6),
+      : noKeychain.decrypt(text),
 };
 
 /** Host module `secrets` (ADR 0021): only with the keychain, never plain like `protect`. */

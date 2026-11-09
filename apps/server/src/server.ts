@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import {
   BayRuntime,
   discoverBays,
+  keysWithoutKeychain,
   readSettings,
   startCore,
   uiLocale,
@@ -35,6 +36,10 @@ export async function startServer(
   // Set by the LaunchAgent to run Electron as Node (ADR 0036); shells and jobs inherit this
   // environment, and the CLI launcher sets it for itself.
   delete process.env.ELECTRON_RUN_AS_NODE;
+  // Relay keys without a keychain: `plain:` (the app moves them here decrypted), new ones
+  // `pass:` with the passphrase; `safe:` only the app's keychain reads. Agents must not get it.
+  const keys = keysWithoutKeychain(process.env.HANGAR_KEY_PASSPHRASE);
+  delete process.env.HANGAR_KEY_PASSPHRASE;
   const version = pkg.version;
   // The language of the desktop that connected last, unless HANGAR_LOCALE fixes it (ADR 0019).
   const localeFile = join(options.data, 'desktop-locale');
@@ -72,7 +77,7 @@ export async function startServer(
       dir: join(options.data, 'workspaces'),
       name: hostname(),
       bus: core.bus,
-      protect: plainKeys,
+      protect: keys,
       onChange: () => bridge.workspacesChanged(),
     });
   } catch (e) {
@@ -258,16 +263,6 @@ export async function startServer(
     },
   };
 }
-
-/** The app moves the keys here decrypted (`plain:`); `safe:` only its keychain can read. */
-const plainKeys = {
-  encrypt: (text: string) => `plain:${text}`,
-  decrypt: (text: string) => {
-    if (!text.startsWith('plain:'))
-      throw new Error('Keys are protected by the keychain of the app');
-    return text.slice(6);
-  },
-};
 
 /** What the desktop offered last; nothing if the file is missing or damaged. */
 function readOffered(file: string): OfferedFunction[] {
