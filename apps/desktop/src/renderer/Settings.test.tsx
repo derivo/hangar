@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { Settings } from './Settings';
@@ -137,6 +137,8 @@ describe('Settings', () => {
     render(<Settings api={api} />);
     const select = screen.getByRole('combobox', { name: 'Update-Kanal' });
     await vi.waitFor(() => expect(select).toBeEnabled());
+    // The catalog mounts anew once the settings name the channel; let that load run first.
+    await act(async () => {});
     const before = api.getBayCatalog.mock.calls.length;
     await userEvent.selectOptions(select, 'Beta');
     await vi.waitFor(() => expect(api.getBayCatalog).toHaveBeenCalledTimes(before + 1));

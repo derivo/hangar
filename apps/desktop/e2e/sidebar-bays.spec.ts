@@ -65,7 +65,7 @@ test('a new Hangar starts empty; bays are added with the plus and removed by rig
     );
     await expect.poll(() => visibleViews(app)).toBe(1);
 
-    for (const name of ['Board', 'Passwörter']) {
+    for (const name of ['Board', 'Feeds', 'Passwörter']) {
       await plus.click();
       await picker.getByRole('button', { name: new RegExp(`^${name}`) }).click();
       await expect(nav.getByRole('button', { name })).toHaveAttribute('aria-current', 'page');
@@ -81,7 +81,7 @@ test('a new Hangar starts empty; bays are added with the plus and removed by rig
   const second = await launch({ userData, bayDirs: [repoBays], env });
   try {
     const nav = second.shell.getByRole('navigation', { name: 'Bays' });
-    await expect(nav.locator('[data-testid^="bay-"]')).toHaveCount(4);
+    await expect(nav.locator('[data-testid^="bay-"]')).toHaveCount(5);
     expect(
       await nav
         .locator('[data-testid^="bay-"]')
@@ -90,6 +90,7 @@ test('a new Hangar starts empty; bays are added with the plus and removed by rig
       'bay-dev.hangar.agents',
       'bay-dev.hangar.browser',
       'bay-dev.hangar.board',
+      'bay-dev.hangar.feeds',
       'bay-dev.hangar.secrets',
     ]);
     await expect(nav.getByRole('button', { name: 'Passwörter' })).toHaveAttribute(
@@ -111,7 +112,7 @@ test('a new Hangar starts empty; bays are added with the plus and removed by rig
     );
     await expect
       .poll(() => JSON.parse(readFileSync(join(userData, 'settings.json'), 'utf8')).bays)
-      .toEqual(['dev.hangar.agents', 'dev.hangar.browser', 'dev.hangar.board']);
+      .toEqual(['dev.hangar.agents', 'dev.hangar.browser', 'dev.hangar.board', 'dev.hangar.feeds']);
     await nav.getByRole('button', { name: 'Zur Leiste hinzufügen' }).click();
     await expect(
       second.shell.getByRole('dialog').getByRole('button', { name: /^Passwörter/ }),

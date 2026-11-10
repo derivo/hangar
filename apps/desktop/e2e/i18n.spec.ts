@@ -115,7 +115,16 @@ test('the pseudo-locale finds no hard-coded text and no overflow at 200 % zoom',
       .getByTestId(/^session-/)
       .locator('.tree-session-title')
       .innerText();
-    const data = new Set(['pseudo', repo, branch, 'Agents', 'Browser', 'Board', 'Passwörter']);
+    const data = new Set([
+      'pseudo',
+      repo,
+      branch,
+      'Agents',
+      'Browser',
+      'Board',
+      'Feeds',
+      'Passwörter',
+    ]);
     const found = await texts(bay);
     await shell.getByRole('button', { name: /Séttíñgs/ }).click();
     // Language, update channel, caller filter and the three of the rule form.

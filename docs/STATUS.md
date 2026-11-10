@@ -19,14 +19,14 @@ locally on macOS (arm64). The gaps are listed below, the next steps in [roadmap.
 
 ## Results (local, macOS arm64)
 
-| Command                                      | Result                                                                                                                                                                                               |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm install`, `lint`, `typecheck`, `build` | Exit 0                                                                                                                                                                                               |
-| `pnpm test`                                  | 93 files, 1296 tests green, 1 skipped, random order; coverage 98.46 % / 97.37 % (gate incl. desktop main process, 2026-11-06)                                                                        |
-| `pnpm test:e2e`                              | 58 green, 1 skipped (packaged only), with error gate (2026-11-04, window invisible); `pnpm test:ssh` 3 of 3 (as of ADR 0025); `pnpm test:container` 3 of 3                                           |
-| E2E against package                          | 26 of 26 green against `release/0.1.0/mac-arm64/Hangar.app` (as of after phase 8); 2026-11-04 `secrets-board`, `local-server`, `sidebar-bays` 9 of 9 against a fresh package (`--mac dir`, unsigned) |
-| Lint rule `packages/host`                    | Probe file with `import { app } from 'electron'` → `no-restricted-imports` error; `packages/host/src` 100 % lines, 98.11 % branches                                                                  |
-| `pnpm docs:api`                              | typedoc without warnings; every public SDK interface is documented                                                                                                                                   |
+| Command                                      | Result                                                                                                                                                                                                                |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm install`, `lint`, `typecheck`, `build` | Exit 0                                                                                                                                                                                                                |
+| `pnpm test`                                  | 98 files, 1376 tests green, 2 skipped, random order; coverage 98.85 % / 97.25 % (gate incl. desktop main process, 2026-11-09)                                                                                         |
+| `pnpm test:e2e`                              | 62 green, 2 skipped, with error gate (2026-11-09; `i18n`, `sidebar-bays`, `sidebar-order` rerun after adding the feeds bay to their bay lists); `pnpm test:ssh` 3 of 3 (as of ADR 0025); `pnpm test:container` 3 of 3 |
+| E2E against package                          | 26 of 26 green against `release/0.1.0/mac-arm64/Hangar.app` (as of after phase 8); 2026-11-04 `secrets-board`, `local-server`, `sidebar-bays` 9 of 9 against a fresh package (`--mac dir`, unsigned)                  |
+| Lint rule `packages/host`                    | Probe file with `import { app } from 'electron'` → `no-restricted-imports` error; `packages/host/src` 100 % lines, 98.11 % branches                                                                                   |
+| `pnpm docs:api`                              | typedoc without warnings; every public SDK interface is documented                                                                                                                                                    |
 
 **Icons** (phase 5): The package `release/0.1.0/mac-arm64/Hangar.app` was built
 with the new app icon (`icon.icns` checked); the tray image in the package is a
@@ -343,6 +343,24 @@ manual step is needed. pnpm reports ignored build scripts of
   `e2e/local-server.spec.ts` (password from the server shell, agent creates on the board,
   exactly one permission dialog, ADR 0036 addendum); packaged green (see table). Review:
   `docs/reviews/2026-11-04-password-and-board-bay.md`.
+- **Feeds bay** (ADR 0040, 2026-11-09): `e2e/feeds.spec.ts` against a local
+  RSS server: subscribe form (empty, `ftp://`, duplicate, happy path by Enter,
+  exact error texts), entry in the history with link, a new entry after
+  "Aktualisieren" appended last, a missing feed shows `HTTP 404` on the
+  subscription, unsubscribe; settings dialog behind the gear: Tab reaches the
+  gear, Enter opens, focus on the first field, Esc closes and returns focus,
+  history 99 and interval 0 each show the exact error, Enter saves and the
+  values stay; an agent reads `feed.items` and `feed.add` rejects
+  `file://` via MCP (one permission dialog). axe light and dark 0 findings,
+  also with the dialog open.
+  With local server: `e2e/local-server.spec.ts` subscribes in the server's bay
+  and sees the entry. Unit: `bays/feeds/src/main/index.test.ts` (100 % lines),
+  `src/ui/parse.test.ts` (RSS 2.0, RSS 1.0, Atom, no feed), `src/ui/App.test.tsx`
+  (dialog: focus, Esc, backdrop, one wrong field at a time, Enter, timer
+  follows the interval). Not checked: real feeds from the web, the timer
+  firing in the app (only start, "Aktualisieren" and new feeds), 200 % zoom by
+  hand. Review:
+  `docs/reviews/2026-11-09-feeds-bay.md`.
 - **Server in operation, phase 12** (ADR 0029): `pnpm test:container` builds the
   production image and checks with Docker Desktop (Linux arm64): runs as uid
   1000, `/data` with mode 700, health check `healthy`, agent bay loaded, no

@@ -34,6 +34,9 @@ password store itself stays closed to them.
   in fields and take screenshots, for example of their dev server.
 - **Board bay** (`bays/board`, `dev.hangar.board`): tasks per project in three
   columns; the person and agents create, claim and finish them (ADR 0037).
+- **Feeds bay** (`bays/feeds`, `dev.hangar.feeds`): RSS and Atom feeds as one
+  history, newest last, like a chat; agents subscribe and read the entries
+  (ADR 0040).
 - **Password bay** (`bays/secrets`, `dev.hangar.secrets`): passwords and tokens
   encrypted with the system keychain; they reach a session's shell as
   environment variables, agents cannot list or read the store (ADR 0021).
@@ -154,6 +157,7 @@ packages/cli     `hangar` command, talks to the MCP server over HTTP
 bays/agents      Projects, sessions, shells (node-pty), status bar
 bays/browser     Web pages in tabs, for the person and for agents (MCP)
 bays/board       Tasks per project in three columns, for the person and agents
+bays/feeds       RSS and Atom feeds as one history, for the person and agents
 bays/secrets     Passwords and tokens, encrypted with the system keychain
 docs/            Documentation and ADRs
 .claude/skills/  Skills for recurring tasks
