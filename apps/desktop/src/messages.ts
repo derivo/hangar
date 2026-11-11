@@ -61,6 +61,30 @@ const de = {
   codeMissing: 'Kopplungscode fehlt.',
   wrongCode: 'Kopplungscode falsch.',
   pairingEnded: 'Kopplung abgebrochen. Bitte neu verbinden.',
+  // Setup on a Linux machine (ADR 0041)
+  setUp: 'Hangar dort einrichten (Linux)',
+  setUpHint:
+    'Hangar kopiert seinen Server per SSH auf den Rechner und startet ihn als systemd-Dienst deines Benutzers. Adresse: benutzer@host oder ein Host aus ~/.ssh/config, ohne Port.',
+  setUpButton: 'Einrichten',
+  settingUp: 'Richte ein … Das Hochladen kann eine Minute dauern.',
+  setUpDone: 'Server eingerichtet und gekoppelt.',
+  lingerHint: (user: string) =>
+    `Damit der Server weiterläuft, wenn du dich dort abmeldest, führe auf dem Rechner aus: loginctl enable-linger ${user} (je nach System mit sudo).`,
+  done: 'Fertig',
+  invalidSetupAddress: 'Adresse ungültig: benutzer@host oder host, ohne Port.',
+  setupErrors: {
+    notLinux: (system: string) => `Der Rechner ist kein Linux (${system}).`,
+    arch: (arch: string) => `Architektur ${arch} wird nicht unterstützt (nur x86_64 und aarch64).`,
+    noPackage: (arch: string) =>
+      `Diese Hangar-Version enthält kein Server-Paket für ${arch}. Release-Builds enthalten es.`,
+    noGlibc: 'Auf dem Rechner gibt es keine glibc (z. B. Alpine); das wird nicht unterstützt.',
+    glibc: (found: string, needed: string) =>
+      `glibc ${found} auf dem Rechner ist zu alt, nötig ist ${needed} (z. B. Debian 12, Ubuntu 22.04, RHEL 9).`,
+    noSystemd: 'Auf dem Rechner laufen keine systemd-Benutzerdienste (systemctl --user).',
+    noGit: 'git fehlt auf dem Rechner.',
+    pty: (detail: string) => `Der Server kann dort keine Terminals starten: ${detail}`,
+    notStarted: (detail: string) => `Der Server ist nicht gestartet: ${detail}`,
+  },
   serverStatus: {
     connecting: 'verbindet',
     connected: 'verbunden',
@@ -368,6 +392,29 @@ const en: typeof de = {
   codeMissing: 'Pairing code is missing.',
   wrongCode: 'Wrong pairing code.',
   pairingEnded: 'Pairing was cancelled. Please connect again.',
+  setUp: 'Set up Hangar there (Linux)',
+  setUpHint:
+    'Hangar copies its server to the machine over SSH and starts it as a systemd service of your user. Address: user@host or a host from ~/.ssh/config, without a port.',
+  setUpButton: 'Set up',
+  settingUp: 'Setting up … The upload can take a minute.',
+  setUpDone: 'Server set up and paired.',
+  lingerHint: (user) =>
+    `To keep the server running when you log out there, run on the machine: loginctl enable-linger ${user} (with sudo, depending on the system).`,
+  done: 'Done',
+  invalidSetupAddress: 'Invalid address: user@host or host, without a port.',
+  setupErrors: {
+    notLinux: (system) => `The machine is not Linux (${system}).`,
+    arch: (arch) => `Architecture ${arch} is not supported (only x86_64 and aarch64).`,
+    noPackage: (arch) =>
+      `This Hangar build contains no server package for ${arch}. Release builds do.`,
+    noGlibc: 'The machine has no glibc (e.g. Alpine); that is not supported.',
+    glibc: (found, needed) =>
+      `glibc ${found} on the machine is too old, ${needed} is needed (e.g. Debian 12, Ubuntu 22.04, RHEL 9).`,
+    noSystemd: 'The machine runs no systemd user services (systemctl --user).',
+    noGit: 'git is missing on the machine.',
+    pty: (detail) => `The server cannot start terminals there: ${detail}`,
+    notStarted: (detail) => `The server did not start: ${detail}`,
+  },
   serverStatus: {
     connecting: 'connecting',
     connected: 'connected',

@@ -27,6 +27,7 @@ under Node (built-in `WebSocket`).
   in `file` (0600): `list()` (with `badges` per bay, `sessions` of the server, `local: true` for the local server, `retry`: number of the reconnect attempt running or waiting since the last connection, counted before `changed`; gone when no further attempt follows), `connectAll()`, `connect`, `disconnect`, `remove`,
   `probe(address)` → `{ id, fingerprint }`, `pair(probeId, name, code)`,
   `pairLocal(dataDir, name)` (server on the same machine, ADR 0036: code from `pair-code`, only with the fingerprint from `listen.json`; stored with `local`, the port comes from `listen.json` on every connect; already paired → the same ID and a new connection attempt if none is running),
+  `pairSetUp(target, name, setup)` (server set up over SSH, ADR 0041: pairs with the code read from the machine, stores `remoteData`; the port comes from `listen.json` over SSH on every connect; same host, user and data folder already paired → the same ID, new connection attempt, no new pairing),
   `cancel`, `invoke`, `jobs(id)`, `job(id, action, jobId)`, `workspaces(id, action, args)`, `offerAgain()`, `closeAll()`;
   `changed` after every status change and every badge change. After
   a drop or failed attempt reconnect after 1, 2, 4 … at most 30
@@ -36,6 +37,13 @@ under Node (built-in `WebSocket`).
   (`functions`, `call`, `sessionEnded`, `workspaces`): bays of the app for the local server;
   offered after every connect and with `offerAgain()`, only to servers with
   `local` and protocol ≥ 3.
+- Setup on Linux machines (`setup.ts`, ADR 0041): `parseSetupAddress` (`[user@]host`, no
+  port), `sshRemote(target, ssh)` → `Remote` (runs one `sh -c` script, optional
+  file as stdin; exit 255 → `SSH failed: …`), `linuxPackages(dir, version)` (the
+  shipped tarballs with `requirements.json` and build `<version>+<8 hex>` of the
+  file), `probeMachine`, `choosePackage` (exact refusals, the UI maps them in
+  `Sidebar.tsx` `setupError`), `unit(build)`, `setUpServer(remote, packages)` →
+  `SetupResult`, `remoteListen(remote, dataDir)`.
 
 ## Pitfalls
 
@@ -68,6 +76,11 @@ under Node (built-in `WebSocket`).
   ends with stdin like `cat` on the server, host `unreachable.invalid` fails
   like ssh. `fixtures/open-tunnel.mjs` opens a tunnel in its own process,
   so that tests can kill it hard.
+- Setup: the refusal messages of `choosePackage`/`setUpServer` are matched by
+  text in `apps/desktop/src/renderer/Sidebar.tsx` (`setupError`); change both
+  together. The unit uses `%h`, never `~` (systemd does not expand it). Runtimes
+  are uploaded only when `runtime/<build>` is missing: the build id hashes the
+  tarball, so a new package gets a new folder.
 - No `-N`: ssh ends with `cat` on the stdin pipe only if the app dies.
   stdin must remain a pipe (`stdio[0] = 'pipe'`). Do not remove `RemoteCommand=none`,
   `ControlMaster=no`, `ControlPath=none` (the person's ssh config);

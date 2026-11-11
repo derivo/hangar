@@ -388,8 +388,24 @@ manual step is needed. pnpm reports ignored build scripts of
   new shell). x64 only in the CI job `linux-server` (under emulation locally
   the image build exceeds the hook timeout). `electron-builder --dir`: both
   packages in `Resources/linux-server`; without `dist/linux-server` it warns
-  "file source doesn't exist" and packages anyway. The app cannot set up a
-  server yet (step 2).
+  "file source doesn't exist" and packages anyway.
+  Review: `docs/reviews/2026-11-11-linux-server-package.md`.
+- **Server on Linux machines, step 2** (ADR 0041): setup over SSH
+  (`packages/bridge/src/setup.ts`, checkbox in "Connect to server").
+  `pnpm test:linux-setup` 3 of 3 locally (Docker Desktop, arm64) against
+  `docker/linux-machine` (Debian bookworm, sshd, systemd as PID 1): the
+  refusals for an old glibc and a missing package before any upload (the
+  other refusals only in `setup.test.ts` with prepared probe output), setup with real ssh (modes 700/600, unit enabled,
+  `PATH` from the login shell in `server.env`), pairing, a session whose
+  `hangar status waiting` arrives; setting up again uploads nothing, keeps the
+  server id and reads the new port. x64 only in the CI job `linux-server`.
+  E2E `e2e/server.spec.ts` (macOS): the probe runs for real over
+  `fake-ssh.mjs` and is refused ("not Linux (Darwin)"); the done state with
+  the lingering hint comes from a stubbed IPC answer; axe 0 violations in
+  form, refusal and done state, light and dark. Not checked: a real remote
+  machine, lingering switched on, a machine without `loginctl`. Updates of an
+  installed server come in step 3.
+  Review: `docs/reviews/2026-11-11-linux-server-setup.md`.
 - **Remote callers in the bus, phase 13** (ADR 0011): `Caller` `remote`, check
   of `remote: true`, "not sensitive", membership and share list before
   every stored permission and again after the dialog; permissions on the subject

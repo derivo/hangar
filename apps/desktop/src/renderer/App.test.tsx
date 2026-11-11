@@ -61,6 +61,7 @@ function fakeApi(initial: ShellState) {
     setModal: vi.fn(),
     setHintHeight: vi.fn(),
     probeServer: vi.fn(),
+    setupServer: vi.fn(),
     pairServer: vi.fn(),
     cancelProbe: vi.fn(),
     serverMenu: vi.fn(),

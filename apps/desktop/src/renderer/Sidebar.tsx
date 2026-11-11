@@ -20,6 +20,7 @@ interface Props {
     | 'bayMenu'
     | 'setModal'
     | 'probeServer'
+    | 'setupServer'
     | 'pairServer'
     | 'cancelProbe'
     | 'serverMenu'
@@ -89,6 +90,25 @@ function shownError(e: Error): string {
   if (message === 'Pairing has ended') return t.pairingEnded;
   if (message === 'Invalid URL') return t.invalidUrl;
   return message;
+}
+
+/** Why the setup on a Linux machine stopped (`packages/bridge/src/setup.ts`, ADR 0041). */
+function setupError(e: Error): string {
+  const message = e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+  const e2 = t.setupErrors;
+  const m = (re: RegExp) => re.exec(message);
+  let found;
+  if (message.startsWith('Invalid address:')) return t.invalidSetupAddress;
+  if ((found = m(/^Not a Linux machine: (.*)$/))) return e2.notLinux(found[1]!);
+  if ((found = m(/^Unsupported architecture: (.*)$/))) return e2.arch(found[1]!);
+  if ((found = m(/^No package for (\S+) in this build$/))) return e2.noPackage(found[1]!);
+  if (message === 'No glibc on the machine') return e2.noGlibc;
+  if ((found = m(/^glibc (\S+) is older than (\S+)$/))) return e2.glibc(found[1]!, found[2]!);
+  if (message === 'No systemd user services on the machine') return e2.noSystemd;
+  if (message === 'git not found on the machine') return e2.noGit;
+  if ((found = m(/^node-pty does not start on the machine: (.*)$/s))) return e2.pty(found[1]!);
+  if ((found = m(/^The server did not start: (.*)$/s))) return e2.notStarted(found[1]!);
+  return shownError(e);
 }
 
 function BayButton({
@@ -494,9 +514,13 @@ function ServerPairing({
   api,
   onDone,
 }: {
-  api: Pick<ShellApi, 'probeServer' | 'pairServer' | 'cancelProbe'>;
+  api: Pick<ShellApi, 'probeServer' | 'pairServer' | 'cancelProbe' | 'setupServer'>;
   onDone(): void;
 }) {
+  // Set up on a Linux machine over ssh instead of connecting to a running server (ADR 0041).
+  const [setup, setSetup] = useState(false);
+  const [settingUp, setSettingUp] = useState(false);
+  const [setUpUser, setSetUpUser] = useState<string>();
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [code, setCode] = useState('');
@@ -530,6 +554,20 @@ function ServerPairing({
     if (!probe) {
       if (!name.trim()) return setError(t.nameMissing);
       if (!address.trim()) return setError(t.addressMissing);
+      if (setup)
+        return once(async () => {
+          setSettingUp(true);
+          try {
+            const result = await api.setupServer(name.trim(), address.trim());
+            if (!session.current.open) return;
+            if (result.linger) onDone();
+            else setSetUpUser(result.user);
+          } catch (e) {
+            throw new Error(setupError(e as Error), { cause: e });
+          } finally {
+            setSettingUp(false);
+          }
+        });
       return once(async () => {
         const p = await api.probeServer(address.trim());
         if (!session.current.open) return api.cancelProbe(p.id);
@@ -545,8 +583,33 @@ function ServerPairing({
     });
   };
 
+  if (setUpUser !== undefined)
+    return (
+      <div className="pairing">
+        <h2 id="picker-title">{t.connectServer}</h2>
+        <p role="status">{t.setUpDone}</p>
+        <p>{t.lingerHint(setUpUser)}</p>
+        <div className="picker-actions">
+          <button type="button" className="button" autoFocus onClick={onDone}>
+            {t.done}
+          </button>
+        </div>
+      </div>
+    );
+
   return (
-    <form className="pairing" onSubmit={submit} noValidate>
+    <form
+      className="pairing"
+      onSubmit={submit}
+      noValidate
+      // The setup goes on in the main process: Escape does not hide it while it runs.
+      onKeyDown={(e) => {
+        if (settingUp && e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }}
+    >
       <h2 id="picker-title">{t.connectServer}</h2>
       {probe ? (
         <>
@@ -579,17 +642,27 @@ function ServerPairing({
             {t.serverAddress}
             <input
               value={address}
-              placeholder="anna@heimserver:7420"
+              placeholder={setup ? 'anna@heimserver' : 'anna@heimserver:7420'}
               spellCheck={false}
               aria-describedby="server-address-hint"
               onChange={(e) => setAddress(e.target.value)}
             />
           </label>
           <p id="server-address-hint" className="muted">
-            {t.serverAddressHint}
+            {setup ? t.setUpHint : t.serverAddressHint}
           </p>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={setup}
+              disabled={settingUp}
+              onChange={(e) => setSetup(e.target.checked)}
+            />
+            {t.setUp}
+          </label>
         </>
       )}
+      {settingUp && <p role="status">{t.settingUp}</p>}
       {error && (
         <p className="error" role="alert">
           {error}
@@ -602,9 +675,9 @@ function ServerPairing({
           // The second click of a double click on Weiter would land on Koppeln (ADR 0028).
           onClick={(e) => e.detail > 1 && e.preventDefault()}
         >
-          {probe ? t.pair : t.next}
+          {probe ? t.pair : setup ? t.setUpButton : t.next}
         </button>
-        <button type="button" className="button" onClick={onDone}>
+        <button type="button" className="button" disabled={settingUp} onClick={onDone}>
           {t.cancel}
         </button>
       </div>

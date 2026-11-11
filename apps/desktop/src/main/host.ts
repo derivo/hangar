@@ -18,7 +18,13 @@ import {
   type OpenDialogOptions,
   type WebContents,
 } from 'electron';
-import { ServerConnections } from '@hangar/bridge';
+import {
+  linuxPackages,
+  parseSetupAddress,
+  ServerConnections,
+  setUpServer,
+  sshRemote,
+} from '@hangar/bridge';
 import type { Bus, Grant, GrantMode } from '@hangar/bus';
 import type { HangarNotification, ViewRect } from '@hangar/sdk';
 import { themeCss } from '@hangar/theme';
@@ -36,6 +42,7 @@ import {
   type LoadedBay,
 } from '@hangar/host';
 import { BrowserTabs, type Placement } from './browser-tabs';
+import { pairWhenReady } from './local-server';
 import { tailFile } from './log-tail';
 import { t } from '../messages';
 import { gitIdentity } from './overview';
@@ -172,6 +179,9 @@ export class Host {
   /** System icons of shortcut paths as data URLs, loaded once (ADR 0027). */
   private readonly shortcutIcons = new Map<string, string>();
 
+  /** The `ssh` command for tunnels and the setup of servers. */
+  private readonly ssh: string;
+
   constructor(
     private readonly services: Omit<
       HostServices,
@@ -207,7 +217,13 @@ export class Host {
       owns: [],
       uiRoots: () => [],
     },
+    /** Linux packages of the server this app ships and its version (ADR 0041). */
+    private readonly linuxServer: { packages: string; version: string } = {
+      packages: '',
+      version: '0.0.0',
+    },
   ) {
+    this.ssh = ssh;
     const serverName = (id: string) => this.servers.list().find((s) => s.id === id)?.name ?? id;
     this.servers = new ServerConnections(
       serversFile,
@@ -301,6 +317,22 @@ export class Host {
     this.layout();
     this.loadShortcutIcons();
     void this.servers.connectAll();
+  }
+
+  /**
+   * Sets up the server on a Linux machine over ssh and pairs with it (ADR 0041). `linger`: whether
+   * the service keeps running after the person logs out there; `user` names them for the hint.
+   */
+  async setUpServer(name: string, address: string): Promise<{ linger: boolean; user: string }> {
+    const target = parseSetupAddress(address);
+    const { packages, version } = this.linuxServer;
+    const setup = await setUpServer(
+      sshRemote(target, this.ssh),
+      await linuxPackages(packages, version),
+    );
+    // `pair-code` is written before the bays are active; until then `/connect` answers 503.
+    await pairWhenReady(() => this.servers.pairSetUp(target, name, setup));
+    return { linger: setup.linger, user: setup.user };
   }
 
   /** Pairs with the local server in `dataDir` once; afterwards it connects like any (ADR 0036). */
@@ -1224,6 +1256,9 @@ export class Host {
       async (_e, probeId: unknown, name: unknown, code: unknown) => {
         await this.servers.pair(String(probeId), String(name), String(code));
       },
+    );
+    ipcMain.handle('shell:server.setup', (_e, name: unknown, address: unknown) =>
+      this.setUpServer(String(name), String(address)),
     );
     ipcMain.on('shell:server.cancel', (_e, probeId: unknown) =>
       this.servers.cancel(String(probeId)),

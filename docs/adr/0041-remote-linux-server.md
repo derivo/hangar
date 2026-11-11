@@ -159,6 +159,11 @@ show-user --property=Linger` and, if off, shows `loginctl enable-linger` to
 2. **Setup over SSH:** checks (system, architecture, glibc, `systemctl --user`,
    `git` on the `PATH`, lingering), upload, unit with modes, pairing; E2E against the SSH container including
    every refusal with its exact message.
+   Done: the checks against the SSH container are `pnpm test:linux-setup`
+   (Vitest, not Playwright); the desktop E2E covers the dialog with the
+   probe refused on macOS. The server picks a free port (no `--listen`);
+   the app stores the data folder and reads the port from `listen.json`
+   over SSH before every connect.
 3. **Update and restart:** build comparison over SSH, hint, restart view with
    the log, cleanup of
    old runtimes, removal with the unit.

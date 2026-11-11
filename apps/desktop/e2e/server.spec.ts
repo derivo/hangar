@@ -266,6 +266,52 @@ test('pairs over SSH by keyboard alone and stays usable at 200 % zoom (ADR 0019)
   }
 });
 
+test('sets up a server on a Linux machine: refuses this Mac, then asks for lingering (ADR 0041)', async () => {
+  // Runs the setup's scripts on this machine, as ssh runs them on the server (packages/bridge/fixtures).
+  const fakeSsh = join(__dirname, '../../../packages/bridge/fixtures/fake-ssh.mjs');
+  const { app, shell } = await launch({
+    bayDirs: [repoBays],
+    env: { ...agentsEnv(), HANGAR_SSH: fakeSsh },
+    seedBays: false,
+  });
+  const checked = async (state: string) => {
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await shell.emulateMedia({ colorScheme });
+      expect(await violations(shell), `${state} (${colorScheme})`).toEqual([]);
+    }
+  };
+  try {
+    const nav = shell.getByRole('navigation', { name: 'Bays' });
+    await nav.getByRole('button', { name: 'Zur Leiste hinzufügen' }).click();
+    const dialog = shell.getByRole('dialog');
+    await dialog.getByRole('button', { name: 'Mit Server verbinden' }).click();
+    await dialog.getByRole('checkbox', { name: 'Hangar dort einrichten (Linux)' }).check();
+    await dialog.getByLabel('Name').fill('Heimserver');
+    await dialog.getByLabel('Adresse').fill('anna@heimserver');
+    await checked('setup form');
+    await dialog.getByRole('button', { name: 'Einrichten' }).click();
+    // The probe ran for real: this Mac is no Linux machine.
+    await expect(dialog.getByRole('alert')).toHaveText('Der Rechner ist kein Linux (Darwin).');
+    await checked('setup refused');
+
+    // A machine where it works is out of reach here (docker/linux-machine checks it): the
+    // answer of the main process stands in for it.
+    await app.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('shell:server.setup');
+      ipcMain.handle('shell:server.setup', async () => ({ linger: false, user: 'anna' }));
+    });
+    await dialog.getByLabel('Adresse').press('Enter');
+    await expect(dialog.getByRole('status')).toHaveText('Server eingerichtet und gekoppelt.');
+    await expect(dialog).toContainText('loginctl enable-linger anna');
+    await expect(dialog.getByRole('button', { name: 'Fertig' })).toBeFocused();
+    await checked('setup done');
+    await shell.keyboard.press('Enter');
+    await expect(dialog).toBeHidden();
+  } finally {
+    await app.close();
+  }
+});
+
 test('a job that runs while the desktop is away notifies, badges and shows its result after connecting (phase 11c, 11d)', async () => {
   // The job waits for the next full minute (cron), so this test may take up to two.
   test.setTimeout(180_000);

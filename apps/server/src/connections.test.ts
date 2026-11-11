@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ServerConnections } from '@hangar/bridge';
@@ -502,6 +502,73 @@ describe('ServerConnections: the local server (ADR 0036)', () => {
       await blocker.server.close();
     }
   });
+
+  it.skipIf(process.platform === 'win32')(
+    'pairs with a server set up over ssh and reads its port there before each connect',
+    async () => {
+      // ADR 0041: key and code come over ssh (here: fake-ssh runs the command on this machine).
+      const s = await startEchoServer();
+      server = s.server;
+      const { connections, file } = desktop(undefined, 20);
+      const { port, fingerprint } = JSON.parse(readFileSync(join(s.data, 'listen.json'), 'utf8'));
+      const setup = {
+        remoteData: s.data,
+        port,
+        fingerprint,
+        code: s.code(),
+        linger: true,
+        user: 'anna',
+        build: 'b',
+      };
+      // A wrong code: the connection closes and nothing is stored.
+      await expect(
+        connections.pairSetUp({ host: 'heimserver' }, 'Heimserver', {
+          ...setup,
+          code: 'XXXX-XXXX',
+        }),
+      ).rejects.toThrow();
+      expect(connections.list()).toEqual([]);
+      const id = await connections.pairSetUp({ host: 'heimserver' }, 'Heimserver', setup);
+      await expect(connections.invoke(id, 'dev.echo', 'echo', [1])).resolves.toBe(1);
+      expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual([
+        expect.objectContaining({ id, remoteData: s.data, ssh: { host: 'heimserver', port } }),
+      ]);
+      // Set up again: the same entry, no new code used up.
+      const code = s.code();
+      await expect(
+        connections.pairSetUp({ host: 'heimserver' }, 'Heimserver', setup),
+      ).resolves.toBe(id);
+      expect(s.code()).toBe(code);
+      // Its clients are gone (a new data folder keeps no token): pairs again, same ID (Codex).
+      await server.close();
+      rmSync(join(s.data, 'clients.json'), { force: true });
+      const again = await startEchoServer(s.data);
+      server = again.server;
+      const { port: newPort } = JSON.parse(readFileSync(join(s.data, 'listen.json'), 'utf8'));
+      const token = JSON.parse(readFileSync(file, 'utf8'))[0].token;
+      await expect(
+        connections.pairSetUp({ host: 'heimserver' }, 'Anders', {
+          ...setup,
+          port: newPort,
+          code: again.code(),
+        }),
+      ).resolves.toBe(id);
+      await expect(connections.invoke(id, 'dev.echo', 'echo', [3])).resolves.toBe(3);
+      const [entry] = JSON.parse(readFileSync(file, 'utf8'));
+      expect(entry).toMatchObject({ id, name: 'Heimserver' });
+      expect(entry.token).not.toBe(token);
+      // The server comes back on another port: read from listen.json over ssh.
+      await server.close();
+      const blocker = await startEchoServer(undefined, port);
+      try {
+        server = (await startEchoServer(s.data)).server;
+        await until(() => connections.list()[0]!.status === 'connected');
+        await expect(connections.invoke(id, 'dev.echo', 'echo', [2])).resolves.toBe(2);
+      } finally {
+        await blocker.server.close();
+      }
+    },
+  );
 
   it('keeps servers.json valid and every change when pairing and connecting run in parallel', async () => {
     const local = await startEchoServer();

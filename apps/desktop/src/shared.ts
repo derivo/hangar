@@ -193,6 +193,8 @@ export interface ShellApi {
   setHintHeight(px: number): void;
   /** Opens an unpaired connection; resolves to the fingerprint to confirm. */
   probeServer(address: string): Promise<{ id: string; fingerprint: string }>;
+  /** Sets up the server on a Linux machine over ssh and pairs with it (ADR 0041). */
+  setupServer(name: string, address: string): Promise<{ linger: boolean; user: string }>;
   pairServer(probeId: string, name: string, code: string): Promise<void>;
   cancelProbe(probeId: string): void;
   /** Native menu of a server: connect or disconnect, remove. */

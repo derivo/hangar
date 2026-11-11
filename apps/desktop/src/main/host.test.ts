@@ -215,6 +215,7 @@ class FakeConnections {
   probe = vi.fn(async (_address: string) => ({ id: 'probe', fingerprint: 'SHA256:x' }));
   pair = vi.fn(async (..._args: string[]) => 'srv');
   pairLocal = vi.fn(async (..._args: string[]) => 'local');
+  pairSetUp = vi.fn(async (..._args: unknown[]) => 'machine');
   cancel = vi.fn();
   invoke = vi.fn(async (..._args: unknown[]) => 'from server');
   jobs = vi.fn(async (_id: string): Promise<unknown[]> => []);
@@ -248,7 +249,15 @@ class FakeConnections {
     FakeConnections.last = this;
   }
 }
-vi.mock('@hangar/bridge', () => ({ ServerConnections: FakeConnections }));
+const bridgeSetup = {
+  linuxPackages: vi.fn(async (dir: string, version: string) => [{ dir, version }]),
+  sshRemote: vi.fn((target: unknown, ssh: string) => ({ target, ssh })),
+  setUpServer: vi.fn(async (..._args: unknown[]) => ({ linger: false, user: 'anna', port: 1 })),
+};
+vi.mock('@hangar/bridge', async (importOriginal) => {
+  const { parseSetupAddress } = await importOriginal<typeof import('@hangar/bridge')>();
+  return { ServerConnections: FakeConnections, parseSetupAddress, ...bridgeSetup };
+});
 vi.mock('./overview', () => ({ gitIdentity: async () => ({ name: 'Anna', email: 'a@x' }) }));
 const askWithDialog = vi.fn(async () => 'deny');
 vi.mock('./prompter', () => ({ askWithDialog }));
@@ -1247,6 +1256,35 @@ describe('Host: servers', () => {
     FakeNotification.all[0]!.emit('click');
     expect(host.state().selected).toBe('remote:srv:dev.test.a');
     servers.events.jobs();
+  });
+
+  it('sets up a server on a Linux machine with the shipped packages and pairs (ADR 0041)', async () => {
+    const { servers, window } = await started();
+    const shell = window().webContents;
+    // The server answers 503 until its bays are active: pairing is tried again (Codex).
+    servers.pairSetUp.mockRejectedValueOnce(new Error('Cannot reach ws://127.0.0.1:1/connect'));
+    await expect(invoke('shell:server.setup', shell, 'Heim', 'anna@heimserver')).resolves.toEqual({
+      linger: false,
+      user: 'anna',
+    });
+    expect(bridgeSetup.linuxPackages).toHaveBeenCalledWith('', '0.0.0');
+    expect(bridgeSetup.sshRemote).toHaveBeenCalledWith(
+      { user: 'anna', host: 'heimserver' },
+      expect.any(String),
+    );
+    expect(bridgeSetup.setUpServer).toHaveBeenCalledWith(
+      { target: { user: 'anna', host: 'heimserver' }, ssh: expect.any(String) },
+      [{ dir: '', version: '0.0.0' }],
+    );
+    expect(servers.pairSetUp).toHaveBeenCalledTimes(2);
+    expect(servers.pairSetUp).toHaveBeenCalledWith(
+      { user: 'anna', host: 'heimserver' },
+      'Heim',
+      expect.objectContaining({ port: 1 }),
+    );
+    await expect(invoke('shell:server.setup', shell, 'Heim', 'heimserver:7420')).rejects.toThrow(
+      'Invalid address: heimserver:7420',
+    );
   });
 
   it('pairs with the local server under its own name (ADR 0036)', async () => {

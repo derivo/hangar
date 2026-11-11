@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { Sidebar } from './Sidebar';
@@ -50,6 +50,7 @@ const themeApi = (theme: ThemeSetting = 'system') => ({
   bayMenu: vi.fn(),
   setModal: vi.fn(),
   probeServer: vi.fn(async (_address: string) => ({ id: 'p1', fingerprint: 'SHA256:abc' })),
+  setupServer: vi.fn(async (_name: string, _address: string) => ({ linger: true, user: 'anna' })),
   pairServer: vi.fn(async (_probe: string, _name: string, _code: string) => {}),
   cancelProbe: vi.fn(),
   serverMenu: vi.fn(),
@@ -469,6 +470,105 @@ describe('Sidebar: pairing a server (one wrong field each)', () => {
   };
   const remote = (message: string) =>
     new Error(`Error invoking remote method 'shell:server.probe': Error: ${message}`);
+
+  // Setup on a Linux machine (ADR 0041): one field wrong at a time, then every refusal.
+  const setUp = async (api = themeApi(), name = 'Heimserver', address = 'anna@heimserver') => {
+    const opened = await open(api);
+    await userEvent.click(
+      opened.ui.getByRole('checkbox', { name: 'Hangar dort einrichten (Linux)' }),
+    );
+    if (name) await userEvent.type(opened.ui.getByLabelText('Name'), name);
+    if (address) await userEvent.type(opened.ui.getByLabelText('Adresse'), address);
+    return opened;
+  };
+  const setupFailed = (message: string) =>
+    new Error(`Error invoking remote method 'shell:server.setup': Error: ${message}`);
+
+  it.each([
+    ['', 'anna@heimserver', 'Name fehlt.'],
+    ['Heimserver', '', 'Adresse fehlt.'],
+    ['   ', 'anna@heimserver', 'Name fehlt.'],
+    ['Heimserver', '   ', 'Adresse fehlt.'],
+  ])('setup needs name and address (%j, %j)', async (name, address, text) => {
+    const { api, ui } = await setUp(undefined, name, address);
+    await userEvent.click(ui.getByRole('button', { name: 'Einrichten' }));
+    expect(ui.getByRole('alert')).toHaveTextContent(text);
+    expect(api.setupServer).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['Invalid address: heimserver:7420', 'Adresse ungültig: benutzer@host oder host, ohne Port.'],
+    ['Not a Linux machine: Darwin', 'Der Rechner ist kein Linux (Darwin).'],
+    [
+      'Unsupported architecture: riscv64',
+      'Architektur riscv64 wird nicht unterstützt (nur x86_64 und aarch64).',
+    ],
+    [
+      'No package for arm64 in this build',
+      'Diese Hangar-Version enthält kein Server-Paket für arm64. Release-Builds enthalten es.',
+    ],
+    [
+      'No glibc on the machine',
+      'Auf dem Rechner gibt es keine glibc (z. B. Alpine); das wird nicht unterstützt.',
+    ],
+    [
+      'glibc 2.31 is older than 2.34',
+      'glibc 2.31 auf dem Rechner ist zu alt, nötig ist 2.34 (z. B. Debian 12, Ubuntu 22.04, RHEL 9).',
+    ],
+    [
+      'No systemd user services on the machine',
+      'Auf dem Rechner laufen keine systemd-Benutzerdienste (systemctl --user).',
+    ],
+    ['git not found on the machine', 'git fehlt auf dem Rechner.'],
+    [
+      'node-pty does not start on the machine: libstdc++.so.6: not found',
+      'Der Server kann dort keine Terminals starten: libstdc++.so.6: not found',
+    ],
+    ['The server did not start: Error: EACCES', 'Der Server ist nicht gestartet: Error: EACCES'],
+    [
+      'SSH failed: Permission denied (publickey).',
+      'SSH-Verbindung fehlgeschlagen (Permission denied (publickey).). Klappt ssh im Terminal ohne Passwortabfrage?',
+    ],
+  ])('names why the setup stopped: %s', async (message, text) => {
+    const api = themeApi();
+    api.setupServer.mockRejectedValueOnce(setupFailed(message));
+    const { ui } = await setUp(api);
+    await userEvent.click(ui.getByRole('button', { name: 'Einrichten' }));
+    expect(await ui.findByRole('alert')).toHaveTextContent(text);
+    expect(ui.queryByRole('status')).toBeNull();
+  });
+
+  it('sets up with Enter, shows that it runs, and asks for lingering when it is off', async () => {
+    const api = themeApi();
+    let finish!: (r: { linger: boolean; user: string }) => void;
+    api.setupServer.mockReturnValueOnce(new Promise((r) => (finish = r)));
+    const { ui, dialog } = await setUp(api, 'Heimserver', ' anna@heimserver ');
+    expect(ui.getByLabelText('Adresse')).toHaveAttribute('placeholder', 'anna@heimserver');
+    await userEvent.type(ui.getByLabelText('Adresse'), '{Enter}');
+    expect(ui.getByRole('status')).toHaveTextContent('Richte ein');
+    expect(ui.getByRole('checkbox')).toBeDisabled();
+    // It goes on in the main process: neither Cancel nor Escape hides it (Codex).
+    expect(ui.getByRole('button', { name: 'Abbrechen' })).toBeDisabled();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    // A second Enter starts nothing.
+    await userEvent.type(ui.getByLabelText('Adresse'), '{Enter}');
+    expect(api.setupServer).toHaveBeenCalledTimes(1);
+    expect(api.setupServer).toHaveBeenCalledWith('Heimserver', 'anna@heimserver');
+    await act(async () => finish({ linger: false, user: 'anna' }));
+    expect(ui.getByRole('status')).toHaveTextContent('Server eingerichtet und gekoppelt.');
+    expect(dialog).toHaveTextContent('loginctl enable-linger anna');
+    await userEvent.click(ui.getByRole('button', { name: 'Fertig' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('closes after a setup where the server keeps running anyway', async () => {
+    const { api, ui } = await setUp();
+    await userEvent.click(ui.getByRole('button', { name: 'Einrichten' }));
+    expect(api.setupServer).toHaveBeenCalledWith('Heimserver', 'anna@heimserver');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(api.probeServer).not.toHaveBeenCalled();
+  });
 
   it.each(['', '   '])('needs a name (%j)', async (name) => {
     const { api, ui } = await open();
