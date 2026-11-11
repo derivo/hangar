@@ -228,8 +228,12 @@ li:has(> .sidebar-item[aria-current='page'])::before,
 }
 
 .local-server-down {
-  max-width: 60ch;
   padding: var(--hangar-space-6);
+}
+
+/* Text keeps a readable measure; the log below takes the whole width of the bay. */
+.local-server-down p {
+  max-width: 60ch;
 }
 
 .local-server-error {
