@@ -160,6 +160,24 @@ test('the pages of the local server without violations: down, starting, new vers
     await app.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0]!.webContents.setZoomFactor(1),
     );
+    // The log takes the whole width of its page; only the text keeps a readable measure
+    // (60ch), so the window is wider than that.
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(1600, 900));
+    await expect
+      .poll(() =>
+        content.getByRole('log').evaluate((l) => {
+          const page = l.closest('section')!;
+          const style = getComputedStyle(page);
+          const inner =
+            page.parentElement!.clientWidth -
+            parseFloat(style.paddingLeft) -
+            parseFloat(style.paddingRight);
+          return Math.round(l.getBoundingClientRect().width - inner);
+        }),
+      )
+      .toBe(0);
+    const text = await content.locator('.local-server-down p').first().boundingBox();
+    expect(text!.width).toBeLessThan((await content.getByRole('log').boundingBox())!.width / 2);
     // The log paused (WCAG 2.2.2): the pressed button without violations too.
     const pause = content.getByRole('button', { name: 'Log anhalten' });
     await pause.click();
