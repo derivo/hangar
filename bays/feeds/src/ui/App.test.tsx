@@ -69,8 +69,9 @@ describe('feeds UI', () => {
         item('3', { receivedAt: '2026-11-05T10:00:00.000Z' }),
       ],
     });
+    // The log shows before the state arrives (empty); the entries come with the state at once.
     const log = await screen.findByRole('log', { name: 'Verlauf' });
-    const rows = within(log).getAllByRole('listitem');
+    const rows = await within(log).findAllByRole('listitem');
     expect(rows.map((r) => r.className)).toEqual(['day', 'entry', 'entry', 'day', 'entry']);
     expect(within(rows[1]!).getByRole('link', { name: 'Post 1' })).toHaveAttribute(
       'target',

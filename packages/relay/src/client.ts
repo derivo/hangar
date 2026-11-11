@@ -163,6 +163,7 @@ export class RelayClient implements RemoteAccess {
     await new Promise<void>((resolve, reject) => {
       let ready = false;
       const fail = (message: string) => {
+        clearTimeout(timer);
         socket.close();
         reject(new Error(message));
       };

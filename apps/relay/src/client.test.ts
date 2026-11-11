@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Bus, MemoryPermissionStore } from '@hangar/bus';
 import {
+  CALL_TIMEOUT_MS,
   createIdentity,
   open,
   RelayClient,
@@ -24,10 +25,19 @@ const OPERATOR = 'operator-token';
 let relay: Relay | undefined;
 const closers: (() => void)[] = [];
 afterEach(async () => {
+  vi.useRealTimers();
   for (const c of closers.splice(0)) c();
   await relay?.close();
   relay = undefined;
 });
+
+/**
+ * Waits for what comes over the loopback relay. `vi.waitFor` gives up after 1 s by default and
+ * does not check once more on timeout: if a loaded machine stalls the process, its interval and
+ * its timeout fall due in the same timer phase, before the socket data that would satisfy the
+ * check is read – it fails although the answer is there. 5 s outlasts such a stall.
+ */
+const arrives = <T>(check: () => T) => vi.waitFor(check, { timeout: 5000 });
 
 async function start() {
   const dir = mkdtempSync(join(tmpdir(), 'hangar-relay-client-'));
@@ -85,9 +95,9 @@ async function pair(opts: Parameters<typeof instance>[2] = {}) {
   a.client.onJoined((w, doc) => void a.client.addMember(w, doc).catch(() => {}));
   await a.client.create('team', OPERATOR);
   await b.client.join('team', await a.client.invite('team'), anna.fingerprint);
-  await vi.waitFor(() => expect(b.client.isMember('team', anna.fingerprint)).toBe(true));
+  await arrives(() => expect(b.client.isMember('team', anna.fingerprint)).toBe(true));
   const id = `${remoteBayId(anna.document, 'dev.hangar.notes')}/note.read`;
-  await vi.waitFor(() => expect(b.bus.list().map((f) => f.id)).toContain(id));
+  await arrives(() => expect(b.bus.list().map((f) => f.id)).toContain(id));
   return { dir, anna, ben, a, b, id };
 }
 
@@ -99,7 +109,7 @@ async function handDriven(anna: Identity) {
   ws.on('message', (d) => inbox.push(JSON.parse(String(d)) as FromRelay));
   await new Promise((r) => ws.once('open', r));
   const wait = async <T extends FromRelay['type']>(type: T) => {
-    await vi.waitFor(() => expect(inbox.some((m) => m.type === type)).toBe(true));
+    await arrives(() => expect(inbox.some((m) => m.type === type)).toBe(true));
     const i = inbox.findIndex((m) => m.type === type);
     return inbox.splice(i, 1)[0] as Extract<FromRelay, { type: T }>;
   };
@@ -155,7 +165,7 @@ describe('RelayClient', () => {
       'waiting',
     );
     // Anna adds Carl (pair() does that on `joined`), but Carl confirmed someone else.
-    await vi.waitFor(() => expect(a.client.workspace('team')?.list.members).toHaveLength(3));
+    await arrives(() => expect(a.client.workspace('team')?.list.members).toHaveLength(3));
     await new Promise((r) => setTimeout(r, 100));
     expect(carl.client.workspace('team')).toBeUndefined();
   });
@@ -173,21 +183,21 @@ describe('RelayClient', () => {
     );
     expect(b.client.workspace('team')).toBeUndefined();
     await a.client.addMember('team', ben.document);
-    await vi.waitFor(() => expect(b.client.workspace('team')?.list.members).toHaveLength(2));
+    await arrives(() => expect(b.client.workspace('team')?.list.members).toHaveLength(2));
   });
 
   it('an invitation still works when another member signed the latest list', async () => {
     const { dir, a, b, anna } = await pair();
-    await vi.waitFor(() => expect(b.client.workspace('team')?.list.members).toHaveLength(2));
+    await arrives(() => expect(b.client.workspace('team')?.list.members).toHaveLength(2));
     await b.client.renew('team');
-    await vi.waitFor(() => expect(a.client.workspace('team')?.list.version).toBe(3));
+    await arrives(() => expect(a.client.workspace('team')?.list.version).toBe(3));
     const carlId = createIdentity('carl');
     const carl = await instance(carlId, dir);
     expect(await carl.client.join('team', await a.client.invite('team'), anna.fingerprint)).toBe(
       'waiting',
     );
     // Anna adds Carl (pair() does that on `joined`): her list makes Carl trust the workspace.
-    await vi.waitFor(() => expect(carl.client.isMember('team', carlId.fingerprint)).toBe(true));
+    await arrives(() => expect(carl.client.isMember('team', carlId.fingerprint)).toBe(true));
   });
 
   it('reports relay errors of requests', async () => {
@@ -208,9 +218,13 @@ describe('RelayClient', () => {
   });
 
   it('gives up after the call timeout and limits open calls per instance', async () => {
-    const { b, id } = await pair({ timeout: 300, handler: () => new Promise(() => {}) });
+    // `callTimeoutMs` also bounds handshake and relay requests: a short one made pairing race it
+    // on a loaded machine. Pair with the default, then let the clock run out for the calls only.
+    const { b, id } = await pair({ handler: () => new Promise(() => {}) });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const calls = Array.from({ length: 10 }, () => b.bus.call(agent, id, {}));
     await expect(b.bus.call(agent, id, {})).rejects.toThrow('Too many open calls to this instance');
+    vi.advanceTimersByTime(CALL_TIMEOUT_MS);
     for (const c of calls) await expect(c).rejects.toThrow('The call timed out');
   });
 
@@ -241,7 +255,7 @@ describe('RelayClient', () => {
   it('removing a member drops its functions and refuses its calls', async () => {
     const { a, b, ben, id } = await pair();
     await a.client.removeMember('team', ben.fingerprint);
-    await vi.waitFor(() => expect(a.client.isMember('team', ben.fingerprint)).toBe(false));
+    await arrives(() => expect(a.client.isMember('team', ben.fingerprint)).toBe(false));
     await expect(b.bus.call(agent, id, {})).rejects.toThrow(
       'The relay refused the message: no member of the workspace',
     );
@@ -256,11 +270,11 @@ describe('RelayClient', () => {
     await c.client.join('team', hand.token, anna.fingerprint);
     const v2 = hand.team.next(anna, { members: [anna.document, carl.document] });
     hand.send({ type: 'list', id: 3, list: v2 });
-    await vi.waitFor(() => expect(c.client.workspace('team')?.list.version).toBe(2));
+    await arrives(() => expect(c.client.workspace('team')?.list.version).toBe(2));
     // v3 only inside an announce: the relay stores and forwards no list.
     const v3 = hand.team.next(anna, {});
     hand.to(carl, { t: 'announce', functions: [], list: v3 });
-    await vi.waitFor(() => expect(c.client.workspace('team')?.list.version).toBe(3));
+    await arrives(() => expect(c.client.workspace('team')?.list.version).toBe(3));
   });
 
   it('drops what does not belong and answers bad calls with an error, without stopping', async () => {
@@ -273,7 +287,7 @@ describe('RelayClient', () => {
     await c.client.join('team', hand.token, anna.fingerprint);
     const v2 = hand.team.next(anna, { members: [anna.document, carl.document] });
     hand.send({ type: 'list', id: 3, list: v2 });
-    await vi.waitFor(() => expect(c.client.workspace('team')?.list.version).toBe(2));
+    await arrives(() => expect(c.client.workspace('team')?.list.version).toBe(2));
     // Carl announces again whenever the list changes: wait for the kind of reply asked for.
     const reply = async (t: string) => {
       for (;;) {
@@ -320,7 +334,7 @@ describe('RelayClient', () => {
       ],
     });
     const id = `${remoteBayId(anna.document, 'dev.x')}/ok`;
-    await vi.waitFor(() =>
+    await arrives(() =>
       expect(c.bus.list().map((f) => f.id)).toEqual(expect.arrayContaining([id])),
     );
     expect(c.bus.list().find((f) => f.id === id)?.spec).toEqual({
@@ -366,7 +380,7 @@ describe('RelayClient', () => {
     let stored: StoredWorkspace | undefined;
     b.client.onChange((s) => (stored = s));
     await b.client.renew('team').catch(() => {});
-    await vi.waitFor(() => expect(stored?.list.version).toBeGreaterThan(1));
+    await arrives(() => expect(stored?.list.version).toBeGreaterThan(1));
     b.client.close();
     const again = await RelayClient.connect(
       {
@@ -434,7 +448,7 @@ describe('RelayClient', () => {
     // A relay without the inviter (older `relay.json`): the request comes without it.
     const doc = createIdentity('w').document;
     server!.send(JSON.stringify({ type: 'joined', workspace: 'team', identity: doc }));
-    await vi.waitFor(() => expect(joined).toHaveBeenCalledWith('team', doc, undefined));
+    await arrives(() => expect(joined).toHaveBeenCalledWith('team', doc, undefined));
     // A ready of the wrong shape ends the connection attempt instead of throwing in a listener.
     fake.removeAllListeners('connection');
     fake.on('connection', (ws) =>
@@ -514,13 +528,8 @@ describe('RelayClient', () => {
     expect(await b.client.join('two', await a.client.invite('two'), anna.fingerprint)).toBe(
       'waiting',
     );
-    // The join takes longer than the default 1 s on the Windows CI runner.
-    await vi.waitFor(() => expect(a.client.isMember('two', ben.fingerprint)).toBe(true), {
-      timeout: 5000,
-    });
-    await vi.waitFor(() => expect(b.client.isMember('two', anna.fingerprint)).toBe(true), {
-      timeout: 5000,
-    });
+    await arrives(() => expect(a.client.isMember('two', ben.fingerprint)).toBe(true));
+    await arrives(() => expect(b.client.isMember('two', anna.fingerprint)).toBe(true));
     shared.team = [];
     a.client.announceAll('team');
     await new Promise((r) => setTimeout(r, 200));
@@ -539,12 +548,25 @@ describe('RelayClient', () => {
       bus: new Bus({ prompter: { ask: async () => 'deny' as const } }),
       dataDir: tmpdir(),
       shared: () => [],
-      callTimeoutMs: 200,
     };
+    // Only where nothing comes back a short timeout: a stalled process would otherwise see it
+    // run out before it reads the close or the handshake that is already there.
     fake.on('connection', (ws) => ws.close());
-    await expect(RelayClient.connect(options)).rejects.toThrow('Relay connection closed');
+    // A failed handshake clears its timer (it would hold the process for a minute). Only that
+    // timer: `ws` may still have its own close timer running.
+    const set = vi.spyOn(globalThis, 'setTimeout');
+    const clear = vi.spyOn(globalThis, 'clearTimeout');
+    await expect(RelayClient.connect({ ...options, callTimeoutMs: 54_321 })).rejects.toThrow(
+      'Relay connection closed',
+    );
+    const handshake = set.mock.results[set.mock.calls.findIndex((c) => c[1] === 54_321)]!.value;
+    expect(clear).toHaveBeenCalledWith(handshake);
+    set.mockRestore();
+    clear.mockRestore();
     fake.removeAllListeners('connection');
-    await expect(RelayClient.connect(options)).rejects.toThrow('The relay did not answer');
+    await expect(RelayClient.connect({ ...options, callTimeoutMs: 200 })).rejects.toThrow(
+      'The relay did not answer',
+    );
     // Ready, then no answer to a request.
     fake.on('connection', (ws) =>
       ws.on('message', (d) => {
@@ -556,7 +578,10 @@ describe('RelayClient', () => {
     );
     const client = await RelayClient.connect(options);
     closers.push(() => client.close());
-    await expect(client.invite('team')).rejects.toThrow('The relay did not answer');
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const invite = client.invite('team');
+    vi.advanceTimersByTime(CALL_TIMEOUT_MS);
+    await expect(invite).rejects.toThrow('The relay did not answer');
   });
 
   it('refuses messages from the relay over the size limit, before and after ready', async () => {
@@ -608,31 +633,31 @@ describe('RelayClient', () => {
       bayId: 'dev.hangar.agents',
       state: { sessions: ['s1'] },
     };
-    await vi.waitFor(() => expect(b.client.remoteStates()).toEqual([fromAnna]));
+    await arrives(() => expect(b.client.remoteStates()).toEqual([fromAnna]));
     expect(changes).toHaveBeenLastCalledWith([fromAnna]);
     // Carl joins later and still learns the last state.
     const carlId = createIdentity('carl');
     const carl = await instance(carlId, dir);
     await carl.client.join('team', await a.client.invite('team'), anna.fingerprint);
-    await vi.waitFor(() => expect(carl.client.remoteStates()).toContainEqual(fromAnna));
+    await arrives(() => expect(carl.client.remoteStates()).toContainEqual(fromAnna));
     // Ben leaves: Anna forgets his state.
     b.client.publishState('dev.hangar.agents', { sessions: [] });
-    await vi.waitFor(() =>
+    await arrives(() =>
       expect(a.client.remoteStates().map((s) => s.instance)).toContain(ben.fingerprint),
     );
     await a.client.removeMember('team', ben.fingerprint);
-    await vi.waitFor(() =>
+    await arrives(() =>
       expect(a.client.remoteStates().map((s) => s.instance)).not.toContain(ben.fingerprint),
     );
     // A state of the wrong shape is dropped.
     expect(carl.client.remoteStates().every((s) => s.bayId === 'dev.hangar.agents')).toBe(true);
     a.client.close();
-    await vi.waitFor(() => expect(a.client.remoteStates()).toEqual([]));
+    await arrives(() => expect(a.client.remoteStates()).toEqual([]));
   });
 
   it('two members changing the list at once: the relay orders them, nobody keeps a fork', async () => {
     const { a, b } = await pair();
-    await vi.waitFor(() =>
+    await arrives(() =>
       expect(b.client.workspace('team')!.list).toEqual(a.client.workspace('team')!.list),
     );
     const version = a.client.workspace('team')!.list.version;
@@ -641,7 +666,7 @@ describe('RelayClient', () => {
     expect(String((results[1] as PromiseRejectedResult).reason)).toContain(
       'Not newer than the stored list',
     );
-    await vi.waitFor(() => expect(b.client.workspace('team')!.list.version).toBe(version + 1));
+    await arrives(() => expect(b.client.workspace('team')!.list.version).toBe(version + 1));
     expect(b.client.workspace('team')!.list).toEqual(a.client.workspace('team')!.list);
   });
 });
