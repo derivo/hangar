@@ -106,7 +106,8 @@ deploy key only if agents are to push. `known_hosts` belongs in the folder too.
 
 Agents on the server log in with an API key (`ANTHROPIC_API_KEY`,
 `OPENAI_API_KEY`); a subscription login applies only to clients on one's own
-notebook. Keys are only in `server.env`, never in the image or in the
+notebook, or on one's own machine with a server the app set up under one's own
+user (ADR 0041). Keys are only in `server.env`, never in the image or in the
 repository. Sessions and jobs inherit the environment of the service. Only if
 Hangar itself runs inside a Claude Code session (`CLAUDECODE` set) does the
 agent bay leave out `ANTHROPIC_*`, `CLAUDE_*` and `MCP_*`.
