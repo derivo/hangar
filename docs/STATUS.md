@@ -76,27 +76,24 @@ manual step is needed. pnpm reports ignored build scripts of
   on retry is reported as flaky, so a rare real failure no longer turns the
   run red. Flaky tests are to be fixed one by one locally with
   `--repeat-each`. Run 42001257976 (`8b7feaf`) was the first with every job
-  green, without a retry. The two runs after it are red again (as of
-  2026-11-06), both not yet investigated:
-  - Run 42062340811 (`8d1d0a7`, macOS): `local-server.spec.ts:130` failed in
-    all three attempts. After the app's restart the shell showed
-    `echo AFTERQUIT=$$` and the next prompt, but not its output. Cause: the
-    terminal dropped live output until the scrollback arrived, but over the
-    bridge an event can overtake that answer. Fixed with a position in
-    `session.data` and `session.snapshot` (`bays/agents/CLAUDE.md`), backed by
-    `terminals.test.ts`; locally the test never failed (6 of 6 before the fix),
-    so only CI shows whether it holds. The helper `shellPid` now reads the rows
-    once per try (the `TypeError` on the retries).
+  green, without a retry. Two red runs after it (2026-11-06) had these causes,
+  both fixed since; Windows has been green in every CI run on `main` of
+  2026-11-11 (`f06eeae`, `8c400c0`, `59f7475`):
+  - Run 42062340811 (`8d1d0a7`, macOS): `local-server.spec.ts` ("the agent bay
+    moves into the local server"): the terminal dropped live output until the
+    scrollback arrived, but over the bridge an event can overtake that answer.
+    Fixed with a position in `session.data` and `session.snapshot`
+    (`bays/agents/CLAUDE.md`, `terminals.test.ts`).
   - Run 42005154571 (`a52e991`, Windows): `apps/relay/src/client.test.ts`
-    ("answers at most 10 calls … also after its calls timed out": "The relay
-    did not answer") and `apps/relay/src/workspaces.test.ts` ("renews the
-    member list on its own": "Not newer than the stored list"); both passed on
-    macOS and Linux in the same run. Causes: the first test bounded the
-    requests to the relay while pairing with its 100 ms call timeout (now
-    1000 ms); in the second a renewal and an own list change drafted the same
-    version, and the relay refused the later one. `RelayClient` now publishes
-    its own changes one after another (`client.test.ts`). Not yet confirmed by
-    a Windows run in CI.
+    (call timeout raised to 1000 ms while pairing) and
+    `apps/relay/src/workspaces.test.ts` (`RelayClient` publishes its own
+    changes one after another).
+
+  Still flaky (as of 2026-11-11): the same `local-server.spec.ts` test failed
+  all three attempts in run 43090058107 (`cfb5af1`, macOS): the poll for the
+  shell's pid in the terminal rows (`:123`) timed out after 15 s; the runs
+  before and after are green, locally it passes. `undock.spec.ts:13` needed a
+  retry in the same run. Cause not yet known.
 
   `release.yml` is untested.
 
@@ -109,9 +106,12 @@ manual step is needed. pnpm reports ignored build scripts of
   Windows too (`taskkill /T /F`, `job-process.test.ts`, Windows runner only). `writeDurable` flushes
   the file instead of the folder; whether that makes the rename durable on NTFS
   is not proven.
-- **Linux**: Packages are only built in CI (node-pty has no Linux prebuilds and
-  is compiled during install). Not checked. `app.setBadgeCount` only works in
-  Unity-like desktops.
+- **Linux**: Packages of the desktop app are only built in CI (node-pty has no
+  Linux prebuilds and is compiled during install); the AppImage was never
+  started. `app.setBadgeCount` only works in Unity-like desktops. The server
+  on Linux is checked in containers: the shipped package (`pnpm
+test:linux-server`) and its setup over SSH (`pnpm test:linux-setup`, ADR
+  0041).
 - **Auto-update**: Channel choice and options are tested. Download and
   installation are not checked end to end without a published release.
 - **Real Claude Code run** (Claude Code 2.1.312, 2026-10-28, macOS,
