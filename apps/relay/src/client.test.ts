@@ -552,11 +552,17 @@ describe('RelayClient', () => {
     // Only where nothing comes back a short timeout: a stalled process would otherwise see it
     // run out before it reads the close or the handshake that is already there.
     fake.on('connection', (ws) => ws.close());
-    // A failed handshake leaves no timer behind (it would hold the process for a minute).
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    await expect(RelayClient.connect(options)).rejects.toThrow('Relay connection closed');
-    expect(vi.getTimerCount()).toBe(0);
-    vi.useRealTimers();
+    // A failed handshake clears its timer (it would hold the process for a minute). Only that
+    // timer: `ws` may still have its own close timer running.
+    const set = vi.spyOn(globalThis, 'setTimeout');
+    const clear = vi.spyOn(globalThis, 'clearTimeout');
+    await expect(RelayClient.connect({ ...options, callTimeoutMs: 54_321 })).rejects.toThrow(
+      'Relay connection closed',
+    );
+    const handshake = set.mock.results[set.mock.calls.findIndex((c) => c[1] === 54_321)]!.value;
+    expect(clear).toHaveBeenCalledWith(handshake);
+    set.mockRestore();
+    clear.mockRestore();
     fake.removeAllListeners('connection');
     await expect(RelayClient.connect({ ...options, callTimeoutMs: 200 })).rejects.toThrow(
       'The relay did not answer',
