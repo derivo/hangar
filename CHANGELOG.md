@@ -120,6 +120,8 @@ All notable changes to this project. Format based on
 
 ### Fixed
 
+- Relay: a failed handshake (relay closed, not reachable, error) no longer leaves its timer running for up to a minute.
+- Tests: unit tests no longer fail now and then on a heavily loaded machine. `vi.waitFor` and `findBy*` gave up after 1 s without a last check, so a stalled worker failed although the answer was already there; the relay client tests (`arrives`) and the UI tests (`asyncUtilTimeout`) now wait up to 5 s, UI tests may take 20 s like the node tests. The relay tests that check a call or request timeout no longer pair with a short `callTimeoutMs` (which also bounds handshake and relay requests) but advance fake timers for the call only.
 - Agent bay: the weekly limit in the footer says the share is free ("85 % frei"), like the 5-hour limit.
 - Local server: after "Restart local server" it could stay stopped without any message. `launchctl bootout` returns while the old server is still ending, launchd refuses the new load until then (exit code 5), and the exit code was ignored. Hangar now waits until launchd has unloaded the old service (at most 30 s) and reports a refused load ("Restart local server" shows the error).
 - Local server: moving the agent bay into the local server or back could leave no server running, and the old server could still write into the data being moved. `launchctl bootout` returns while the old server is still ending; the move started right away, and a following start could still see the service as loaded and skip the load. Hangar now waits until launchd has unloaded the old service (at most 30 s) before it moves anything; if it is still there then, nothing moves and the next start tries again.

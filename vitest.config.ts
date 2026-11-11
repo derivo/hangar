@@ -61,6 +61,8 @@ export default defineConfig({
             'bays/*/src/ui/**/*.test.{ts,tsx}',
           ],
           setupFiles: ['./vitest.setup-ui.ts'],
+          // Like the node project: a loaded machine stalls a jsdom worker for seconds (vitest.setup-ui.ts).
+          testTimeout: 20_000,
         },
       },
     ],
