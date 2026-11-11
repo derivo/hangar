@@ -54,6 +54,10 @@ export interface SidebarServer {
   bays: SidebarBay[];
   /** Server bays without a matching local bundle. */
   errors: SidebarBayError[];
+  /** Set up over SSH and its unit starts another build than this app ships (ADR 0041). */
+  update?: { running: string; ready: string };
+  /** A restart of a server set up over SSH runs. */
+  restarting?: true;
 }
 
 /** The server on this Mac (ADR 0036): its bays stand in the sidebar like the app's own. */
@@ -199,6 +203,8 @@ export interface ShellApi {
   cancelProbe(probeId: string): void;
   /** Native menu of a server: connect or disconnect, remove. */
   serverMenu(id: string): void;
+  /** Installs this app's build on a server set up over SSH and restarts it (ADR 0041). */
+  restartServer(id: string): Promise<void>;
   /** Starts the local server anew in the version of this app; asks first while shells run. */
   restartLocalServer(): Promise<void>;
   openLocalServerLog(): void;

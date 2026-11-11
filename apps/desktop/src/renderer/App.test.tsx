@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
@@ -93,6 +93,7 @@ function fakeApi(initial: ShellState) {
     cancelBay: vi.fn(),
     rollbackBay: vi.fn(),
     restartLocalServer: vi.fn(async () => {}),
+    restartServer: vi.fn(async (_id: string) => {}),
     openLocalServerLog: vi.fn(),
     getLocalServer: vi.fn(async () => null),
     setLocalServer: vi.fn(async () => {}),
@@ -257,5 +258,32 @@ describe('App', () => {
     const hint = await screen.findByRole('region', { name: 'Neue Version' });
     expect(within(hint).getByRole('status')).toHaveTextContent('Lokaler Server startet …');
     expect(within(hint).queryByRole('button')).toBeNull();
+  });
+
+  it('shows the hint above a bay of a server set up over SSH and restarts that one (ADR 0041)', async () => {
+    const key = 'remote:s1:dev.hangar.agents';
+    const bay = { id: key, name: 'Agents', icon: 'data:image/svg+xml;base64,PHN2Zy8+', badge: 0 };
+    const server = {
+      id: 's1',
+      name: 'Heimserver',
+      status: 'connected' as const,
+      bays: [bay],
+      errors: [],
+      update: { running: '0.1.0', ready: '0.2.0' },
+    };
+    const { api, push } = fakeApi({ ...base, selected: key, servers: [server] });
+    render(<App api={api} />);
+    const hint = await screen.findByRole('region', { name: 'Neue Version' });
+    expect(hint).toHaveTextContent(
+      'Neue Version bereit: Auf Heimserver läuft Hangar 0.1.0, diese App bringt 0.2.0 mit.',
+    );
+    await userEvent.click(within(hint).getByRole('button', { name: 'Server neu starten' }));
+    expect(api.restartServer).toHaveBeenCalledWith('s1');
+    expect(api.restartLocalServer).not.toHaveBeenCalled();
+    push({ ...base, selected: key, servers: [{ ...server, restarting: true }] });
+    expect(await within(hint).findByRole('status')).toHaveTextContent('Server startet neu …');
+    // Another bay: no hint.
+    push({ ...base, selected: 'overview', servers: [server] });
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Neue Version' })).toBeNull());
   });
 });

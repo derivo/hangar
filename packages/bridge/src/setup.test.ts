@@ -9,6 +9,9 @@ import {
   parseSetupAddress,
   probeMachine,
   remoteListen,
+  serverLog,
+  serverUpdate,
+  uninstallServer,
   setUpServer,
   sshRemote,
   unit,
@@ -164,6 +167,9 @@ describe('setup over ssh (ADR 0041)', () => {
     const install = remote.mock.calls.find(([s]) => s.includes('HANGAR_UNIT'))![0];
     expect(install).toContain('PATH="/usr/local/bin:/usr/bin:/bin"');
     expect(install).toContain('rm -f "$HOME/.local/share/hangar/data/pair-code"');
+    // Once it runs, runtimes the unit no longer starts go; uploads still running stay.
+    const prune = remote.mock.calls.at(-1)![0];
+    expect(prune).toContain(`'1.0.0+abcd1234'|"$cur"|*.tmp.*) ;;`);
   });
 
   it('does not upload a build that is there, and escapes quotes in the PATH', async () => {
@@ -230,6 +236,47 @@ describe('setup over ssh (ADR 0041)', () => {
       input ? { code: 2, stdout: '', stderr: 'tar: unexpected EOF\n' } : fakeMachine({})(script),
     );
     await expect(setUpServer(upload, [pkg])).rejects.toThrow('Upload failed: tar: unexpected EOF');
+  });
+
+  it('compares the build the unit starts with the package for its architecture', async () => {
+    const arm: LinuxPackage = { ...pkg, arch: 'arm64', build: '1.0.0+ffff0000' };
+    const answer = (stdout: string) => vi.fn<Remote>(async () => ok(stdout));
+    const running = answer('x86_64 0.9.0+00000000\n');
+    await expect(serverUpdate(running, [arm, pkg])).resolves.toEqual({
+      running: '0.9.0+00000000',
+      ready: '1.0.0+abcd1234',
+    });
+    expect(running.mock.calls[0]![0]).toContain('hangar-server.service');
+    await expect(serverUpdate(answer('x86_64 1.0.0+abcd1234\n'), [pkg])).resolves.toBeUndefined();
+    // No unit, or no package for it in this build: nothing to offer.
+    await expect(serverUpdate(answer('x86_64 \n'), [pkg])).resolves.toBeUndefined();
+    await expect(serverUpdate(answer('aarch64 0.9.0+0\n'), [pkg])).resolves.toBeUndefined();
+  });
+
+  it('removes the unit and the runtimes, the data folder only when asked', async () => {
+    const remote = vi.fn<Remote>(async () => ok());
+    await uninstallServer(remote, { data: false });
+    const [script] = remote.mock.calls[0]!;
+    expect(script).toMatch(
+      /^set -e\nif \[ -e "\$HOME\/\.config\/systemd\/user\/hangar-server\.service" \]; then systemctl --user disable --now hangar-server\.service; fi\n/,
+    );
+    expect(script).toContain('rm -f "$HOME/.config/systemd/user/hangar-server.service"');
+    expect(script).toContain('"$HOME/.local/share/hangar/runtime"');
+    expect(script).not.toContain('hangar/data');
+    await uninstallServer(remote, { data: true });
+    expect(remote.mock.calls[1]![0]).toContain('"$HOME/.local/share/hangar/data"');
+    remote.mockResolvedValueOnce({ code: 1, stdout: '', stderr: 'rm: Permission denied\n' });
+    await expect(uninstallServer(remote, { data: true })).rejects.toThrow(
+      'Removing the server failed: rm: Permission denied',
+    );
+  });
+
+  it('reads the last lines of the server log', async () => {
+    const remote = vi.fn<Remote>(async () => ok('a\nb\n'));
+    await expect(serverLog(remote, '/home/anna/.local/share/hangar/data')).resolves.toBe('a\nb');
+    expect(remote.mock.calls[0]![0]).toBe(
+      "tail -n 20 '/home/anna/.local/share/hangar/data/server.log'",
+    );
   });
 
   it('reads the port of a running server, or says it is not running', async () => {

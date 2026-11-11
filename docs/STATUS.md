@@ -406,6 +406,20 @@ manual step is needed. pnpm reports ignored build scripts of
   machine, lingering switched on, a machine without `loginctl`. Updates of an
   installed server come in step 3.
   Review: `docs/reviews/2026-11-11-linux-server-setup.md`.
+- **Server on Linux machines, steps 3 and 4** (ADR 0041): build comparison
+  over SSH at app start (`serverUpdate`), hint in the server's name and above
+  its bays, "Restart server …" and "Remove server …" in its menu, cleanup of
+  older runtimes after a successful start, uninstall with or without the data
+  folder. `pnpm test:linux-setup` 5 of 5 locally (arm64): an older runtime is
+  gone after the restart, `serverUpdate` reads the unit's build (none for the
+  same package, the running one against a newer), uninstall stops the server
+  and removes unit and runtimes, keeps `data/` and removes it when asked.
+  Host and UI in unit tests (`host.test.ts`, `App.test.tsx`,
+  `Sidebar.test.tsx`). Changed from the ADR: no live log during the restart,
+  the last lines of `server.log` in the error message instead. Not checked:
+  a real update between two app versions, a machine that is unreachable at
+  app start (no hint until the next start).
+  Review: `docs/reviews/2026-11-11-linux-server-update.md`.
 - **Remote callers in the bus, phase 13** (ADR 0011): `Caller` `remote`, check
   of `remote: true`, "not sensitive", membership and share list before
   every stored permission and again after the dialog; permissions on the subject

@@ -155,7 +155,11 @@ const electron = {
   BrowserWindow: FakeWindow,
   dialog: {
     showOpenDialog: vi.fn(async () => ({ canceled: true, filePaths: [] as string[] })),
-    showMessageBox: vi.fn(async () => ({ response: 0 })),
+    showMessageBox: vi.fn(
+      async (..._args: unknown[]): Promise<{ response: number; checkboxChecked?: boolean }> => ({
+        response: 0,
+      }),
+    ),
   },
   ipcMain: {
     handle: (channel: string, handler: (e: unknown, ...a: unknown[]) => unknown) =>
@@ -216,6 +220,7 @@ class FakeConnections {
   pair = vi.fn(async (..._args: string[]) => 'srv');
   pairLocal = vi.fn(async (..._args: string[]) => 'local');
   pairSetUp = vi.fn(async (..._args: unknown[]) => 'machine');
+  setUpAt = vi.fn((_id: string): unknown => undefined);
   cancel = vi.fn();
   invoke = vi.fn(async (..._args: unknown[]) => 'from server');
   jobs = vi.fn(async (_id: string): Promise<unknown[]> => []);
@@ -253,6 +258,12 @@ const bridgeSetup = {
   linuxPackages: vi.fn(async (dir: string, version: string) => [{ dir, version }]),
   sshRemote: vi.fn((target: unknown, ssh: string) => ({ target, ssh })),
   setUpServer: vi.fn(async (..._args: unknown[]) => ({ linger: false, user: 'anna', port: 1 })),
+  serverUpdate: vi.fn(async (..._args: unknown[]) => ({
+    running: '0.1.0+aaaa0000',
+    ready: '0.2.0+bbbb0000',
+  })),
+  uninstallServer: vi.fn(async (..._args: unknown[]) => undefined),
+  serverLog: vi.fn(async (..._args: unknown[]) => 'Error: EACCES'),
 };
 vi.mock('@hangar/bridge', async (importOriginal) => {
   const { parseSetupAddress } = await importOriginal<typeof import('@hangar/bridge')>();
@@ -1287,6 +1298,195 @@ describe('Host: servers', () => {
     );
   });
 
+  it('offers a new build of a server set up over SSH, restarts it there and removes it (ADR 0041)', async () => {
+    const at = {
+      target: { user: 'anna', host: 'heimserver' },
+      remoteData: '/home/anna/.local/share/hangar/data',
+    };
+    const h = setup();
+    const servers = FakeConnections.last;
+    servers.setUpAt = vi.fn((id: string) => (id === 'srv' ? at : undefined));
+    // `other` is a server not set up over SSH: nothing to ask there.
+    servers.servers = [
+      { ...connected(), sessions: 2 },
+      { ...connected(), id: 'other' },
+    ];
+    // Set up again, the known entry answers with its id.
+    servers.pairSetUp = vi.fn(async (..._args: unknown[]) => 'srv');
+    await h.host.start();
+    menus.length = 0;
+    const shell = h.window().webContents;
+    const remote = { target: at.target, ssh: expect.any(String) };
+    // Read over SSH at start: also when the bridge would reject this app.
+    await vi.waitFor(() =>
+      expect(h.host.state().servers[0]).toMatchObject({
+        update: { running: '0.1.0', ready: '0.2.0' },
+      }),
+    );
+    expect(bridgeSetup.serverUpdate).toHaveBeenCalledWith(remote, [{ dir: '', version: '0.0.0' }]);
+    servers.events.changed();
+    h.host.select('remote:srv:dev.test.a');
+    expect(h.viewOf('remote:srv:dev.test.a')!.bounds.y).toBe(UPDATE_HINT_HEIGHT);
+
+    send('shell:serverMenu', shell, 'srv');
+    expect(menus.at(-1)!.map((i) => i.label ?? i.type)).toEqual([
+      'Verbindung trennen',
+      'Server neu starten …',
+      'separator',
+      'Server entfernen …',
+    ]);
+    const box = electron.dialog.showMessageBox;
+    // From the menu: asks first; cancelled, nothing runs.
+    box.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
+    clickMenu('Server neu starten …');
+    await vi.waitFor(() => expect(box).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r));
+    expect(bridgeSetup.setUpServer).not.toHaveBeenCalled();
+    box.mockClear();
+    // Restart: asks once for both clicks, installs this build, pairs again; the hint goes.
+    box.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
+    let release!: (v: { linger: boolean; user: string; port: number }) => void;
+    bridgeSetup.setUpServer.mockImplementationOnce(() => new Promise((r) => (release = r)));
+    const restarts = Promise.all([
+      invoke('shell:server.restart', shell, 'srv'),
+      invoke('shell:server.restart', shell, 'srv'),
+    ]);
+    await vi.waitFor(() => expect(h.host.state().servers[0]!.restarting).toBe(true));
+    release({ linger: false, user: 'anna', port: 1 });
+    await restarts;
+    expect(box).toHaveBeenCalledTimes(1);
+    expect(box).toHaveBeenCalledWith(h.window(), {
+      type: 'warning',
+      message: 'Heimserver neu starten?',
+      detail: '2 laufende Shells enden; ihr Verlauf bleibt.',
+      buttons: ['Neu starten', 'Abbrechen'],
+      defaultId: 1,
+      cancelId: 1,
+    });
+    expect(bridgeSetup.setUpServer).toHaveBeenCalledWith(remote, [{ dir: '', version: '0.0.0' }]);
+    expect(servers.pairSetUp).toHaveBeenCalledWith(at.target, 'Heimserver', expect.anything());
+    expect(h.host.state().servers[0]!.update).toBeUndefined();
+    expect(h.viewOf('remote:srv:dev.test.a')!.bounds.y).toBe(0);
+    // Failed: the log of the machine in the message. Cancelled: nothing runs.
+    bridgeSetup.setUpServer.mockRejectedValueOnce(new Error('The server did not start: x'));
+    box.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
+    await invoke('shell:server.restart', shell, 'srv');
+    expect(box).toHaveBeenLastCalledWith(h.window(), {
+      type: 'error',
+      message: 'Heimserver ließ sich nicht neu starten',
+      detail: 'The server did not start: x\n\nError: EACCES',
+    });
+    expect(h.host.state().servers[0]!.restarting).toBeUndefined();
+    bridgeSetup.setUpServer.mockClear();
+    box.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
+    await invoke('shell:server.restart', shell, 'srv');
+    expect(bridgeSetup.setUpServer).not.toHaveBeenCalled();
+    // No shells: no question. Unknown server: nothing.
+    servers.servers = [{ ...connected(), sessions: 0 }];
+    box.mockClear();
+    await invoke('shell:server.restart', shell, 'srv');
+    expect(box).not.toHaveBeenCalled();
+    expect(bridgeSetup.setUpServer).toHaveBeenCalledTimes(1);
+    await invoke('shell:server.restart', shell, 'gone');
+    expect(bridgeSetup.setUpServer).toHaveBeenCalledTimes(1);
+
+    // Remove: Cancel keeps it; a failed uninstall keeps the pairing; uninstall with the data.
+    const removing = async (response: number, checkboxChecked: boolean) => {
+      box.mockResolvedValueOnce({ response, checkboxChecked });
+      send('shell:serverMenu', shell, 'srv');
+      clickMenu('Server entfernen …');
+      await vi.waitFor(() => expect(box).toHaveBeenCalled());
+      await new Promise((r) => setTimeout(r));
+    };
+    box.mockClear();
+    await removing(2, true);
+    expect(box).toHaveBeenCalledWith(h.window(), {
+      type: 'question',
+      message: 'Heimserver entfernen?',
+      detail:
+        'Hangar kann den Server dort auch beenden und deinstallieren. Sessions, Worktrees und Einstellungen bleiben, außer du löschst die Daten mit.',
+      buttons: ['Entfernen und deinstallieren', 'Nur Kopplung entfernen', 'Abbrechen'],
+      defaultId: 2,
+      cancelId: 2,
+      checkboxLabel: 'Auch die Daten auf dem Rechner löschen',
+      checkboxChecked: false,
+    });
+    expect(bridgeSetup.uninstallServer).not.toHaveBeenCalled();
+    expect(servers.remove).not.toHaveBeenCalled();
+    bridgeSetup.uninstallServer.mockRejectedValueOnce(new Error('Removing the server failed: x'));
+    box.mockClear();
+    await removing(0, false);
+    expect(bridgeSetup.uninstallServer).toHaveBeenCalledWith(remote, { data: false });
+    expect(box).toHaveBeenLastCalledWith(h.window(), {
+      type: 'error',
+      message: 'Server ließ sich nicht deinstallieren',
+      detail: 'Removing the server failed: x',
+    });
+    expect(servers.remove).not.toHaveBeenCalled();
+    box.mockClear();
+    await removing(0, true);
+    expect(bridgeSetup.uninstallServer).toHaveBeenLastCalledWith(remote, { data: true });
+    expect(servers.remove).toHaveBeenCalledWith('srv');
+    // Only the pairing: nothing on the machine.
+    servers.remove.mockClear();
+    bridgeSetup.uninstallServer.mockClear();
+    box.mockClear();
+    await removing(1, true);
+    expect(bridgeSetup.uninstallServer).not.toHaveBeenCalled();
+    expect(servers.remove).toHaveBeenCalledWith('srv');
+  });
+
+  it('drops a build comparison older than an install, and waits with removing for a restart (Codex)', async () => {
+    const at = { target: { host: 'heimserver' }, remoteData: '/d' };
+    const h = setup();
+    const servers = FakeConnections.last;
+    servers.setUpAt = vi.fn((id: string) => (id === 'srv' ? at : undefined));
+    servers.servers = [{ ...connected(), sessions: 0 }];
+    servers.pairSetUp = vi.fn(async (..._args: unknown[]) => 'srv');
+    let answer!: (v: { running: string; ready: string }) => void;
+    bridgeSetup.serverUpdate.mockImplementationOnce(() => new Promise((r) => (answer = r)));
+    await h.host.start();
+    const shell = h.window().webContents;
+    await vi.waitFor(() => expect(bridgeSetup.serverUpdate).toHaveBeenCalled());
+    // Set up again while the comparison at start still waits: the new state goes out.
+    await invoke('shell:server.setup', shell, 'Heimserver', 'heimserver');
+    expect(h.shellState().servers[0]!.update).toBeUndefined();
+    answer({ running: '0.1.0', ready: '0.2.0' });
+    await new Promise((r) => setTimeout(r));
+    expect(h.host.state().servers[0]!.update).toBeUndefined();
+
+    // Remove while a restart runs: asked only once the restart is done.
+    let release!: (v: { linger: boolean; user: string; port: number }) => void;
+    bridgeSetup.setUpServer.mockImplementationOnce(() => new Promise((r) => (release = r)));
+    const restart = invoke('shell:server.restart', shell, 'srv');
+    await vi.waitFor(() => expect(h.host.state().servers[0]!.restarting).toBe(true));
+    const box = electron.dialog.showMessageBox;
+    box.mockClear();
+    box.mockResolvedValueOnce({ response: 2 });
+    send('shell:serverMenu', shell, 'srv');
+    clickMenu('Server entfernen …');
+    await new Promise((r) => setTimeout(r));
+    expect(box).not.toHaveBeenCalled();
+    release({ linger: false, user: 'anna', port: 1 });
+    await restart;
+    await vi.waitFor(() => expect(box).toHaveBeenCalledTimes(1));
+  });
+
+  it('shows no new build when the machine cannot be asked or has none (ADR 0041)', async () => {
+    const h = setup();
+    const servers = FakeConnections.last;
+    servers.setUpAt = vi.fn(() => ({ target: { host: 'h' }, remoteData: '/d' }));
+    servers.servers = [connected(), { ...connected(), id: 'other' }];
+    bridgeSetup.serverUpdate.mockRejectedValueOnce(new Error('SSH failed: x'));
+    bridgeSetup.serverUpdate.mockResolvedValueOnce(undefined as never);
+    bridgeSetup.linuxPackages.mockRejectedValueOnce(new Error('broken tarball'));
+    await h.host.start();
+    await vi.waitFor(() => expect(bridgeSetup.serverUpdate).toHaveBeenCalledTimes(2));
+    expect(bridgeSetup.serverUpdate).toHaveBeenCalledWith(expect.anything(), []);
+    await new Promise((r) => setTimeout(r));
+    expect(h.host.state().servers.map((s) => s.update)).toEqual([undefined, undefined]);
+  });
+
   it('pairs with the local server under its own name (ADR 0036)', async () => {
     const { host, servers } = await started();
     await expect(host.pairLocalServer('/data/local-server/data')).resolves.toBe('local');
@@ -1323,7 +1523,7 @@ describe('Host: servers', () => {
     clickMenu('Verbinden');
     expect(servers.connect).toHaveBeenCalledWith('srv');
     clickMenu('Server entfernen');
-    expect(servers.remove).toHaveBeenCalledWith('srv');
+    await vi.waitFor(() => expect(servers.remove).toHaveBeenCalledWith('srv'));
   });
 });
 

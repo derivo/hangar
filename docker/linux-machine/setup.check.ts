@@ -10,7 +10,9 @@ import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import {
   linuxPackages,
   ServerConnections,
+  serverUpdate,
   setUpServer,
+  uninstallServer,
   sshRemote,
   type LinuxPackage,
   type Remote,
@@ -161,6 +163,8 @@ it('sets up the same build again without uploading, keeps the pairing and finds 
   const before = JSON.parse(root('cat /home/person/.local/share/hangar/data/listen.json')) as {
     port: number;
   };
+  // A runtime of an older build: gone once the server runs again (step 3).
+  root('runuser -u person -- mkdir /home/person/.local/share/hangar/runtime/0.0.1+old');
   const upload = vi.fn(remote);
   const setup = await setUpServer(
     (script, input) => (input ? upload(script, input) : remote(script)),
@@ -171,4 +175,29 @@ it('sets up the same build again without uploading, keeps the pairing and finds 
   // listen.json is new after the restart: a random port, read over ssh before connecting.
   expect(setup.port).not.toBe(before.port);
   await expect.poll(() => connections.list()[0]!.status, { timeout: 30_000 }).toBe('connected');
+  expect(root('ls /home/person/.local/share/hangar/runtime')).toBe(`${setup.build}\n`);
+});
+
+it('reads the build the unit starts and tells a newer package apart (step 3)', async () => {
+  await expect(serverUpdate(remote, packages)).resolves.toBeUndefined();
+  const newer = packages.map((p) => ({ ...p, build: '9.9.9+00000000' }));
+  await expect(serverUpdate(remote, newer)).resolves.toEqual({
+    running: root('ls /home/person/.local/share/hangar/runtime').trim(),
+    ready: '9.9.9+00000000',
+  });
+});
+
+it('uninstalls the server, the data folder only when asked (step 3)', async () => {
+  connections.closeAll();
+  await uninstallServer(remote, { data: false });
+  const gone = (path: string) => root(`test -e ${path} && echo there || echo gone`).trim();
+  expect(gone('/home/person/.config/systemd/user/hangar-server.service')).toBe('gone');
+  expect(gone('/home/person/.local/share/hangar/runtime')).toBe('gone');
+  expect(gone('/home/person/.local/share/hangar/data/clients.json')).toBe('there');
+  await expect
+    .poll(() => root('pgrep -u person -f hangar-server.mjs || echo none').trim())
+    .toBe('none');
+  await expect(serverUpdate(remote, packages)).resolves.toBeUndefined();
+  await uninstallServer(remote, { data: true });
+  expect(gone('/home/person/.local/share/hangar')).toBe('gone');
 });

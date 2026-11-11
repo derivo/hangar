@@ -270,7 +270,11 @@ export function Sidebar({ state, api, onSelect }: Props) {
           <ErrorItem key={e.label} error={e} />
         ))}
         {state.servers.map((server) => {
-          const status = t.serverStatus[server.status] + (server.error ? ` (${server.error})` : '');
+          const status = server.restarting
+            ? t.serverRestarting
+            : t.serverStatus[server.status] +
+              (server.error ? ` (${server.error})` : '') +
+              (server.update ? `, ${t.newVersion}` : '');
           const label = t.server(server.name, status);
           return (
             <li key={server.id}>

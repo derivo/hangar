@@ -1,12 +1,66 @@
 # Operating the Hangar server
 
-Hangar without a UI, permanently on a Linux machine: as a container or as a
-systemd service ([ADR 0029](adr/0029-hangar-server-in-operation.md)). What the
+Hangar without a UI, permanently on a Linux machine: set up from the app under
+your own user, as a container or as a systemd service
+([ADR 0029](adr/0029-hangar-server-in-operation.md),
+[ADR 0041](adr/0041-remote-linux-server.md)). What the
 server can do is described in [ADR 0018](adr/0018-headless-server.md),
 the connection to the desktop in [ADR 0019](adr/0019-desktop-server-bridge.md).
 
 The server is a workbench, not a vault: agents have a shell there and can do
 anything the service user can. Own machine or own VM, own user.
+
+## From the app, under your own user
+
+The quickest way for your own machine: the app copies its server there and runs
+it as a systemd user service of your user, so agents see your login, your
+tools and your Claude subscription login (ADR 0041).
+
+Preconditions on the machine: Linux on x86_64 or aarch64 with glibc 2.34 or
+newer (Debian 12, Ubuntu 22.04, RHEL 9 and later; not Alpine), systemd user
+services (`systemctl --user` works in an SSH login), `git`. No Node needed: the
+package brings its own. On this Mac, `ssh user@host` must work without a
+password prompt (key or agent).
+
+In the app: plus in the sidebar → "Connect to server" → tick "Set up Hangar
+there (Linux)", name, address `user@host` (or a host from `~/.ssh/config`)
+without a port → "Set up". The app checks the machine, uploads the package
+(about 46 MB, only for a new build), checks that the server can start
+terminals there, installs the unit and pairs. A refusal names what is missing.
+
+On the machine afterwards:
+
+| Path                                               | Content                          |
+| -------------------------------------------------- | -------------------------------- |
+| `~/.local/share/hangar/runtime/<version>+<build>/` | Node, server, CLI, bays          |
+| `~/.local/share/hangar/data/`                      | sessions, settings, `server.log` |
+| `~/.local/share/hangar/server.env`                 | `PATH` of your login shell       |
+| `~/.config/systemd/user/hangar-server.service`     | the unit                         |
+
+All of it is private to your user (folders 0700, files 0600). Projects are any
+Git folders under your home (`--root %h`); add them in the agent bay by path.
+
+**Lingering.** Without it, systemd stops your user services when your last
+login there ends. The dialog says so after the setup; on the machine run
+`loginctl enable-linger <user>` (with `sudo`, depending on the system).
+
+**New version.** When this app ships another build than the unit starts, the
+server's name in the sidebar says "new version ready" and a hint above its bays
+offers "Restart server". The app reads the build over SSH, so this works even
+when the server rejects a newer app. "Restart server …" in the server's menu
+(right click) does the same at any time: it uploads this app's build if
+needed, restarts the unit and connects again. Sessions come back as after any
+restart; programs running in their shells end. Older runtimes are deleted once
+the new one runs. If the server does not start, the message shows the last
+lines of `server.log`.
+
+**Removing.** "Remove server …" in the server's menu asks whether to only
+remove the pairing or also stop and uninstall the server there (unit and
+runtimes). The data folder stays unless you tick "Also delete the data on the
+machine".
+
+Log: `~/.local/share/hangar/data/server.log` on the machine;
+`systemctl --user status hangar-server` shows the service.
 
 ## As a container
 
@@ -154,7 +208,8 @@ bay restores the sessions: scrollback stays, below it "Hangar restarted", then a
 new shell in the same folder. Programs running in the shells end with the
 restart.
 
-Update: build and transfer a new image, then `docker compose up -d`
+Update of a server set up from the app: "Restart server" in the app (see
+above). Update of a container or system service: build and transfer a new image, then `docker compose up -d`
 (or update the checkout, `pnpm build`, `systemctl restart
 hangar-server`). Desktop app and server must have the same bay version.
 

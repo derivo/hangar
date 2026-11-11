@@ -21,9 +21,15 @@ import {
 import {
   linuxPackages,
   parseSetupAddress,
+  serverLog,
   ServerConnections,
+  serverUpdate,
   setUpServer,
   sshRemote,
+  uninstallServer,
+  type LinuxPackage,
+  type SetupResult,
+  type SetupTarget,
 } from '@hangar/bridge';
 import type { Bus, Grant, GrantMode } from '@hangar/bus';
 import type { HangarNotification, ViewRect } from '@hangar/sdk';
@@ -159,6 +165,14 @@ export class Host {
   private modal = false;
   /** Measured by the shell (wrapped text at 200 % zoom); its fixed height until then. */
   private hintHeight = UPDATE_HINT_HEIGHT;
+  /** Servers set up over SSH whose unit starts another build than this app ships (ADR 0041). */
+  private readonly serverUpdates = new Map<string, { running: string; ready: string }>();
+  /** Restarts of servers set up over SSH: running after the confirmation, joined by more clicks. */
+  private readonly serverRestarts = new Map<string, Promise<void>>();
+  private readonly restartingServers = new Set<string>();
+  private packages?: Promise<LinuxPackage[]>;
+  /** Counts installs: a build comparison started before one is out of date. */
+  private installs = 0;
   /** Web page tabs of bays with the `browser` host module (ADR 0015). */
   private readonly tabs = new BrowserTabs((contents) => this.placement(contents));
   /** Bays of connected servers shown with a local bundle (ADR 0019). */
@@ -317,6 +331,7 @@ export class Host {
     this.layout();
     this.loadShortcutIcons();
     void this.servers.connectAll();
+    void this.checkServerUpdates();
   }
 
   /**
@@ -324,15 +339,132 @@ export class Host {
    * the service keeps running after the person logs out there; `user` names them for the hint.
    */
   async setUpServer(name: string, address: string): Promise<{ linger: boolean; user: string }> {
-    const target = parseSetupAddress(address);
-    const { packages, version } = this.linuxServer;
-    const setup = await setUpServer(
-      sshRemote(target, this.ssh),
-      await linuxPackages(packages, version),
-    );
-    // `pair-code` is written before the bays are active; until then `/connect` answers 503.
-    await pairWhenReady(() => this.servers.pairSetUp(target, name, setup));
+    const setup = await this.install(parseSetupAddress(address), name);
     return { linger: setup.linger, user: setup.user };
+  }
+
+  /** The Linux packages this app ships (read once). */
+  private linuxPackages(): Promise<LinuxPackage[]> {
+    const { packages, version } = this.linuxServer;
+    return (this.packages ??= linuxPackages(packages, version));
+  }
+
+  /** Installs this app's build on the machine, restarts the unit and pairs (again). */
+  private async install(target: SetupTarget, name: string): Promise<SetupResult> {
+    const setup = await setUpServer(sshRemote(target, this.ssh), await this.linuxPackages());
+    // `pair-code` is written before the bays are active; until then `/connect` answers 503.
+    const id = await pairWhenReady(() => this.servers.pairSetUp(target, name, setup));
+    this.installs++;
+    this.serverUpdates.delete(id);
+    this.layout();
+    this.pushState();
+    return setup;
+  }
+
+  /** Asks every server set up over SSH which build its unit starts (ADR 0041, step 3). */
+  private async checkServerUpdates(): Promise<void> {
+    const packages = await this.linuxPackages().catch(() => []);
+    const installs = this.installs;
+    await Promise.all(
+      this.servers.list().map(async ({ id }) => {
+        const at = this.servers.setUpAt(id);
+        if (!at) return;
+        // An unreachable machine shows no hint; its status says it is not connected.
+        const update = await serverUpdate(sshRemote(at.target, this.ssh), packages).catch(
+          () => undefined,
+        );
+        // An install meanwhile read its build itself.
+        if (installs !== this.installs) return;
+        if (update) this.serverUpdates.set(id, update);
+        else this.serverUpdates.delete(id);
+      }),
+    );
+    this.layout();
+    this.pushState();
+  }
+
+  /** Installs this app's build on a server set up over SSH and restarts it; clicks meanwhile
+   * join the running restart. */
+  private restartServer(id: string): Promise<void> {
+    let running = this.serverRestarts.get(id);
+    if (!running) {
+      running = this.restartServerOnce(id).finally(() => {
+        this.serverRestarts.delete(id);
+        this.pushState();
+      });
+      this.serverRestarts.set(id, running);
+    }
+    return running;
+  }
+
+  private async restartServerOnce(id: string): Promise<void> {
+    const server = this.servers.list().find((s) => s.id === id);
+    const at = this.servers.setUpAt(id);
+    if (!server || !at) return;
+    // Unknown unless connected and told: the server may still run shells.
+    const shells = server.status === 'connected' ? server.sessions : undefined;
+    if (shells !== 0) {
+      const { response } = await dialog.showMessageBox(this.window, {
+        type: 'warning',
+        message: t.restartServerTitle(server.name),
+        detail: t.restartLocalServerDetail(shells),
+        buttons: [t.restart, t.cancel],
+        defaultId: 1,
+        cancelId: 1,
+      });
+      if (response !== 0) return;
+    }
+    this.restartingServers.add(id);
+    this.pushState();
+    try {
+      await this.install(at.target, server.name);
+    } catch (e) {
+      // The log on the machine says why it did not start (ADR 0041, step 3).
+      const log = await serverLog(sshRemote(at.target, this.ssh), at.remoteData).catch(() => '');
+      await dialog.showMessageBox(this.window, {
+        type: 'error',
+        message: t.restartServerFailed(server.name),
+        detail: [(e as Error).message, log].filter(Boolean).join('\n\n'),
+      });
+    } finally {
+      this.restartingServers.delete(id);
+    }
+  }
+
+  /** Removes the pairing; for a server set up over SSH it offers to uninstall it there. */
+  private async removeServer(id: string): Promise<void> {
+    // A restart running would pair it again afterwards.
+    await this.serverRestarts.get(id);
+    const server = this.servers.list().find((s) => s.id === id);
+    const at = this.servers.setUpAt(id);
+    if (server && at) {
+      const { response, checkboxChecked } = await dialog.showMessageBox(this.window, {
+        type: 'question',
+        message: t.removeServerTitle(server.name),
+        detail: t.removeServerDetail,
+        buttons: [t.uninstallServer, t.unpairServer, t.cancel],
+        defaultId: 2,
+        cancelId: 2,
+        checkboxLabel: t.deleteServerData,
+        checkboxChecked: false,
+      });
+      if (response === 2) return;
+      if (response === 0) {
+        try {
+          await uninstallServer(sshRemote(at.target, this.ssh), { data: checkboxChecked });
+        } catch (e) {
+          await dialog.showMessageBox(this.window, {
+            type: 'error',
+            message: t.uninstallServerFailed,
+            detail: (e as Error).message,
+          });
+          return;
+        }
+      }
+    }
+    this.serverUpdates.delete(id);
+    this.servers.remove(id);
+    this.layout();
   }
 
   /** Pairs with the local server in `dataDir` once; afterwards it connects like any (ADR 0036). */
@@ -519,14 +651,7 @@ export class Host {
             .map((bay) => ({ key: remoteKey(id, bay.manifest.id), bay, id: bay.manifest.id }));
     const running = this.localServer.version?.();
     const ready = this.localServer.ready?.() ?? this.services.hangarVersion;
-    // The build id only where it is the difference: a new build of the same version.
-    const plain = (v: string) => v.split('+')[0]!;
-    const update =
-      running &&
-      running !== ready &&
-      (plain(running) === plain(ready)
-        ? { running, ready }
-        : { running: plain(running), ready: plain(ready) });
+    const update = running && running !== ready && shownUpdate(running, ready);
     return {
       status,
       ...(error && { error }),
@@ -785,12 +910,17 @@ export class Host {
     const server = this.servers.list().find((s) => s.id === id);
     if (!server) return;
     const live = server.status === 'connected' || server.status === 'connecting';
+    const setUp = !!this.servers.setUpAt(id);
     Menu.buildFromTemplate([
       live
         ? { label: t.disconnect, click: () => this.servers.disconnect(id) }
         : { label: t.connect, click: () => void this.servers.connect(id) },
+      ...(setUp ? [{ label: t.restartServerMenu, click: () => void this.restartServer(id) }] : []),
       { type: 'separator' },
-      { label: t.removeServer, click: () => this.servers.remove(id) },
+      {
+        label: setUp ? t.removeServerMenu : t.removeServer,
+        click: () => void this.removeServer(id),
+      },
     ]).popup({ window: this.window });
   }
 
@@ -843,6 +973,13 @@ export class Host {
           name: server.name,
           status: server.status,
           ...(server.error && { error: server.error }),
+          ...(this.serverUpdates.has(server.id) && {
+            update: shownUpdate(
+              this.serverUpdates.get(server.id)!.running,
+              this.serverUpdates.get(server.id)!.ready,
+            ),
+          }),
+          ...(this.restartingServers.has(server.id) && { restarting: true as const }),
           bays: server.bays.flatMap((info) => {
             const target = this.remotes.get(remoteKey(server.id, info.id));
             if (!target) return [];
@@ -1185,9 +1322,14 @@ export class Host {
 
   private layout(): void {
     const [width, height] = this.window.getContentSize() as [number, number];
-    // The hint „Neue Version bereit“ sits above a bay of the local server.
+    // The hint „Neue Version bereit“ sits above a bay of the local server or of a server set up
+    // over SSH (ADR 0041) whose build differs.
+    const server = this.selected?.startsWith('remote:') ? this.selected.split(':')[1]! : '';
     const hint =
-      this.isLocalKey(this.selected) && this.localServerState()?.update ? this.hintHeight : 0;
+      (this.isLocalKey(this.selected) && this.localServerState()?.update) ||
+      this.serverUpdates.has(server)
+        ? this.hintHeight
+        : 0;
     for (const [id, view] of this.views) {
       const y = id === this.selected ? hint : 0;
       view.setBounds({ x: SIDEBAR_WIDTH, y, width: width - SIDEBAR_WIDTH, height: height - y });
@@ -1265,6 +1407,7 @@ export class Host {
     );
     ipcMain.on('shell:serverMenu', (_e, id: unknown) => this.serverMenu(String(id)));
     ipcMain.handle('shell:localServer.restart', () => this.restartLocalServer());
+    ipcMain.handle('shell:server.restart', (_e, id: unknown) => this.restartServer(String(id)));
     ipcMain.on('shell:localServer.log', () => {
       if (this.localServer.log) void shell.openPath(this.localServer.log);
     });
@@ -1355,4 +1498,13 @@ export async function pickFolder(
     ? dialog.showOpenDialog(parent, settings)
     : dialog.showOpenDialog(settings));
   return result.canceled ? undefined : result.filePaths[0];
+}
+
+/** Versions for the hint: the build id only where it is the difference (a new build of the same
+ * version). */
+function shownUpdate(running: string, ready: string): { running: string; ready: string } {
+  const plain = (v: string) => v.split('+')[0]!;
+  return plain(running) === plain(ready)
+    ? { running, ready }
+    : { running: plain(running), ready: plain(ready) };
 }

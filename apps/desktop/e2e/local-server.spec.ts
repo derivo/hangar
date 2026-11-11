@@ -25,6 +25,7 @@ import {
   mockFolderPicker,
   repoBays,
   startRelay,
+  violations,
 } from './helpers';
 
 test.skip(process.platform !== 'darwin', 'LaunchAgents only on macOS (ADR 0036)');
@@ -386,6 +387,11 @@ test('a server from an older copy shows „Neue Version bereit“ until it resta
       await expect(hint).toContainText(
         `Im lokalen Server läuft Hangar 0.0.1, installiert ist ${version!.split('+')[0]}.`,
       );
+      // The same hint stands above bays of a server set up over SSH (ADR 0041).
+      for (const colorScheme of ['light', 'dark'] as const) {
+        await second.shell.emulateMedia({ colorScheme });
+        expect(await violations(second.shell), `update hint (${colorScheme})`).toEqual([]);
+      }
       await answerDialog(second.app, 'Neu starten');
       await hint.getByRole('button', { name: 'Lokalen Server neu starten' }).click();
       await expect(hint).toHaveCount(0, { timeout: 60_000 });

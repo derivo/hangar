@@ -28,6 +28,7 @@ under Node (built-in `WebSocket`).
   `probe(address)` → `{ id, fingerprint }`, `pair(probeId, name, code)`,
   `pairLocal(dataDir, name)` (server on the same machine, ADR 0036: code from `pair-code`, only with the fingerprint from `listen.json`; stored with `local`, the port comes from `listen.json` on every connect; already paired → the same ID and a new connection attempt if none is running),
   `pairSetUp(target, name, setup)` (server set up over SSH, ADR 0041: pairs with the code read from the machine, stores `remoteData`; the port comes from `listen.json` over SSH on every connect; same host, user and data folder already paired → the same ID, new connection attempt, no new pairing),
+  `setUpAt(id)` → `{ target, remoteData }` of a server set up over SSH,
   `cancel`, `invoke`, `jobs(id)`, `job(id, action, jobId)`, `workspaces(id, action, args)`, `offerAgain()`, `closeAll()`;
   `changed` after every status change and every badge change. After
   a drop or failed attempt reconnect after 1, 2, 4 … at most 30
@@ -43,7 +44,11 @@ under Node (built-in `WebSocket`).
   shipped tarballs with `requirements.json` and build `<version>+<8 hex>` of the
   file), `probeMachine`, `choosePackage` (exact refusals, the UI maps them in
   `Sidebar.tsx` `setupError`), `unit(build)`, `setUpServer(remote, packages)` →
-  `SetupResult`, `remoteListen(remote, dataDir)`.
+  `SetupResult` (after the start it deletes runtimes the unit no longer starts),
+  `remoteListen(remote, dataDir)`; step 3: `serverUpdate(remote, packages)`
+  (build in the unit's `ExecStart` against the package for `uname -m`, nothing
+  when equal or unknown), `uninstallServer(remote, { data })`,
+  `serverLog(remote, dataDir)` (last 20 lines).
 
 ## Pitfalls
 
