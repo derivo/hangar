@@ -32,6 +32,11 @@ extraResources:
   # The local server, run from a copy of the app by a LaunchAgent (ADR 0036).
   - from: ../../apps/server/dist/hangar-server.mjs
     to: server/hangar-server.mjs
+  # The server for Linux machines, set up over SSH (ADR 0041); built on Linux by
+  # `pnpm package:linux-server`. A build without them cannot set up servers.
+  - from: ../../dist/linux-server
+    to: linux-server
+    filter: ['*.tar.gz']
 # node-pty is N-API: the prebuilt (macOS/Windows) or install-time compiled (Linux)
 # binary works in Electron as is, so no electron-rebuild (it cannot cross-compile).
 npmRebuild: false

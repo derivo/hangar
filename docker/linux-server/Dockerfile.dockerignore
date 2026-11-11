@@ -1,0 +1,13 @@
+# The build context is the repository root; the package needs only the built bundles.
+*
+!apps/server/dist/hangar-server.mjs
+!packages/cli/dist/hangar.mjs
+!bays/agents/manifest.json
+!bays/agents/icon.svg
+!bays/agents/dist
+!bays/board/manifest.json
+!bays/board/icon.svg
+!bays/board/dist
+!bays/feeds/manifest.json
+!bays/feeds/icon.svg
+!bays/feeds/dist
