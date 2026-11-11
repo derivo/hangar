@@ -38,11 +38,17 @@ Requirements from the person (2026-11-11):
    offline. The build id is computed as for the local runtime (ADR 0036,
    point 1) over the package's content.
 2. **Supported baseline: glibc of the build image.** node-pty is compiled in the
-   Debian image of `docker/server/Dockerfile` (bookworm), so the package needs at
-   least that image's glibc and libstdc++; the Node binary needs less. Setup
-   checks the glibc version (`ldd --version`) before uploading and refuses older
-   ones with a message naming both versions. The exact minimum is measured in
-   step 1 and written here; musl systems (Alpine) are refused.
+   Debian image of `docker/server/Dockerfile` (bookworm). The build reads the
+   newest `GLIBC_`, `GLIBCXX_` and `CXXABI_` symbol versions that the Node binary
+   or `pty.node` needs (`objdump -T`) and writes them to `requirements.json` in
+   the package: measured glibc 2.34, libstdc++ `GLIBCXX_3.4.22`, `CXXABI_1.3.11`
+   for x64 and arm64 (2026-11-11), so Debian 12, Ubuntu 22.04, RHEL 9 or newer.
+   The limit is node-pty: on glibc 2.31 Node starts, `pty.node` does not load.
+   Setup checks the machine's glibc (`getconf GNU_LIBC_VERSION`) before
+   uploading and refuses older ones with a message naming both versions, musl
+   systems (Alpine) too. After unpacking it starts a shell through node-pty with
+   the package's Node; only then is the unit written, so a missing or too old
+   libstdc++ shows its own error instead of a server that never starts.
 3. **Explicit paths, no repository layout.** The package has a fixed layout
    (`node`, `server/hangar-server.mjs`, `bin/` for the CLI, `bays/`). The unit
    passes `--bays` and `--cli` explicitly, as the local server does (ADR 0036,
@@ -130,7 +136,10 @@ show-user --property=Linger` and, if off, shows `loginctl enable-linger` to
 
 ## Consequences
 
-- The app grows by both Linux packages; size to be measured in step 1.
+- The app grows by both Linux packages: 45.8 MB (arm64) and 46.1 MB (x64)
+  compressed (2026-11-11). The local server's runtime copy (ADR 0036) copies the
+  whole app and grows by the same; removing them from the copy would break the
+  bundle's signature.
 - macOS machines as targets are not covered (a later step could reuse the local
   runtime copy and a LaunchAgent).
 - An agent on the machine can do everything the person's user can there; the

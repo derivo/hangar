@@ -377,6 +377,19 @@ manual step is needed. pnpm reports ignored build scripts of
   played through on throwaway volumes (archive 600, permissions and content back).
   Linux checked only in the container, `network_mode: host` not (macOS).
   Review: `docs/reviews/2026-11-01-server-operations.md`.
+- **Server on Linux machines, step 1** (ADR 0041): `pnpm package:linux-server`
+  builds both packages with Docker (arm64 natively on macOS arm64, x64 under
+  emulation): 45.8 MB and 46.1 MB, `requirements.json` glibc 2.34,
+  `GLIBCXX_3.4.22`, `CXXABI_1.3.11`. `pnpm test:linux-server` 4 of 4 for arm64
+  (node-pty spawns a shell on Rocky Linux 9 with glibc 2.34, fails on Debian 11
+  with 2.31) against `debian:bookworm-slim`
+  without Node (bays agents, board, feeds without errors; session reaches the
+  `hangar` CLI, status turns `waiting`; after `docker restart` scrollback and
+  new shell). x64 only in the CI job `linux-server` (under emulation locally
+  the image build exceeds the hook timeout). `electron-builder --dir`: both
+  packages in `Resources/linux-server`; without `dist/linux-server` it warns
+  "file source doesn't exist" and packages anyway. The app cannot set up a
+  server yet (step 2).
 - **Remote callers in the bus, phase 13** (ADR 0011): `Caller` `remote`, check
   of `remote: true`, "not sensitive", membership and share list before
   every stored permission and again after the dialog; permissions on the subject

@@ -115,26 +115,28 @@ environment of a session: [docs/mcp.md](docs/mcp.md).
 
 ## Commands
 
-| Command                                                   | Purpose                                                                           |
-| --------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `pnpm install`                                            | Dependencies (repairs node-pty permissions automatically)                         |
-| `pnpm dev`                                                | Build CLI and bays, start the app in dev mode                                     |
-| `./start.sh`                                              | Check Node/pnpm, install if needed, `pnpm dev`                                    |
-| `pnpm lint`                                               | ESLint + Prettier check                                                           |
-| `pnpm typecheck`                                          | `tsc --noEmit` over the whole repo                                                |
-| `pnpm test`                                               | Vitest (unit, integration, components) with coverage gate                         |
-| `pnpm test:e2e`                                           | Builds everything, then Playwright against the real Electron app                  |
-| `pnpm build`                                              | Build all packages, bays and the app                                              |
-| `pnpm package`                                            | Installer with electron-builder for the current OS                                |
-| `pnpm create:bay <id>`                                    | Scaffold for a new bay                                                            |
-| `pnpm pack:bay <id> [--key <file>]`                       | Signed `.bay` package to `dist/bays/` (ADR 0033); `--keygen <file>` creates a key |
-| `node apps/server/dist/hangar-server.mjs --data <folder>` | Server without a UI (after `pnpm build`, `apps/server/CLAUDE.md`)                 |
-| `pnpm dev:server [down]`                                  | Start/stop the dev server with SSH in Docker (ADR 0020)                           |
-| `pnpm test:ssh`                                           | Start the dev server, check the bridge with a real `ssh` (Docker required)        |
-| `pnpm image:server [tag]`                                 | Build the production image of the server (ADR 0029)                               |
-| `pnpm image:relay [tag]`                                  | Build the image of the relay (ADR 0011, `docs/relay-operations.md`)               |
-| `pnpm test:container`                                     | Build images, smoke tests with Docker (server and relay)                          |
-| `pnpm docs:api`                                           | Generate the SDK API reference to `docs/api/`                                     |
+| Command                                                   | Purpose                                                                                        |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `pnpm install`                                            | Dependencies (repairs node-pty permissions automatically)                                      |
+| `pnpm dev`                                                | Build CLI and bays, start the app in dev mode                                                  |
+| `./start.sh`                                              | Check Node/pnpm, install if needed, `pnpm dev`                                                 |
+| `pnpm lint`                                               | ESLint + Prettier check                                                                        |
+| `pnpm typecheck`                                          | `tsc --noEmit` over the whole repo                                                             |
+| `pnpm test`                                               | Vitest (unit, integration, components) with coverage gate                                      |
+| `pnpm test:e2e`                                           | Builds everything, then Playwright against the real Electron app                               |
+| `pnpm build`                                              | Build all packages, bays and the app                                                           |
+| `pnpm package`                                            | Installer with electron-builder for the current OS                                             |
+| `pnpm create:bay <id>`                                    | Scaffold for a new bay                                                                         |
+| `pnpm pack:bay <id> [--key <file>]`                       | Signed `.bay` package to `dist/bays/` (ADR 0033); `--keygen <file>` creates a key              |
+| `node apps/server/dist/hangar-server.mjs --data <folder>` | Server without a UI (after `pnpm build`, `apps/server/CLAUDE.md`)                              |
+| `pnpm dev:server [down]`                                  | Start/stop the dev server with SSH in Docker (ADR 0020)                                        |
+| `pnpm test:ssh`                                           | Start the dev server, check the bridge with a real `ssh` (Docker required)                     |
+| `pnpm image:server [tag]`                                 | Build the production image of the server (ADR 0029)                                            |
+| `pnpm package:linux-server [x64\|arm64]…`                 | Linux packages of the server that the app ships to `dist/linux-server/` (ADR 0041, Docker)     |
+| `pnpm test:linux-server`                                  | Linux package in a plain Debian without Node (Docker; `HANGAR_LINUX_ARCH`, default the host's) |
+| `pnpm image:relay [tag]`                                  | Build the image of the relay (ADR 0011, `docs/relay-operations.md`)                            |
+| `pnpm test:container`                                     | Build images, smoke tests with Docker (server and relay)                                       |
+| `pnpm docs:api`                                           | Generate the SDK API reference to `docs/api/`                                                  |
 
 ## Repository layout
 

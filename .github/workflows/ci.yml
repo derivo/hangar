@@ -70,3 +70,27 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:container
+
+  # The Linux packages of hangar-server that the app ships (ADR 0041): both architectures
+  # (arm64 through QEMU), the x64 one checked in a plain Debian without Node.
+  linux-server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm package:linux-server
+      - run: pnpm test:linux-server
+        env:
+          HANGAR_LINUX_ARCH: x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-server
+          path: dist/linux-server/*.tar.gz
+          if-no-files-found: error
