@@ -167,5 +167,13 @@ show-user --property=Linger` and, if off, shows `loginctl enable-linger` to
 3. **Update and restart:** build comparison over SSH, hint, restart view with
    the log, cleanup of
    old runtimes, removal with the unit.
+   Done, with one change to point 9: there is no live log view during the
+   restart. A server that is not connected has no bays in the sidebar, so no
+   page could show it; a failed restart shows the last 20 lines of
+   `server.log` (read over SSH) in its message instead. The hint stands in the
+   server's name in the sidebar (also while the bridge rejects the app) and
+   above a selected bay of the server; "Restart server …" is in the server's
+   menu at any time. The comparison runs at app start and after every setup
+   or restart.
 4. **Docs:** `docs/server-operations.md` (setup from the app next to Docker and
-   the system unit), STATUS and CHANGELOG.
+   the system unit), STATUS and CHANGELOG. Done.

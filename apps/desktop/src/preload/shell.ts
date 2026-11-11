@@ -39,6 +39,7 @@ const api: ShellApi = {
   pairServer: (probeId, name, code) => ipcRenderer.invoke('shell:server.pair', probeId, name, code),
   cancelProbe: (probeId) => ipcRenderer.send('shell:server.cancel', probeId),
   serverMenu: (id) => ipcRenderer.send('shell:serverMenu', id),
+  restartServer: (id) => ipcRenderer.invoke('shell:server.restart', id),
   restartLocalServer: () => ipcRenderer.invoke('shell:localServer.restart'),
   openLocalServerLog: () => ipcRenderer.send('shell:localServer.log'),
   getLocalServer: () => ipcRenderer.invoke('shell:localServer.setting'),

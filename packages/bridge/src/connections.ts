@@ -172,6 +172,14 @@ export class ServerConnections {
     connection?.close();
   }
 
+  /** Machine and data folder of a server the app set up over SSH (ADR 0041); else nothing. */
+  setUpAt(id: string): { target: SetupTarget; remoteData: string } | undefined {
+    const server = this.saved.find((s) => s.id === id);
+    if (!server?.remoteData || !server.ssh) return undefined;
+    const { host, user } = server.ssh;
+    return { target: { host, user }, remoteData: server.remoteData };
+  }
+
   remove(id: string): void {
     this.disconnect(id);
     this.live.delete(id);

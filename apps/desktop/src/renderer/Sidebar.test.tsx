@@ -226,6 +226,16 @@ describe('Sidebar', () => {
           errors: [{ label: 'Browser', error: 'Version passt nicht (Server 0.2.0, hier 0.1.0)' }],
         },
         { id: 's2', name: 'Alt', status: 'failed', error: 'Invalid token', bays: [], errors: [] },
+        {
+          id: 's3',
+          name: 'Neu',
+          status: 'failed',
+          error: 'Protocol version 5 not supported',
+          bays: [],
+          errors: [],
+          update: { running: '0.1.0', ready: '0.2.0' },
+        },
+        { id: 's4', name: 'Bau', status: 'connected', bays: [], errors: [], restarting: true },
       ],
     };
     render(<Sidebar state={withServer} api={api} onSelect={onSelect} />);
@@ -238,6 +248,15 @@ describe('Sidebar', () => {
     expect(api.serverMenu).toHaveBeenCalledWith('s1');
     expect(
       screen.getByRole('button', { name: 'Server Alt: Fehler (Invalid token)' }),
+    ).toBeInTheDocument();
+    // Set up over SSH (ADR 0041): a new version also when the bridge rejects the app.
+    expect(
+      screen.getByRole('button', {
+        name: 'Server Neu: Fehler (Protocol version 5 not supported), neue Version bereit',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Server Bau: Server startet neu …' }),
     ).toBeInTheDocument();
   });
 });

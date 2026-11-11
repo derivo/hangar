@@ -530,6 +530,11 @@ describe('ServerConnections: the local server (ADR 0036)', () => {
       expect(connections.list()).toEqual([]);
       const id = await connections.pairSetUp({ host: 'heimserver' }, 'Heimserver', setup);
       await expect(connections.invoke(id, 'dev.echo', 'echo', [1])).resolves.toBe(1);
+      expect(connections.setUpAt(id)).toEqual({
+        target: { host: 'heimserver' },
+        remoteData: s.data,
+      });
+      expect(connections.setUpAt('unknown')).toBeUndefined();
       expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual([
         expect.objectContaining({ id, remoteData: s.data, ssh: { host: 'heimserver', port } }),
       ]);

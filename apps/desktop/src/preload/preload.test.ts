@@ -155,6 +155,7 @@ describe('shell preload (window.hangarShell)', () => {
     ['setHintHeight', [70], 'send', ['shell:hintHeight', 70]],
     ['cancelProbe', ['p'], 'send', ['shell:server.cancel', 'p']],
     ['serverMenu', ['s'], 'send', ['shell:serverMenu', 's']],
+    ['restartServer', ['s'], 'invoke', ['shell:server.restart', 's']],
     ['openShortcut', ['x'], 'send', ['shell:shortcut.open', 'x']],
     ['shortcutMenu', ['x'], 'send', ['shell:shortcutMenu', 'x']],
     ['moveShortcut', ['x', 0], 'send', ['shell:moveShortcut', 'x', 0]],

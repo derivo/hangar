@@ -16,6 +16,7 @@ export function App({ api }: { api: ShellApi }) {
   if (!state) return null;
   const local = state.localServer;
   const localBay = local?.bays.some((b) => b.id === state.selected) ? local : undefined;
+  const server = state.servers.find((s) => s.bays.some((b) => b.id === state.selected));
   return (
     <div className="shell">
       <Sidebar state={state} api={api} onSelect={(s) => api.select(s)} />
@@ -51,6 +52,14 @@ export function App({ api }: { api: ShellApi }) {
             api={api}
             text={t.updateReady(localBay.update.running, localBay.update.ready)}
             restarting={!!localBay.restarting}
+          />
+        )}
+        {server?.update && (
+          <UpdateHint
+            api={api}
+            text={t.serverUpdateReady(server.name, server.update.running, server.update.ready)}
+            restarting={!!server.restarting}
+            server={server.id}
           />
         )}
       </main>
@@ -99,15 +108,20 @@ function ServerLog({ lines }: { lines: string[] }) {
   );
 }
 
-/** „Neue Version bereit“ above a bay of the local server; as tall as its text needs. */
+/**
+ * „Neue Version bereit“ above a bay of the local server, or of the server set up over SSH with
+ * the id `server` (ADR 0041); as tall as its text needs.
+ */
 function UpdateHint({
   api,
   text,
   restarting,
+  server,
 }: {
   api: ShellApi;
   text: string;
   restarting: boolean;
+  server?: string;
 }) {
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -125,10 +139,14 @@ function UpdateHint({
     >
       <p>{text}</p>
       {restarting ? (
-        <span role="status">{t.localServerStarting}</span>
+        <span role="status">{server ? t.serverRestarting : t.localServerStarting}</span>
       ) : (
-        <button type="button" className="button" onClick={() => void api.restartLocalServer()}>
-          {t.restartLocalServer}
+        <button
+          type="button"
+          className="button"
+          onClick={() => void (server ? api.restartServer(server) : api.restartLocalServer())}
+        >
+          {server ? t.restartServer : t.restartLocalServer}
         </button>
       )}
     </section>

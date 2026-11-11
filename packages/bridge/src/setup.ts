@@ -166,6 +166,9 @@ export function choosePackage(machine: Machine, packages: LinuxPackage[]): Linux
 }
 
 const ROOT = '$HOME/.local/share/hangar';
+const UNIT_FILE = '$HOME/.config/systemd/user/hangar-server.service';
+/** Prints the build the installed unit starts, nothing without a unit. */
+const UNIT_BUILD = `sed -n 's#^ExecStart=%h/.local/share/hangar/runtime/\\([^/]*\\)/node .*#\\1#p' "${UNIT_FILE}" 2>/dev/null`;
 
 /** The data folder on the machine, as the unit passes it to the server. */
 export const remoteDataDir = (home: string) => `${home}/.local/share/hangar/data`;
@@ -247,7 +250,7 @@ export async function setUpServer(
 mkdir -p "$HOME/.config/systemd/user"
 cat > "${ROOT}/server.env" <<'HANGAR_ENV'
 ${env}HANGAR_ENV
-cat > "$HOME/.config/systemd/user/hangar-server.service" <<'HANGAR_UNIT'
+cat > "${UNIT_FILE}" <<'HANGAR_UNIT'
 ${unit(pkg.build)}HANGAR_UNIT
 rm -f "${ROOT}/data/pair-code" "${ROOT}/data/listen.json"
 systemctl --user daemon-reload
@@ -267,6 +270,11 @@ tail -n 5 "$D/server.log" 2>/dev/null; exit 3`);
     throw new Error(
       `The server did not start: ${lastLine(started.stdout) || lastLine(started.stderr)}`,
     );
+  // It runs: runtimes the unit no longer starts go; the one it starts now (another app may have
+  // installed it meanwhile) and uploads still running stay. Best effort.
+  await remote(
+    `cur=$(${UNIT_BUILD}); cd "${ROOT}/runtime" && for d in *; do case "$d" in ${quote(pkg.build)}|"$cur"|*.tmp.*) ;; *) rm -rf "./$d" ;; esac; done`,
+  );
   const [listen = '', code = ''] = started.stdout.trim().split('\n');
   const { port, fingerprint } = JSON.parse(listen) as { port: number; fingerprint: string };
   return {
@@ -278,6 +286,44 @@ tail -n 5 "$D/server.log" 2>/dev/null; exit 3`);
     user: machine.user,
     build: pkg.build,
   };
+}
+
+/**
+ * The build the unit starts against the package of this app for the machine's architecture
+ * (ADR 0041, step 3): over SSH, so it works when the bridge rejects the app's protocol.
+ * Nothing when they match, no unit is installed or this build has no package for it.
+ */
+export async function serverUpdate(
+  remote: Remote,
+  packages: LinuxPackage[],
+): Promise<{ running: string; ready: string } | undefined> {
+  const { stdout } = await remote(`echo "$(uname -m) $(${UNIT_BUILD})"`);
+  const [arch = '', running = ''] = stdout.trim().split(' ');
+  const ready = packages.find((p) => p.arch === ARCH[arch])?.build;
+  return running && ready && running !== ready ? { running, ready } : undefined;
+}
+
+/** Stops and removes the unit and the runtimes; the data folder only with `data` (ADR 0041). */
+export async function uninstallServer(remote: Remote, { data }: { data: boolean }): Promise<void> {
+  await expectOk(
+    // Nothing is deleted unless an installed server stopped.
+    remote(`set -e
+if [ -e "${UNIT_FILE}" ]; then systemctl --user disable --now hangar-server.service; fi
+rm -f "${UNIT_FILE}"
+systemctl --user daemon-reload
+rm -rf "${ROOT}/runtime" "${ROOT}/server.env"${
+      data
+        ? ` "${ROOT}/data"
+rmdir "${ROOT}" 2>/dev/null || true`
+        : ''
+    }`),
+    'Removing the server failed',
+  );
+}
+
+/** The last lines of the server's log on the machine, for a failed restart. */
+export async function serverLog(remote: Remote, remoteData: string): Promise<string> {
+  return (await remote(`tail -n 20 ${quote(`${remoteData}/server.log`)}`)).stdout.trim();
 }
 
 /** Port and key of a server set up on a machine, as it wrote them after listening. */
