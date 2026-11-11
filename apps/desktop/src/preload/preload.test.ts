@@ -144,6 +144,7 @@ describe('shell preload (window.hangarShell)', () => {
     ['setBaySetting', ['b', 'k', 1], 'invoke', ['shell:baySetting', 'b', 'k', 1]],
     ['addBay', ['b'], 'invoke', ['shell:addBay', 'b']],
     ['probeServer', ['h:1'], 'invoke', ['shell:server.probe', 'h:1']],
+    ['setupServer', ['Heim', 'anna@h'], 'invoke', ['shell:server.setup', 'Heim', 'anna@h']],
     ['pairServer', ['p', 'n', 'c'], 'invoke', ['shell:server.pair', 'p', 'n', 'c']],
     ['pickShortcut', ['folder'], 'invoke', ['shell:shortcut.pick', 'folder']],
     ['addUrlShortcut', ['https://x'], 'invoke', ['shell:shortcut.url', 'https://x']],

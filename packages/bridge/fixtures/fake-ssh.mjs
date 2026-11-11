@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Stands in for `ssh -T -L 127.0.0.1:<local>:127.0.0.1:<remote> -- [user@]host cat` in tests:
 // forwards the local port to the remote port on this machine and, like `cat` on the server,
-// ends with stdin. Host `unreachable.invalid` fails like ssh does.
+// ends with stdin. Host `unreachable.invalid` fails like ssh does. Without `-L` it runs the
+// command on this machine, as ssh runs it on the server (setup, ADR 0041).
+import { spawnSync } from 'node:child_process';
 import { connect, createServer } from 'node:net';
 
 const args = process.argv.slice(2);
@@ -13,6 +15,10 @@ const host = args.at(-2).split('@').at(-1);
 if (host === 'unreachable.invalid') {
   process.stderr.write(`ssh: Could not resolve hostname ${host}: nodename nor servname provided\n`);
   process.exit(255);
+}
+if (!args.includes('-L')) {
+  const { status } = spawnSync('/bin/sh', ['-c', args.at(-1)], { stdio: 'inherit' });
+  process.exit(status ?? 1);
 }
 const [, local, , remote] = args[args.indexOf('-L') + 1].split(':');
 createServer((socket) => {

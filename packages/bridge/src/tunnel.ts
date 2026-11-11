@@ -67,7 +67,7 @@ export function stdinNullSupported(version: string): boolean {
 }
 
 /** `ssh -V` prints to stderr; an ssh that fails or is not OpenSSH yields no version. */
-function sshVersion(ssh: string): Promise<string> {
+export function sshVersion(ssh: string): Promise<string> {
   return new Promise((resolve) => {
     execFile(ssh, ['-V'], { timeout: 5000 }, (_, stdout, stderr) => resolve(`${stdout}${stderr}`));
   });

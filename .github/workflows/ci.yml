@@ -89,6 +89,8 @@ jobs:
       - run: pnpm test:linux-server
         env:
           HANGAR_LINUX_ARCH: x64
+      # The app's setup over real ssh against a machine with systemd (ADR 0041, step 2).
+      - run: pnpm test:linux-setup
       - uses: actions/upload-artifact@v4
         with:
           name: linux-server

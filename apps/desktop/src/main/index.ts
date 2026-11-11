@@ -278,6 +278,15 @@ async function start(): Promise<void> {
           log: join(userData, 'local-server', 'data', 'server.log'),
         }
       : undefined,
+    {
+      // Built by `pnpm package:linux-server`; HANGAR_LINUX_PACKAGES for tests.
+      packages:
+        process.env.HANGAR_LINUX_PACKAGES ??
+        (app.isPackaged
+          ? join(process.resourcesPath, 'linux-server')
+          : join(app.getAppPath(), '../../dist/linux-server')),
+      version: app.getVersion(),
+    },
   );
   await host.start();
   if (localServer) {

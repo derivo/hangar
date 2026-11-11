@@ -28,6 +28,7 @@
     "test:ssh": "node scripts/dev-server.mjs && vitest run --config docker/dev-server/vitest.config.ts",
     "package:linux-server": "node scripts/linux-server-package.mjs",
     "test:linux-server": "vitest run --config docker/linux-server/vitest.config.ts",
+    "test:linux-setup": "vitest run --config docker/linux-machine/vitest.config.ts",
     "image:server": "node scripts/server-image.mjs",
     "image:relay": "node scripts/relay-image.mjs",
     "test:container": "node scripts/server-image.mjs hangar-server:test && node scripts/relay-image.mjs hangar-relay:test && vitest run --config docker/server/vitest.config.ts && vitest run --config docker/relay/vitest.config.ts",

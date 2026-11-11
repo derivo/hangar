@@ -35,6 +35,7 @@ const api: ShellApi = {
   setModal: (open) => ipcRenderer.send('shell:modal', open),
   setHintHeight: (px) => ipcRenderer.send('shell:hintHeight', px),
   probeServer: (address) => ipcRenderer.invoke('shell:server.probe', address),
+  setupServer: (name, address) => ipcRenderer.invoke('shell:server.setup', name, address),
   pairServer: (probeId, name, code) => ipcRenderer.invoke('shell:server.pair', probeId, name, code),
   cancelProbe: (probeId) => ipcRenderer.send('shell:server.cancel', probeId),
   serverMenu: (id) => ipcRenderer.send('shell:serverMenu', id),

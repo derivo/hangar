@@ -134,6 +134,7 @@ environment of a session: [docs/mcp.md](docs/mcp.md).
 | `pnpm image:server [tag]`                                 | Build the production image of the server (ADR 0029)                                            |
 | `pnpm package:linux-server [x64\|arm64]…`                 | Linux packages of the server that the app ships to `dist/linux-server/` (ADR 0041, Docker)     |
 | `pnpm test:linux-server`                                  | Linux package in a plain Debian without Node (Docker; `HANGAR_LINUX_ARCH`, default the host's) |
+| `pnpm test:linux-setup`                                   | Setup over ssh against a Debian machine with systemd (Docker; needs the host's package)        |
 | `pnpm image:relay [tag]`                                  | Build the image of the relay (ADR 0011, `docs/relay-operations.md`)                            |
 | `pnpm test:container`                                     | Build images, smoke tests with Docker (server and relay)                                       |
 | `pnpm docs:api`                                           | Generate the SDK API reference to `docs/api/`                                                  |

@@ -11,6 +11,7 @@ import type {
   Notification,
   OfferedFunction,
 } from './protocol';
+import { remoteListen, sshRemote, type SetupResult, type SetupTarget } from './setup';
 import { openTunnel, parseAddress, type SshTarget } from './tunnel';
 
 /** A paired server as saved on the desktop (`<userData>/servers.json`, mode 0600). */
@@ -22,11 +23,16 @@ export interface SavedServer {
   ssh?: SshTarget;
   /** Data folder of a server on this machine: its port is read from `listen.json` (ADR 0036). */
   local?: string;
+  /**
+   * Data folder of a server the app set up on the machine behind `ssh` (ADR 0041): its port is
+   * read from `listen.json` there over ssh before each connect.
+   */
+  remoteData?: string;
   fingerprint: string;
   token: string;
 }
 
-type Target = Pick<SavedServer, 'url' | 'ssh' | 'local'>;
+type Target = Pick<SavedServer, 'url' | 'ssh' | 'local' | 'remoteData'>;
 
 export type ServerStatus = 'connecting' | 'connected' | 'disconnected' | 'failed';
 
@@ -226,6 +232,44 @@ export class ServerConnections {
     }
   }
 
+  /**
+   * Pairs with a server the app has just set up on a machine (ADR 0041), with the key and code
+   * read over ssh: the ssh host key vouches for them, as the file system does locally.
+   */
+  async pairSetUp(target: SetupTarget, name: string, setup: SetupResult): Promise<string> {
+    const known = this.saved.find(
+      (s) =>
+        s.remoteData === setup.remoteData &&
+        s.ssh?.host === target.host &&
+        s.ssh.user === target.user,
+    );
+    const saved = { ssh: { ...target, port: setup.port }, remoteData: setup.remoteData };
+    const { fingerprint } = setup;
+    if (known) {
+      // Its token is usually still in the server's clients.json: no new pairing then.
+      this.disconnect(known.id);
+      try {
+        const connection = await this.open(saved, { fingerprint, token: known.token });
+        this.attach(known.id, connection);
+        return known.id;
+      } catch {
+        // A new data folder or a removed client: pair again under the same ID.
+      }
+    }
+    const connection = await this.open(saved, { fingerprint });
+    try {
+      const token = await connection.pair(setup.code, this.client.name, this.client.locale);
+      const id = known?.id ?? randomUUID().slice(0, 8);
+      const entry = { id, name: known?.name ?? name, ...saved, fingerprint, token };
+      this.save([...this.saved.filter((s) => s.id !== id), entry]);
+      this.attach(id, connection);
+      return id;
+    } catch (e) {
+      connection.close();
+      throw e;
+    }
+  }
+
   cancel(probeId: string): void {
     this.probes.get(probeId)?.connection.close();
     this.probes.delete(probeId);
@@ -291,7 +335,13 @@ export class ServerConnections {
       return connect({ url, locale, ...auth });
     }
     if (!target.ssh) return connect({ url: target.url!, locale, ...auth });
-    const tunnel = await openTunnel(target.ssh, this.ssh);
+    const ssh = target.remoteData
+      ? {
+          ...target.ssh,
+          port: (await remoteListen(sshRemote(target.ssh, this.ssh), target.remoteData)).port,
+        }
+      : target.ssh;
+    const tunnel = await openTunnel(ssh, this.ssh);
     try {
       const connection = await connect({
         url: `ws://127.0.0.1:${tunnel.port}/connect`,
