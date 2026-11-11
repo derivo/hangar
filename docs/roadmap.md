@@ -644,6 +644,11 @@ and notarization (certificates of the user).
 
 ## Noted, not yet planned
 
+- **Server on a Linux machine, set up from the app** (wish 2026-11-11,
+  [ADR 0041](adr/0041-remote-linux-server.md)): Linux runtime shipped in the
+  app, setup and updates over SSH as a systemd user unit, pairing without a
+  code, subscription login on one's own machine. Four steps, none done yet.
+
 - **Sessions survive a restart of Hangar** (ADR 0036, agent bay in the local
   server): step 1 done (runtime copy, LaunchAgent, `listen.json`, `pair-code`,
   pairing without a code; only with `HANGAR_LOCAL_SERVER=1`); step 2 done (move,

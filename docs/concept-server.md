@@ -143,7 +143,9 @@ A job that hangs on a question does not wait but ends with a clear reason.
 
 - Decided (2026-10-29): A subscription login is permitted only while the agent
   client runs on one's own notebook. Agents on the server log in with an API key
-  (environment variable of the service).
+  (environment variable of the service). Narrowed 2026-11-11 (ADR 0041): a
+  server the app sets up on the person's own Linux machine runs under their
+  user and may use their subscription login.
 - Will a web UI (phone) be needed later, or is the desktop enough?
 - Should the server also be the relay instance of a workspace, or does the
   desktop–server connection stay its own, simpler path?
