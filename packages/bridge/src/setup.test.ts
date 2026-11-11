@@ -94,25 +94,29 @@ describe('setup over ssh (ADR 0041)', () => {
     expect((await probeMachine(remote)).glibc).toBe('2.36');
   });
 
-  it('takes the PATH of the login shell even when it greets first', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'hangar-shell-'));
-    const shell = join(dir, 'greeting-sh');
-    writeFileSync(
-      shell,
-      '#!/bin/sh\necho Welcome to heimserver\nPATH=/greeted:$PATH exec /bin/sh "$@"\n',
-      {
-        mode: 0o755,
-      },
-    );
-    vi.stubEnv('SHELL', shell);
-    try {
-      const { path } = await probeMachine(sshRemote({ host: 'heimserver' }, fakeSsh));
-      expect(path.split(':')).toContain('/greeted');
-      expect(path).not.toContain('Welcome');
-    } finally {
-      vi.unstubAllEnvs();
-    }
-  });
+  // fake-ssh runs its command with /bin/sh, like the tunnel tests not on Windows.
+  it.skipIf(process.platform === 'win32')(
+    'takes the PATH of the login shell even when it greets first',
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'hangar-shell-'));
+      const shell = join(dir, 'greeting-sh');
+      writeFileSync(
+        shell,
+        '#!/bin/sh\necho Welcome to heimserver\nPATH=/greeted:$PATH exec /bin/sh "$@"\n',
+        {
+          mode: 0o755,
+        },
+      );
+      vi.stubEnv('SHELL', shell);
+      try {
+        const { path } = await probeMachine(sshRemote({ host: 'heimserver' }, fakeSsh));
+        expect(path.split(':')).toContain('/greeted');
+        expect(path).not.toContain('Welcome');
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    },
+  );
 
   it('chooses the package or says exactly why not', () => {
     expect(choosePackage(machine, [pkg])).toBe(pkg);
@@ -261,22 +265,25 @@ describe('setup over ssh (ADR 0041)', () => {
     await expect(linuxPackages(dir, '1.0.0')).rejects.toThrow();
   });
 
-  it('runs scripts over ssh with stdin from a file, and reports a failing ssh', async () => {
-    const remote = sshRemote({ user: 'anna', host: 'heimserver' }, fakeSsh);
-    expect(await remote(`printf '%s\\n' "it's" && exit 4`)).toEqual({
-      code: 4,
-      stdout: "it's\n",
-      stderr: '',
-    });
-    const input = join(mkdtempSync(join(tmpdir(), 'hangar-input-')), 'in');
-    writeFileSync(input, 'from the file');
-    expect((await remote('cat', input)).stdout).toBe('from the file');
-    await expect(sshRemote({ host: 'unreachable.invalid' }, fakeSsh)('true')).rejects.toThrow(
-      /^SSH failed: ssh: Could not resolve hostname/,
-    );
-    await expect(remote('exit 255')).rejects.toThrow(/^SSH failed: exit code 255$/);
-    await expect(sshRemote({ host: 'x' }, '/nonexistent/ssh')('true')).rejects.toThrow(
-      /^SSH failed: /,
-    );
-  });
+  it.skipIf(process.platform === 'win32')(
+    'runs scripts over ssh with stdin from a file, and reports a failing ssh',
+    async () => {
+      const remote = sshRemote({ user: 'anna', host: 'heimserver' }, fakeSsh);
+      expect(await remote(`printf '%s\\n' "it's" && exit 4`)).toEqual({
+        code: 4,
+        stdout: "it's\n",
+        stderr: '',
+      });
+      const input = join(mkdtempSync(join(tmpdir(), 'hangar-input-')), 'in');
+      writeFileSync(input, 'from the file');
+      expect((await remote('cat', input)).stdout).toBe('from the file');
+      await expect(sshRemote({ host: 'unreachable.invalid' }, fakeSsh)('true')).rejects.toThrow(
+        /^SSH failed: ssh: Could not resolve hostname/,
+      );
+      await expect(remote('exit 255')).rejects.toThrow(/^SSH failed: exit code 255$/);
+      await expect(sshRemote({ host: 'x' }, '/nonexistent/ssh')('true')).rejects.toThrow(
+        /^SSH failed: /,
+      );
+    },
+  );
 });
