@@ -26,6 +26,8 @@ Codex found no C1 (`\x9b`) answers with the default `termName`.
 ## Verification
 
 `pnpm exec vitest run bays/agents/src/ui/terminals.test.ts`: 12 passed.
-`playwright test e2e/local-server.spec.ts -g "agent bay moves" --repeat-each=5
---retries=0`: 5 passed (before round 2: the full spec 5 times, the test 5 of
-5; `:307` failed 2 of 5 with an unrelated page error, see `docs/STATUS.md`).
+Locally, with the filter of round 1: `playwright test e2e/local-server.spec.ts
+--repeat-each=5 --retries=0` passed the test 5 of 5 (`:307` failed 2 of 5 with
+an unrelated page error, see `docs/STATUS.md`), then `-g "agent bay moves"
+--repeat-each=5`: 5 passed. Round 2 only narrows what is dropped (typed text
+never matched); with the final code the e2e suite ran in the PR's CI (macOS).
