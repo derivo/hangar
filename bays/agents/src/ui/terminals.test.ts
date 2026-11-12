@@ -106,6 +106,43 @@ describe('TerminalRegistry', () => {
     expect(term.written).toEqual(['\x1b[c', 'live']);
   });
 
+  it('forwards keystrokes typed while the scrollback is replayed', async () => {
+    const { api, registry, handles, resolveBuffer } = setup();
+    registry.attach('s1', document.createElement('div'));
+    const term = handles[0]!;
+    term.hold = true;
+    resolveBuffer('history');
+    await Promise.resolve();
+    await Promise.resolve();
+    term.emit('echo'); // the user types while xterm still parses the replay
+    term.emit('\x1b'); // Escape
+    term.emit('\x1b[A'); // arrow up
+    term.emit('\x1b[200~ls\x1b[201~'); // a bracketed paste
+    term.emit('\x1b]0;title\x07'); // a pasted title sequence, not an answer
+    // Answers to replayed queries are still dropped.
+    for (const answer of [
+      '\x1b[?1;2c',
+      '\x1b[>0;276;0c',
+      '\x1b[0n',
+      '\x1b[24;80R',
+      '\x1b[8;24;80t',
+      '\x1b[?2004;1$y',
+      '\x1b[4;2$y',
+      '\x1b]4;1;rgb:cdcd/0000/0000\x07',
+      '\x1b]11;rgb:0000/0000/0000\x1b\\',
+      '\x1b]10;rgb:ffff/ffff/ffff\x07',
+      '\x1bP1$r0m\x1b\\',
+    ])
+      term.emit(answer);
+    expect(api.input.mock.calls).toEqual([
+      ['s1', 'echo'],
+      ['s1', '\x1b'],
+      ['s1', '\x1b[A'],
+      ['s1', '\x1b[200~ls\x1b[201~'],
+      ['s1', '\x1b]0;title\x07'],
+    ]);
+  });
+
   it('forwards keystrokes typed before the scrollback has arrived', async () => {
     const { api, registry, handles, resolveBuffer } = setup();
     registry.attach('s1', document.createElement('div'));
