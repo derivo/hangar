@@ -26,6 +26,15 @@ jobs:
       - name: E2E (macOS)
         if: runner.os == 'macOS'
         run: pnpm --filter @hangar/desktop test:e2e
+      # Traces and screenshots of failed attempts, also of tests that passed on retry.
+      - name: E2E results
+        if: ${{ !cancelled() && runner.os == 'macOS' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: apps/desktop/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Package (unsigned)
         run: pnpm --filter @hangar/desktop package
         env:
