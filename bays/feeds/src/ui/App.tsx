@@ -44,10 +44,14 @@ export function App({ api }: { api: FeedsApi }) {
 
   useEffect(() => {
     const off = api.onState(setState);
-    void api.state().then((s) => {
-      setState(s);
-      void refresh(s.feeds.map((f) => f.url));
-    });
+    // E.g. a server bay whose connection closed on quit: shown, never an uncaught rejection.
+    api
+      .state()
+      .then((s) => {
+        setState(s);
+        void refresh(s.feeds.map((f) => f.url));
+      })
+      .catch((e) => setError(errorMessage(e)));
     return off;
   }, [api, refresh]);
 
@@ -56,7 +60,11 @@ export function App({ api }: { api: FeedsApi }) {
   useEffect(() => {
     if (!minutes) return;
     const timer = setInterval(
-      () => void api.state().then((s) => refresh(s.feeds.map((f) => f.url))),
+      () =>
+        void api
+          .state()
+          .then((s) => refresh(s.feeds.map((f) => f.url)))
+          .catch((e) => setError(errorMessage(e))),
       minutes * 60_000,
     );
     return () => clearInterval(timer);
@@ -150,7 +158,7 @@ export function App({ api }: { api: FeedsApi }) {
                 className="button button-quiet"
                 type="button"
                 aria-label={t.remove(f.title)}
-                onClick={() => void api.remove(f.url)}
+                onClick={() => api.remove(f.url).catch((e) => setError(errorMessage(e)))}
               >
                 ×
               </button>
