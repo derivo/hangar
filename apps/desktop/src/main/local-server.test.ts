@@ -1078,4 +1078,16 @@ describe('serverUiRoots', () => {
     ]);
     expect(serverUiRoots(join(options.userData, 'none'))).toEqual([]);
   });
+
+  it('names only the copy of the build the server runs, when it is known', () => {
+    const { options } = setup();
+    const runtime = join(options.userData, 'local-server', 'runtime');
+    for (const build of ['0.9.0+aaaaaaaa', '0.9.0+bbbbbbbb'])
+      mkdirSync(join(runtime, build, 'Hangar.app', 'Contents/Resources/app.asar/bays'), {
+        recursive: true,
+      });
+    expect(serverUiRoots(options.userData, '0.9.0+bbbbbbbb')).toEqual([
+      join(runtime, '0.9.0+bbbbbbbb', 'Hangar.app', 'Contents/Resources/app.asar/bays'),
+    ]);
+  });
 });

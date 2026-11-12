@@ -271,7 +271,7 @@ async function start(): Promise<void> {
     localServer
       ? {
           owns: IN_SERVER,
-          uiRoots: () => serverUiRoots(userData),
+          uiRoots: () => serverUiRoots(userData, localServerVersion),
           version: () => localServerVersion,
           ready: () => localServerReady,
           restart: () => startLocalServer(userData, cliPath, true),

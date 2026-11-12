@@ -53,11 +53,15 @@ export const localServerLabel = (userData: string) =>
 /** `<userData>/local-server`: data folder, runtime copies and the `migrated` marker. */
 const localDir = (userData: string) => join(userData, 'local-server');
 
-/** Bay folders of the runtime copies: the UI of a server bay comes from its own version. */
-export function serverUiRoots(userData: string): string[] {
+/**
+ * Bay folders of the runtime copies: the UI of a server bay comes from its own version. With
+ * `build` (the copy the server runs, `ensureLocalServer().version`) only that copy.
+ */
+export function serverUiRoots(userData: string, build?: string): string[] {
   const runtime = join(localDir(userData), 'runtime');
   if (!existsSync(runtime)) return [];
-  return readdirSync(runtime).flatMap((version) =>
+  const versions = readdirSync(runtime).filter((v) => build === undefined || v === build);
+  return versions.flatMap((version) =>
     readdirSync(join(runtime, version))
       .filter((name) => name.endsWith('.app'))
       .map((name) => join(runtime, version, name, 'Contents', 'Resources', 'app.asar', 'bays'))
