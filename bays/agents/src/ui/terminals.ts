@@ -15,13 +15,22 @@ export interface TerminalHandle {
   dispose(): void;
 }
 
+/**
+ * What xterm answers to a query: device attributes and status (`c`, `n`, `R`), window reports
+ * (`t`), modes (`$y`), colors (OSC `rgb:`) and settings (DECRQSS). ponytail: F3 with a modifier
+ * (`ESC[1;2R` …) looks like a cursor report and is dropped while a scrollback is replayed.
+ */
+const ANSWER =
+  // eslint-disable-next-line no-control-regex -- matching terminal escape sequences is the point
+  /^\x1b(\[[?>]?[\d;]*[cnRt]|\[\??[\d;]*\$y|\][\d;]*rgb:[^\x07\x1b]*(\x07|\x1b\\)|P[01]\$r[^\x1b]*\x1b\\)$/;
+
 interface Entry {
   handle: TerminalHandle;
   element: HTMLDivElement;
   ready: boolean;
   /** Live output that arrived before the snapshot; what is newer than it is written after it. */
   early: { data: string; end?: number }[];
-  /** The scrollback is being parsed; xterm's answers meanwhile are not keystrokes. */
+  /** The scrollback is being parsed; answers to queries meanwhile are not keystrokes. */
   replaying: boolean;
   /** Selecting copies to the clipboard (per session, ADR 0023). */
   copy: boolean;
@@ -52,7 +61,10 @@ export class TerminalRegistry {
       handle.open(element);
       const created = entry;
       // Replaying old queries (e.g. ESC[c) makes xterm answer again; the shell would print it.
-      handle.onData((data) => !created.replaying && void this.api.input(id, data));
+      // Keys and pastes typed meanwhile go through.
+      handle.onData(
+        (data) => (!created.replaying || !ANSWER.test(data)) && void this.api.input(id, data),
+      );
       // Copy on select: a selection made with the left button goes to the clipboard on
       // release, even outside the terminal. Capture runs before xterm.
       const note = document.createElement('div');

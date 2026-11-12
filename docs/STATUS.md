@@ -76,24 +76,30 @@ manual step is needed. pnpm reports ignored build scripts of
   on retry is reported as flaky, so a rare real failure no longer turns the
   run red. Flaky tests are to be fixed one by one locally with
   `--repeat-each`. Run 42001257976 (`8b7feaf`) was the first with every job
-  green, without a retry. Two red runs after it (2026-11-06) had these causes,
-  both fixed since; Windows has been green in every CI run on `main` of
+  green, without a retry. Three red runs after it had these causes,
+  all fixed since; Windows has been green in every CI run on `main` of
   2026-11-11 (`f06eeae`, `8c400c0`, `59f7475`):
-  - Run 42062340811 (`8d1d0a7`, macOS): `local-server.spec.ts` ("the agent bay
+  - Run 42062340811 (`8d1d0a7`, macOS, 2026-11-06): `local-server.spec.ts` ("the agent bay
     moves into the local server"): the terminal dropped live output until the
     scrollback arrived, but over the bridge an event can overtake that answer.
     Fixed with a position in `session.data` and `session.snapshot`
     (`bays/agents/CLAUDE.md`, `terminals.test.ts`).
-  - Run 42005154571 (`a52e991`, Windows): `apps/relay/src/client.test.ts`
+  - Run 42005154571 (`a52e991`, Windows, 2026-11-06): `apps/relay/src/client.test.ts`
     (call timeout raised to 1000 ms while pairing) and
     `apps/relay/src/workspaces.test.ts` (`RelayClient` publishes its own
     changes one after another).
+  - Run 43090058107 (`cfb5af1`, macOS, 2026-11-11): the same `local-server.spec.ts` test
+    failed all three attempts; the poll for the shell's pid (`:123`) timed out.
+    Likely cause: while the terminal replayed the scrollback after the restart,
+    it dropped every input, so `echo AFTERQUIT=$$` lost characters. Since
+    2026-11-12 it drops only xterm's answers then (`terminals.ts`); 5 of 5
+    local runs with `--repeat-each=5` passed. `undock.spec.ts:13` needed a
+    retry in the same run, cause not known.
 
-  Still flaky (as of 2026-11-11): the same `local-server.spec.ts` test failed
-  all three attempts in run 43090058107 (`cfb5af1`, macOS): the poll for the
-  shell's pid in the terminal rows (`:123`) timed out after 15 s; the runs
-  before and after are green, locally it passes. `undock.spec.ts:13` needed a
-  retry in the same run. Cause not yet known.
+  Still flaky (as of 2026-11-12): `local-server.spec.ts:307` (workspaces move
+  into the local server) failed 2 of 5 local runs: the feeds UI got "Not
+  connected" from `bay:invoke` while the app switched to the server, an
+  uncaught page error. Not yet fixed.
 
   `release.yml` is untested.
 
