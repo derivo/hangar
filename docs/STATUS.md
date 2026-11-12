@@ -100,11 +100,11 @@ manual step is needed. pnpm reports ignored build scripts of
     `kill -9` timed out. A second run on the same commit and a rerun passed. So
     the replay was at most part of the cause; the rest is not known. Since
     2026-11-12 CI keeps the traces of failed attempts (artifact `e2e-results`).
-
-  Still flaky (as of 2026-11-12): `local-server.spec.ts:307` (workspaces move
-  into the local server) failed 2 of 5 local runs: the feeds UI got "Not
-  connected" from `bay:invoke` while the app switched to the server, an
-  uncaught page error. Not yet fixed.
+  - `local-server.spec.ts:307` (workspaces move into the local server) failed 2 of 5
+    local runs (2026-11-12): on quit `Host.stop()` closes the server connections
+    before the bay views, and the feeds UI did not catch the "Not connected" of its
+    first `state()` call. Since 2026-11-12 the feeds UI shows such errors
+    (`App.tsx`); 10 of 10 local runs with `--repeat-each=10` passed.
 
   `release.yml` is untested.
 

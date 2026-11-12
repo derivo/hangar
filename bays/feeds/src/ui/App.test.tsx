@@ -1,6 +1,6 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import type { FeedsApi } from './api';
 import type { Feed, FeedState, Item } from '../main/feeds';
@@ -149,6 +149,47 @@ describe('feeds UI', () => {
     expect(clear).toHaveBeenCalled();
     set.mockRestore();
     clear.mockRestore();
+  });
+
+  describe('a server bay whose connection is gone', () => {
+    const gone = new Error("Error invoking remote method 'bay:invoke': Error: Not connected: s1");
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    beforeEach(() => {
+      unhandled.length = 0;
+      process.on('unhandledRejection', record);
+    });
+    afterEach(async () => {
+      // Unhandled rejections are reported after the microtasks of the current turn.
+      await new Promise((r) => setTimeout(r, 0));
+      process.off('unhandledRejection', record);
+      expect(unhandled).toEqual([]);
+    });
+
+    it('shows the error when the state does not load at start', async () => {
+      const { api } = setup();
+      const start = { ...api, state: vi.fn(() => Promise.reject(gone)) };
+      cleanup();
+      render(<App api={start} />);
+      expect(await screen.findByRole('alert')).toHaveTextContent('Not connected: s1');
+    });
+
+    it('shows the error on the interval and on unsubscribe', async () => {
+      const user = userEvent.setup();
+      const set = vi.spyOn(globalThis, 'setInterval');
+      try {
+        const { api } = setup({ feeds: [feed('https://example.org/a.xml')], items: [] });
+        await vi.waitFor(() => expect(set).toHaveBeenCalled());
+        api.state.mockRejectedValueOnce(gone);
+        await act(async () => (set.mock.lastCall![0] as () => void)());
+        expect(screen.getByRole('alert')).toHaveTextContent('Not connected: s1');
+        api.remove.mockRejectedValueOnce(new Error('Error: Connection closed'));
+        await user.click(screen.getByRole('button', { name: /abbestellen|unsubscribe/i }));
+        expect(await screen.findByRole('alert')).toHaveTextContent('Connection closed');
+      } finally {
+        set.mockRestore();
+      }
+    });
   });
 
   describe('subscribe form', () => {
