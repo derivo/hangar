@@ -560,12 +560,14 @@ export class Host {
     for (const server of this.servers.list()) {
       if (server.status !== 'connected') continue;
       for (const info of server.bays) {
-        const bay = this.localBundle(info);
+        const bay = this.localBundle(info, server.local);
         if (!bay) continue;
         const key = remoteKey(server.id, info.id);
+        const shown = this.remotes.get(key);
         wanted.set(
           key,
-          this.remotes.get(key) ?? {
+          // Another bundle (e.g. once the build of the local server is known) needs a new view.
+          (shown?.bay.dir === bay.dir && shown) || {
             key,
             bay,
             // The local server's bays work as if they ran here: folder dialog, no path form.
@@ -583,7 +585,7 @@ export class Host {
         );
       }
     }
-    for (const key of this.remotes.keys()) if (!wanted.has(key)) this.closeView(key);
+    for (const [key, target] of this.remotes) if (wanted.get(key) !== target) this.closeView(key);
     for (const [key, target] of wanted) {
       if (this.remotes.has(key)) continue;
       this.remotes.set(key, target);
@@ -741,12 +743,15 @@ export class Host {
     return this.found.filter((b) => !this.localServer.owns.includes(b.manifest.id));
   }
 
-  /** The bundle found here, or in a runtime copy of the local server, matching a server bay. */
-  private localBundle(info: { id: string; version: string }): LoadedBay | undefined {
+  /**
+   * The bundle matching a server bay: for the local server first from its runtime copy, since a
+   * build of the same bay version may differ (ADR 0036, point 5), else the one found here.
+   */
+  private localBundle(info: { id: string; version: string }, local = false): LoadedBay | undefined {
     const match = (b: LoadedBay) =>
       b.manifest.id === info.id && b.manifest.version === info.version;
     const here = this.found.find(match);
-    if (here) return here;
+    if (here && !local) return here;
     const roots = this.localServer.uiRoots();
     if (roots.join('\n') !== this.copies.roots) {
       this.copies = {
@@ -755,7 +760,7 @@ export class Host {
         bays: roots.flatMap((r) => discoverBays([r], this.services.hangarVersion).bays),
       };
     }
-    return this.copies.bays.find(match);
+    return this.copies.bays.find(match) ?? here;
   }
 
   /** Closes a bay's view and windows. */

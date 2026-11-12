@@ -1199,6 +1199,53 @@ describe('Host: servers', () => {
     );
   });
 
+  it('shows the local server its own copy when the app has a bay of the same version (ADR 0036, point 5)', async () => {
+    // Another build of the app, bay versions unchanged: the UI still comes from the server's copy.
+    const copy = mkdtempSync(join(tmpdir(), 'hangar-copy-'));
+    const ui = writeBay(copy, 'dev.test.a', 'Alpha');
+    const { servers, viewOf } = await started({
+      localServer: { owns: ['dev.test.a'], uiRoots: () => [copy] },
+    });
+    servers.servers = [
+      { ...connected([{ id: 'dev.test.a', version: '0.1.0' }]), local: true as const },
+    ];
+    servers.events.changed();
+    expect(viewOf('remote:srv:dev.test.a')!.webContents.loadFile).toHaveBeenCalledWith(
+      join(ui, 'index.html'),
+      undefined,
+    );
+  });
+
+  it('shows the UI of another copy once the build the local server runs is known', async () => {
+    // Before the build is known every copy counts; then only the one the server runs.
+    const [first, running] = [
+      mkdtempSync(join(tmpdir(), 'hangar-copy-')),
+      mkdtempSync(join(tmpdir(), 'hangar-copy-')),
+    ];
+    writeBay(first, 'dev.test.a', 'Alpha');
+    const ui = writeBay(running, 'dev.test.a', 'Alpha');
+    let roots = [first, running];
+    const { servers, viewOf } = await started({
+      localServer: { owns: ['dev.test.a'], uiRoots: () => roots },
+    });
+    servers.servers = [
+      { ...connected([{ id: 'dev.test.a', version: '0.1.0' }]), local: true as const },
+    ];
+    servers.events.changed();
+    const old = viewOf('remote:srv:dev.test.a')!;
+    roots = [running];
+    servers.events.changed();
+    // The view of the other copy is replaced by one of the running copy.
+    expect(old.webContents.close).toHaveBeenCalled();
+    const views = FakeView.all.filter(
+      (v) => v.options.webPreferences.partition === 'persist:bay:remote:srv:dev.test.a',
+    );
+    expect(views.at(-1)!.webContents.loadFile).toHaveBeenCalledWith(
+      join(ui, 'index.html'),
+      undefined,
+    );
+  });
+
   it('names server bays it cannot show: other version or missing here', async () => {
     const { host, servers } = await started();
     servers.servers = [

@@ -123,6 +123,7 @@ All notable changes to this project. Format based on
 
 ### Fixed
 
+- Local server: after an update of the app the server, still running the old build, shows the UI of its own copy again. Since the bays keep their version across builds, the app used to load its own, newer UI, whose calls the old server might not know (ADR 0036, point 5).
 - Agent bay: keys typed while a terminal replays its scrollback (opening it, reconnecting to the server) reach the shell again; only xterm's answers to replayed queries (device attributes, cursor and status reports, modes, colors, settings) are dropped then. F3 with Shift, Ctrl or Alt in that moment is dropped too, since it looks like a cursor report.
 - Local server: restarting it into a new build deletes the copy of the old build only once the new one is loaded. Before, the copy went first; if the old server did not stop, it kept running without its files (ADR 0036, point 1). A failed restart now also puts the old LaunchAgent back, so the next start of the app keeps the server's copy as well and still reports the old version; "Restart server" tries the new build again.
 - Relay: a failed handshake (relay closed, not reachable, error) no longer leaves its timer running for up to a minute.
