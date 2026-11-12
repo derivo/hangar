@@ -193,16 +193,24 @@ stateDiagram-v2
   Running --> Running: restart / new environment variables
   Running --> Ended: shell ends (session.exit)
   Ended --> Running: restart
-  Running --> Saved: Hangar quits (shutdown)
-  Saved --> Running: Hangar starts (restore)
+  Running --> Saved: the bay stops (shutdown)
+  Saved --> Running: the bay starts (restore)
   Running --> [*]: closeSession
   Ended --> [*]: closeSession
 ```
 
+With the local server (ADR 0036) the bay runs in the server: quitting or
+updating the app leaves shells running; shutdown and restore happen only when
+the server stops and starts.
+
 **Create** (`createSession`):
 
-- Worktree under `worktrees/<project>-<short-id>` with branch `hangar/<short-id>`
-  (first 8 characters of the session UUID), based on the current HEAD.
+- "New session" in the UI starts in the project folder (ADR 0022): no worktree,
+  no branch, `worktreePath` is `project.path`. Several sessions in one project
+  folder share its files.
+- A handover (ADR 0031) creates a worktree under `worktrees/<project>-<short-id>`
+  with branch `hangar/<short-id>` (first 8 characters of the session UUID),
+  based on the current HEAD or the handover's start point.
 - `.mcp.json` and `.claude/settings.local.json` are added to the shared
   `info/exclude` of the repository (`git rev-parse --git-common-dir`), so that
   Git ignores them.
@@ -241,16 +249,17 @@ every 5 seconds and on quit, if it has changed.
 **Restore** (`restore`, when the bay is activated):
 
 - Every saved session gets the status `idle`.
-- If the worktree exists, a new shell starts in the same worktree with the same
-  variables. The old scrollback is played back first, followed by the marker
+- If its folder (worktree or project folder) exists, a new shell starts there
+  with the same variables. The old scrollback is played back first, followed by the marker
   "— Hangar restarted —". If the old history ended in a full-screen program
   (alternate screen), that is left beforehand.
-- If the worktree is missing, the session stays in the list without a shell.
+- If the folder is missing, the session stays in the list without a shell.
 
 **Close** (`closeSession`): end the shell, invalidate the token and discard the
-session permissions, delete the scrollback file, `git worktree remove` without
-`--force`. A worktree with changes stays on disk; the branch is always kept
-(ADR 0005).
+session permissions, delete the scrollback file. A worktree session also runs
+`git worktree remove` without `--force`; a worktree with changes stays on disk,
+the branch is always kept (ADR 0005). A session in the project folder removes
+nothing else.
 
 ## Permissions and settings
 
