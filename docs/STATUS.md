@@ -90,11 +90,16 @@ manual step is needed. pnpm reports ignored build scripts of
     changes one after another).
   - Run 43090058107 (`cfb5af1`, macOS, 2026-11-11): the same `local-server.spec.ts` test
     failed all three attempts; the poll for the shell's pid (`:123`) timed out.
-    Likely cause: while the terminal replayed the scrollback after the restart,
+    One cause: while the terminal replayed the scrollback after the restart,
     it dropped every input, so `echo AFTERQUIT=$$` lost characters. Since
     2026-11-12 it drops only xterm's answers then (`terminals.ts`); 5 of 5
     local runs with `--repeat-each=5` passed. `undock.spec.ts:13` needed a
     retry in the same run, cause not known.
+  - Run 43207740369 (`985050a`, macOS, 2026-11-12): the same test failed all three
+    attempts again, with the replay fix in place; the poll for the pid after
+    `kill -9` timed out. A second run on the same commit and a rerun passed. So
+    the replay was at most part of the cause; the rest is not known. Since
+    2026-11-12 CI keeps the traces of failed attempts (artifact `e2e-results`).
 
   Still flaky (as of 2026-11-12): `local-server.spec.ts:307` (workspaces move
   into the local server) failed 2 of 5 local runs: the feeds UI got "Not
