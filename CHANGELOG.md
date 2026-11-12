@@ -123,6 +123,7 @@ All notable changes to this project. Format based on
 
 ### Fixed
 
+- Local server: restarting it into a new build deletes the copy of the old build only once the new one is loaded. Before, the copy went first; if the old server did not stop, it kept running without its files (ADR 0036, point 1). A failed restart now also puts the old LaunchAgent back, so the next start of the app keeps the server's copy as well and still reports the old version; "Restart server" tries the new build again.
 - Relay: a failed handshake (relay closed, not reachable, error) no longer leaves its timer running for up to a minute.
 - Tests: unit tests no longer fail now and then on a heavily loaded machine. `vi.waitFor` and `findBy*` gave up after 1 s without a last check, so a stalled worker failed although the answer was already there; the relay client tests (`arrives`) and the UI tests (`asyncUtilTimeout`) now wait up to 5 s, UI tests may take 20 s like the node tests. The relay tests that check a call or request timeout no longer pair with a short `callTimeoutMs` (which also bounds handshake and relay requests) but advance fake timers for the call only. The feeds UI test waited for the history but read its entries at once; the history shows (empty) before the state arrives, so it now waits for the entries.
 - Agent bay: the weekly limit in the footer says the share is free ("85 % frei"), like the 5-hour limit.

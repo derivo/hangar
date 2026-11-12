@@ -256,6 +256,20 @@ describe.skipIf(process.platform === 'win32')('ensureLocalServer', () => {
     expect(calls.map(([, sub]) => sub)).toEqual(['print', 'bootout', 'print', 'bootstrap']);
   });
 
+  it('keeps the new LaunchAgent after a failed load when the old copy is gone', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'hangar-local-app-'));
+    const { options, plist } = setup({ app: fakeApp(base), executable: 'Hangar' });
+    await ensureLocalServer({ ...options, version: '1.1.0' });
+    rmSync(join(options.userData, 'local-server', 'runtime', '1.1.0'), { recursive: true });
+    const failing = {
+      ...options,
+      run: async (cmd: string, args: string[]) =>
+        cmd === 'launchctl' && args[0] === 'bootstrap' ? 5 : options.run(cmd, args),
+    };
+    await expect(ensureLocalServer(failing)).rejects.toThrow('exit code 5');
+    expect(strings(plist(), 'ProgramArguments')[0]).toContain(join('runtime', '1.2.0'));
+  });
+
   it('writes the LaunchAgent anew when the copy it runs from is gone', async () => {
     const base = mkdtempSync(join(tmpdir(), 'hangar-local-app-'));
     const { options, plist, calls } = setup({ app: fakeApp(base), executable: 'Hangar' });
@@ -328,6 +342,29 @@ describe.skipIf(process.platform === 'win32')('ensureLocalServer', () => {
       vi.useRealTimers();
     }
     expect(calls.at(-1)?.[1]).toBe('bootstrap');
+  });
+
+  it('keeps the copy the old server runs from while it does not stop (ADR 0036, point 1)', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'hangar-local-app-'));
+    const { options, calls } = setup({ app: fakeApp(base), executable: 'Hangar' });
+    const runtime = join(options.userData, 'local-server', 'runtime');
+    await ensureLocalServer({ ...options, version: '1.1.0' });
+    vi.useFakeTimers();
+    try {
+      const result = expect(
+        ensureLocalServer(unloading(options, calls, Infinity), true),
+      ).rejects.toThrow('exit code 5');
+      await vi.advanceTimersByTimeAsync(30_000);
+      await result;
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(existsSync(join(runtime, '1.1.0'))).toBe(true);
+    // The plist names the program launchd still runs, so the next start keeps its copy too.
+    const stuck = unloading(options, calls, Infinity);
+    await stuck.run('launchctl', ['bootout']);
+    expect((await ensureLocalServer(stuck)).version).toBe('1.1.0');
+    expect(existsSync(join(runtime, '1.1.0'))).toBe(true);
   });
 
   it('fails when launchd does not load the service, instead of waiting for a server', async () => {
