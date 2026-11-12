@@ -378,12 +378,6 @@ export async function ensureLocalServer(
     writeFileSync(plistFile, plist(label, args, join(data, 'server.log'), o.env));
   }
   const used = readFileSync(plistFile, 'utf8');
-  if (existsSync(runtime)) {
-    for (const version of readdirSync(runtime)) {
-      if (version !== name && !used.includes(escape(join(runtime, version) + sep)))
-        rmSync(join(runtime, version), { recursive: true, force: true });
-    }
-  }
   const domain = `gui/${o.uid}`;
   const loaded = (await o.run('launchctl', ['print', `${domain}/${label}`])) === 0;
   // A loaded service keeps the program it was loaded with: a new plist needs a new load.
@@ -393,7 +387,18 @@ export async function ensureLocalServer(
   }
   if (!loaded || !kept) {
     const code = await o.run('launchctl', ['bootstrap', domain, plistFile]);
-    if (code !== 0) throw new Error(`launchctl bootstrap ${label} failed (exit code ${code})`);
+    if (code !== 0) {
+      // The old server may still run: the plist keeps naming its program, so its copy stays.
+      if (!kept && program && existsSync(unescape(program[1]!))) writeFileSync(plistFile, current!);
+      throw new Error(`launchctl bootstrap ${label} failed (exit code ${code})`);
+    }
+  }
+  // Only now the old server is gone: a copy it still runs from must stay (ADR 0036, point 1).
+  if (existsSync(runtime)) {
+    for (const version of readdirSync(runtime)) {
+      if (version !== name && !used.includes(escape(join(runtime, version) + sep)))
+        rmSync(join(runtime, version), { recursive: true, force: true });
+    }
   }
   const version = new RegExp(`<string>${escapeRegExp(escape(runtime + sep))}([^/<]+)/`).exec(used);
   return {
