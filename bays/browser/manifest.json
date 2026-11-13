@@ -12,19 +12,19 @@
       "name": "tab.open",
       "sensitive": false,
       "openToAgents": true,
-      "description": "Opens a web page in a new tab of your own (http or https; localhost:5173 means http://localhost:5173) and waits up to 30 seconds for it to load. Your tabs have their own cookies, separate from the person's and other agents'. Returns the tab with id, url, title and error if loading failed."
+      "description": "Opens a web page in a new tab of your own (http or https; localhost:5173 means http://localhost:5173) and waits up to 30 seconds for it to load. Your tabs have their own cookies, separate from the person's and other agents'. Returns the tab with id, url, title, error if loading failed, status (HTTP status of the page) and errors (number of errors on the page; details with page.errors)."
     },
     {
       "name": "tab.navigate",
       "sensitive": false,
       "openToAgents": true,
-      "description": "Loads another address in one of your tabs and waits up to 30 seconds. Returns the tab."
+      "description": "Loads another address in one of your tabs and waits up to 30 seconds. Returns the tab, with error, status and errors as tab.open."
     },
     {
       "name": "tab.list",
       "sensitive": false,
       "openToAgents": true,
-      "description": "Lists your own tabs with id, url, title, loading and error."
+      "description": "Lists your own tabs with id, url, title, loading, error, status and errors."
     },
     {
       "name": "tab.close",
@@ -49,6 +49,12 @@
       "sensitive": false,
       "openToAgents": true,
       "description": "Sets the value of the first input, textarea or select matching a CSS selector in one of your tabs, as if typed."
+    },
+    {
+      "name": "page.errors",
+      "sensitive": false,
+      "openToAgents": true,
+      "description": "Returns the errors and warnings of the page in one of your tabs, oldest first (at most 200): the page itself failing to load or answering with HTTP 400 or higher, console errors and warnings (uncaught exceptions included), and other requests that failed. Pass since (milliseconds since the epoch, the time of an entry) to get only newer entries. The list starts over when the tab loads another page."
     },
     {
       "name": "page.screenshot",

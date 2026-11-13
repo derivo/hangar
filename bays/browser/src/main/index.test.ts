@@ -46,6 +46,7 @@ describe('browser bay: agents', () => {
       ['page.click', { id: 't2', selector: 'a' }],
       ['page.fill', { id: 't2', selector: 'input', value: 'x' }],
       ['page.screenshot', { id: 't3' }],
+      ['page.errors', { id: 't2' }],
     ] as const) {
       await expect(fake.call(name, args, fake.session('s1'))).rejects.toThrow('Unknown tab "');
     }
@@ -276,5 +277,63 @@ describe('browser bay: agents of the local server (ADR 0036)', () => {
     });
     fake.endSession('s1', 'local-server:dev.hangar.agents');
     expect([...fake.tabs.values()].map((t) => t.url)).toEqual(['https://b.test', 'https://c.test']);
+  });
+});
+
+describe('browser bay: page errors and find (ADR 0042)', () => {
+  const error = (time: number, message: string) => ({
+    time,
+    kind: 'console' as const,
+    level: 'error' as const,
+    message,
+  });
+
+  it('gives an agent the errors of its tab, with since only the newer ones', async () => {
+    const fake = await setup();
+    await fake.call('tab.open', { url: 'https://a.test' }, fake.session('s1'));
+    fake.tabs.get('t1')!.pageErrors = [error(100, 'old'), error(200, 'new')];
+
+    expect(await fake.call('page.errors', { id: 't1' }, fake.session('s1'))).toEqual({
+      errors: [error(100, 'old'), error(200, 'new')],
+    });
+    expect(await fake.call('page.errors', { id: 't1', since: 100 }, fake.session('s1'))).toEqual({
+      errors: [error(200, 'new')],
+    });
+    await expect(
+      fake.call('page.errors', { id: 't1', since: 'x' }, fake.session('s1')),
+    ).rejects.toThrow('Invalid arguments: since:');
+  });
+
+  it('gives the UI the errors of any tab, finds and stops finding', async () => {
+    const fake = await setup();
+    await fake.call('tab.open', { url: 'https://a.test' }, fake.session('s1'));
+    fake.tabs.get('t1')!.pageErrors = [error(100, 'boom')];
+
+    expect(await fake.invoke('tab.errors', 't1')).toEqual([error(100, 'boom')]);
+    await fake.invoke('tab.find', 't1', 'Hangar', { forward: false, next: true });
+    expect(fake.browser.find).toHaveBeenCalledWith('t1', 'Hangar', {
+      forward: false,
+      next: true,
+    });
+    await fake.invoke('tab.stopFind', 't1');
+    expect(fake.browser.stopFind).toHaveBeenCalledWith('t1');
+    await fake.invoke('tab.focus', 't1');
+    expect(fake.browser.focus).toHaveBeenCalledWith('t1');
+  });
+
+  it('tells the UI when the person presses Cmd/Ctrl+F in a page', async () => {
+    const fake = await setup();
+    await fake.invoke('tab.open', 'https://a.test');
+    fake.requestFind('t1');
+    expect(fake.ctx.ui.send).toHaveBeenLastCalledWith('find', 't1');
+  });
+
+  it('lets the person trust a refused certificate, and no agent (ADR 0043)', async () => {
+    const fake = await setup();
+    await fake.call('tab.open', { url: 'https://self.test' }, fake.session('s1'));
+    const shown = { host: 'self.test', fingerprint: 'sha256/abc' };
+    await fake.invoke('tab.trustCertificate', 't1', shown);
+    expect(fake.browser.trustCertificate).toHaveBeenCalledWith('t1', shown);
+    expect([...fake.functions.keys()].filter((name) => /trust|cert/i.test(name))).toEqual([]);
   });
 });

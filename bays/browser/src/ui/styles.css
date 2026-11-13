@@ -22,7 +22,12 @@ body {
   display: grid;
   /* minmax(0, …): the column must not grow to the tabs' min-content (overflow at 200 % zoom). */
   grid-template-columns: minmax(0, 1fr);
+  /* Tab bar, toolbar, find bar (only while finding), messages, page with error panel. */
   grid-template-rows: auto auto auto minmax(0, 1fr);
+}
+
+.layout:has(.findbar) {
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
 }
 
 .muted {
@@ -136,10 +141,100 @@ body {
   color: var(--hangar-color-danger);
 }
 
+/* Page and, below it, the error panel: the panel shrinks the page, the tab view never covers it. */
+.main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 /* The page is a host view laid over this area; without a tab it shows the background. */
 .page {
   position: relative;
+  flex: 1;
+  min-height: 0;
   background-color: var(--hangar-color-bg);
+}
+
+/* Shown instead of a page that failed to load (ADR 0042). */
+.load-error {
+  padding: var(--hangar-space-6) var(--hangar-space-4);
+  overflow-wrap: anywhere;
+}
+
+.load-error h2 {
+  margin: 0 0 var(--hangar-space-3);
+  font-size: var(--hangar-font-size-lg);
+}
+
+.load-error p {
+  margin: 0 0 var(--hangar-space-2);
+}
+
+.load-error .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hangar-space-2);
+  margin-top: var(--hangar-space-4);
+}
+
+/* Read out, not shown: the tab's errors in words. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Error count on a tab: the person sees a broken page without opening it. */
+.tab-errors {
+  flex: none;
+  padding: 0 var(--hangar-space-1);
+  border-radius: 4px;
+  background: var(--hangar-color-danger);
+  color: var(--hangar-color-bg);
+  font-size: var(--hangar-font-size-sm);
+  font-weight: 600;
+}
+
+.button.error {
+  border-color: var(--hangar-color-danger);
+  color: var(--hangar-color-danger);
+}
+
+.errors-panel {
+  max-height: 40%;
+  overflow: auto;
+  padding: var(--hangar-space-2) var(--hangar-space-3);
+  border-top: 1px solid var(--hangar-color-border);
+  background: var(--hangar-color-surface-raised);
+  font-size: var(--hangar-font-size-sm);
+}
+
+.errors-panel ol {
+  margin: var(--hangar-space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.errors-panel li {
+  padding: var(--hangar-space-1) 0;
+  border-top: 1px solid var(--hangar-color-border);
+  overflow-wrap: anywhere;
+}
+
+.errors-panel p {
+  margin: var(--hangar-space-2) 0 0;
+}
+
+.findbar {
+  display: flex;
+  align-items: center;
+  gap: var(--hangar-space-1);
+  padding: 0 var(--hangar-space-3) var(--hangar-space-2);
+  background: var(--hangar-color-surface-raised);
 }
 
 .empty {

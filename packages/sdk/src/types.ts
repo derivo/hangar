@@ -218,6 +218,40 @@ export interface BrowserTab {
   openerId?: string;
   /** Page zoom in percent; absent at 100 %. */
   zoom?: number;
+  /** HTTP status of the main document; absent before the first response (ADR 0042). */
+  status?: number;
+  /** Number of {@link PageError} entries of level `error`; absent at 0. */
+  errors?: number;
+  /** Result of the running {@link BayBrowser.find}. */
+  find?: {
+    /** The highlighted match, counted from 1; 0 without matches. */
+    active: number;
+    /** All matches in the page. */
+    matches: number;
+  };
+  /** Certificate the page was refused with, until the next load (ADR 0043). */
+  certificate?: {
+    /** Host name of the page, without port. */
+    host: string;
+    /** SHA-256 fingerprint, as Electron gives it (`sha256/…`). */
+    fingerprint: string;
+  };
+}
+
+/** An error or warning of a page, collected by the host per tab (ADR 0042). */
+export interface PageError {
+  /** Milliseconds since the epoch. */
+  time: number;
+  /** `load`: the page itself; `console`: a console message; `request`: another request. */
+  kind: 'load' | 'console' | 'request';
+  /** Console warnings are `warning`; everything else is `error`. */
+  level: 'error' | 'warning';
+  /** Error text, e.g. `HTTP 404`, `net::ERR_CONNECTION_REFUSED` or the console message. */
+  message: string;
+  /** Script or request address. */
+  source?: string;
+  /** Line in `source`. */
+  line?: number;
 }
 
 /** Where a tab keeps cookies and storage; always inside the bay's own namespace. */
@@ -277,6 +311,28 @@ export interface BayBrowser {
   screenshot(id: string): Promise<Uint8Array>;
   /** Runs a script in the page and resolves with its (JSON-serialisable) result. */
   evaluate(id: string, script: string): Promise<unknown>;
+  /** Errors and warnings of the current page, oldest first (at most 200). */
+  errors(id: string): PageError[];
+  /**
+   * Finds `text` in the page; the result arrives as `find` of the tab. `next` goes to the
+   * next (or with `forward: false` the previous) match of the running search.
+   */
+  find(id: string, text: string, options?: { forward?: boolean; next?: boolean }): void;
+  /** Ends finding and clears the highlight. */
+  stopFind(id: string): void;
+  /** Gives the page the keyboard focus, e.g. after the find bar closed. */
+  focus(id: string): void;
+  /** Called with the tab id when the person presses Cmd/Ctrl+F in a page. */
+  onFindRequest(listener: (id: string) => void): void;
+  /**
+   * Trusts the certificate the tab's page was refused with (`BrowserTab.certificate`) for its
+   * host in every tab until Hangar quits, and loads the page again (ADR 0043). Only for the
+   * person: offer it in the bay UI, never as a function for agents.
+   * @param shown Host and fingerprint the person saw; binds the click to them.
+   * @throws Without a refused certificate, or when the tab's host or certificate is another
+   *   one now.
+   */
+  trustCertificate(id: string, shown: { host: string; fingerprint: string }): Promise<void>;
 }
 
 /**

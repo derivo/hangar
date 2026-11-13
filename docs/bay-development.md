@@ -349,6 +349,16 @@ With `"hostModules": ["browser"]` in the manifest, the main part gets
   sets it back.
 - `evaluate(id, script)` runs a script in the page; `screenshot(id)`
   returns a PNG.
+- `errors(id)` lists errors and warnings of the page (failed load or HTTP
+  400+, console, failed requests; ADR 0042); `list` names `status` and the
+  error count `errors`. `find(id, text, { forward, next })` and
+  `stopFind(id)` find in the page, the result comes as `find` of the tab;
+  `focus(id)` gives the page the keyboard focus;
+  `onFindRequest(listener)` hears Cmd/Ctrl+F pressed in a page.
+  `trustCertificate(id, { host, fingerprint })` trusts the certificate a page
+  was refused with (`certificate` of the tab, as shown to the person)
+  for its host until Hangar quits and loads the page again (ADR 0043); offer it
+  only to the person, never to agents.
 - Partitions only apply within the bay; `persist: true` keeps cookies
   across restarts. Only http, https and `about:blank` are loaded, web pages
   receive no permissions (camera, location …).

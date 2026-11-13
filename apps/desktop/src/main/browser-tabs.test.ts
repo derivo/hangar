@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BrowserTab } from '@hangar/sdk';
 
 /** A fake web page: events, a URL, a history; `loadURL` answers as `nextLoad` says. */
+let nextContentsId = 0;
 class FakeContents extends EventEmitter {
+  id = ++nextContentsId;
   url = '';
   title = '';
   zoom = 1;
@@ -18,6 +20,9 @@ class FakeContents extends EventEmitter {
     goForward: vi.fn(),
   };
   reload = vi.fn();
+  focus = vi.fn();
+  findInPage = vi.fn(() => 1);
+  stopFindInPage = vi.fn();
   executeJavaScript = vi.fn(async () => 'result');
   capturePage = vi.fn(async () => ({ toPNG: () => Buffer.from('png') }));
   loadURL(url: string) {
@@ -79,6 +84,8 @@ const sessions = new Map<
   {
     request?: (wc: unknown, permission: string, callback: (ok: boolean) => void) => void;
     check?: () => boolean;
+    completed?: (details: Record<string, unknown>) => void;
+    failed?: (details: Record<string, unknown>) => void;
   }
 >();
 
@@ -91,6 +98,10 @@ vi.mock('electron', () => ({
       return {
         setPermissionRequestHandler: (h: NonNullable<typeof ses.request>) => (ses.request = h),
         setPermissionCheckHandler: (h: NonNullable<typeof ses.check>) => (ses.check = h),
+        webRequest: {
+          onCompleted: (l: NonNullable<typeof ses.completed>) => (ses.completed = l),
+          onErrorOccurred: (l: NonNullable<typeof ses.failed>) => (ses.failed = l),
+        },
       };
     },
   },
@@ -522,5 +533,398 @@ describe('BrowserTabs: showing over a bay UI', () => {
     tabs.show(ui as never, 'dev.hangar.browser', undefined);
     expect(undocked.children).toEqual([FakeView.all[0]]);
     expect(FakeView.all[0]!.visible).toBe(false);
+  });
+});
+
+describe('BrowserTabs: page errors (ADR 0042)', () => {
+  const partition = 'bay-browser:dev.hangar.browser:default';
+
+  it('collects console errors and warnings, not info or debug', async () => {
+    const { browser, open, last } = setup();
+    const id = await open();
+    const wc = FakeView.all[0]!.webContents;
+    const log = (level: string, message: string) =>
+      wc.emit('console-message', { level, message, lineNumber: 7, sourceId: 'https://x/app.js' });
+    log('info', 'hello');
+    log('debug', 'details');
+    log('warning', 'deprecated');
+    log('error', 'Uncaught TypeError: x is undefined');
+    expect(browser.errors(id)).toEqual([
+      {
+        time: expect.any(Number),
+        kind: 'console',
+        level: 'warning',
+        message: 'deprecated',
+        source: 'https://x/app.js',
+        line: 7,
+      },
+      {
+        time: expect.any(Number),
+        kind: 'console',
+        level: 'error',
+        message: 'Uncaught TypeError: x is undefined',
+        source: 'https://x/app.js',
+        line: 7,
+      },
+    ]);
+    // Only errors count; warnings do not.
+    expect(last()[0]!.errors).toBe(1);
+  });
+
+  it('reports the status of the page, a failing status as a load error, and failed requests of its own page only', async () => {
+    const { browser, open, last } = setup();
+    const id = await open();
+    const other = await open('https://other.example');
+    const wc = FakeView.all[0]!.webContents;
+    const ses = sessions.get(partition)!;
+    const done = (details: Record<string, unknown>) =>
+      ses.completed!({ webContentsId: wc.id, ...details });
+    wc.emit('did-navigate', {}, 'https://example.com/', 500, 'Internal Server Error');
+    // The main document's response is no request error of its own: did-navigate names it.
+    done({ url: 'https://example.com/', resourceType: 'mainFrame', statusCode: 500 });
+    done({ url: 'https://example.com/ok.js', resourceType: 'script', statusCode: 200 });
+    done({ url: 'https://example.com/api', resourceType: 'xhr', statusCode: 404 });
+    ses.failed!({
+      webContentsId: wc.id,
+      url: 'https://x/a',
+      resourceType: 'image',
+      error: 'net::ERR_ABORTED',
+    });
+    ses.failed!({
+      webContentsId: wc.id,
+      url: 'https://example.com/',
+      resourceType: 'mainFrame',
+      error: 'net::ERR_FAILED',
+    });
+    ses.failed!({
+      webContentsId: wc.id,
+      url: 'http://localhost:9/ws',
+      resourceType: 'xhr',
+      error: 'net::ERR_CONNECTION_REFUSED',
+    });
+    ses.completed!({ url: 'https://example.com/bg', resourceType: 'xhr', statusCode: 500 });
+    ses.completed!({
+      webContentsId: 999,
+      url: 'https://example.com/z',
+      resourceType: 'xhr',
+      statusCode: 500,
+    });
+    expect(
+      browser
+        .errors(id)
+        .map(({ kind, level, message, source }) => ({ kind, level, message, source })),
+    ).toEqual([
+      { kind: 'load', level: 'error', message: 'HTTP 500', source: 'https://example.com/' },
+      { kind: 'request', level: 'error', message: 'HTTP 404', source: 'https://example.com/api' },
+      {
+        kind: 'request',
+        level: 'error',
+        message: 'net::ERR_CONNECTION_REFUSED',
+        source: 'http://localhost:9/ws',
+      },
+    ]);
+    expect(last()[0]).toMatchObject({ status: 500, errors: 3 });
+    expect(browser.errors(other)).toEqual([]);
+    expect(last()[1]).not.toHaveProperty('errors');
+    expect(last()[1]).not.toHaveProperty('status');
+  });
+
+  it('records a failed load of the main frame', async () => {
+    const { browser, open } = setup();
+    const id = await open();
+    const wc = FakeView.all[0]!.webContents;
+    wc.emit('did-fail-load', {}, -202, 'ERR_CERT_AUTHORITY_INVALID', 'https://self.test/', true);
+    expect(browser.errors(id)).toEqual([
+      {
+        time: expect.any(Number),
+        kind: 'load',
+        level: 'error',
+        message: 'ERR_CERT_AUTHORITY_INVALID',
+        source: 'https://self.test/',
+      },
+    ]);
+  });
+
+  it('starts over when the page navigates to another document, and keeps at most 200 entries', async () => {
+    const { browser, open, last } = setup();
+    const id = await open();
+    const wc = FakeView.all[0]!.webContents;
+    for (let i = 0; i < 205; i++)
+      wc.emit('console-message', { level: 'error', message: `e${i}`, lineNumber: 1, sourceId: '' });
+    expect(browser.errors(id)).toHaveLength(200);
+    expect(browser.errors(id)[0]!.message).toBe('e5');
+    // Starting to load another page keeps the old one's errors: it is still shown (Codex).
+    wc.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false });
+    wc.emit('console-message', { level: 'error', message: 'old', lineNumber: 1, sourceId: '' });
+    expect(browser.errors(id).at(-1)!.message).toBe('old');
+    // The new document replaces it: its errors start empty, with its status.
+    wc.emit('did-navigate', {}, 'https://example.com/next', 200, 'OK');
+    expect(browser.errors(id)).toEqual([]);
+    expect(last()[0]).not.toHaveProperty('errors');
+    expect(last()[0]!.status).toBe(200);
+  });
+
+  it('replaces the errors and status of the previous page by a failed load (Codex)', async () => {
+    const { browser, open, last } = setup();
+    const id = await open();
+    const wc = FakeView.all[0]!.webContents;
+    wc.emit('did-navigate', {}, 'https://example.com/', 500, 'Internal Server Error');
+    wc.emit('console-message', { level: 'error', message: 'old', lineNumber: 1, sourceId: '' });
+    // A load Electron refuses before navigating (invalid URL) keeps the shown page's list.
+    wc.emit('did-fail-load', {}, -300, 'ERR_INVALID_URL', 'https://example.test:99999/', true);
+    expect(browser.errors(id).map((e) => e.message)).toEqual([
+      'HTTP 500',
+      'old',
+      'ERR_INVALID_URL',
+    ]);
+    expect(last()[0]!.status).toBe(500);
+    // Electron shows its error page without did-navigate.
+    wc.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false });
+    wc.emit('did-fail-load', {}, -102, 'ERR_CONNECTION_REFUSED', 'http://127.0.0.1:9/', true);
+    expect(browser.errors(id).map((e) => e.message)).toEqual(['ERR_CONNECTION_REFUSED']);
+    expect(last()[0]).not.toHaveProperty('status');
+    expect(last()[0]!.errors).toBe(1);
+  });
+
+  it("keeps a tab's errors from other bays", async () => {
+    const { tabs, open } = setup();
+    const id = await open();
+    expect(() => tabs.forBay('dev.hangar.other').errors(id)).toThrow(`Unknown tab "${id}"`);
+  });
+});
+
+describe('BrowserTabs: find in page (ADR 0042)', () => {
+  it('finds, reports the final result with the tab and stops', async () => {
+    const { browser, open, last } = setup();
+    const id = await open();
+    const wc = FakeView.all[0]!.webContents;
+    // Electron's findNext is true for a new search and false for the next match (Codex).
+    browser.find(id, 'Hangar');
+    expect(wc.findInPage).toHaveBeenLastCalledWith('Hangar', { forward: true, findNext: true });
+    browser.find(id, 'Hangar', { forward: false, next: true });
+    expect(wc.findInPage).toHaveBeenLastCalledWith('Hangar', { forward: false, findNext: false });
+    wc.emit('found-in-page', {}, { activeMatchOrdinal: 1, matches: 0, finalUpdate: false });
+    expect(last()[0]).not.toHaveProperty('find');
+    wc.emit('found-in-page', {}, { activeMatchOrdinal: 3, matches: 17, finalUpdate: true });
+    expect(last()[0]!.find).toEqual({ active: 3, matches: 17 });
+    browser.stopFind(id);
+    expect(wc.stopFindInPage).toHaveBeenCalledWith('clearSelection');
+    expect(wc.focus).not.toHaveBeenCalled();
+    browser.focus(id);
+    expect(wc.focus).toHaveBeenCalled();
+    expect(last()[0]).not.toHaveProperty('find');
+  });
+
+  it('takes Cmd/Ctrl+F from the page: focuses the bay UI and asks the bay to open its find bar', async () => {
+    const { tabs, main, browser, open, place } = setup();
+    tabs.attach(main as never);
+    const id = await open();
+    const wc = FakeView.all[0]!.webContents;
+    const requests: string[] = [];
+    browser.onFindRequest((tab) => requests.push(tab));
+    const mod = process.platform === 'darwin' ? { meta: true } : { control: true };
+    const press = (input: Record<string, unknown>) => {
+      const e = { preventDefault: vi.fn() };
+      wc.emit('before-input-event', e, { type: 'keyDown', ...input });
+      return e.preventDefault;
+    };
+    // Not shown anywhere: the bay still hears of it, nothing to focus.
+    expect(press({ ...mod, key: 'f' })).toHaveBeenCalled();
+    const { ui } = place();
+    tabs.show(ui as never, 'dev.hangar.browser', id, { x: 0, y: 0, width: 10, height: 10 });
+    expect(press({ ...mod, key: 'F', shift: true })).not.toHaveBeenCalled();
+    expect(press({ key: 'f' })).not.toHaveBeenCalled();
+    expect(press({ ...mod, key: 'f' })).toHaveBeenCalled();
+    expect(ui.focus).toHaveBeenCalledTimes(1);
+    expect(requests).toEqual([id, id]);
+  });
+});
+
+describe('BrowserTabs: trusting a certificate (ADR 0043)', () => {
+  const certError = (wc: FakeContents, url: string, fingerprint: string, isMainFrame = true) => {
+    const e = { preventDefault: vi.fn() };
+    const callback = vi.fn();
+    const certificate = { fingerprint };
+    wc.emit(
+      'certificate-error',
+      e,
+      url,
+      'net::ERR_CERT_AUTHORITY_INVALID',
+      certificate,
+      callback,
+      isMainFrame,
+    );
+    return {
+      trusted: callback.mock.calls[0]?.[0] as boolean,
+      prevented: e.preventDefault.mock.calls.length > 0,
+    };
+  };
+
+  it('refuses an unknown certificate and offers it with the tab, until the next load', async () => {
+    const { open, last } = setup();
+    await open();
+    const wc = FakeView.all[0]!.webContents;
+    expect(certError(wc, 'https://self.test:8443/app', 'sha256/abc')).toEqual({
+      trusted: false,
+      prevented: false,
+    });
+    expect(last()[0]!.certificate).toEqual({ host: 'self.test', fingerprint: 'sha256/abc' });
+    // A frame inside the page is not what the person sees refused.
+    certError(wc, 'https://ads.test/', 'sha256/other', false);
+    expect(last()[0]!.certificate).toEqual({ host: 'self.test', fingerprint: 'sha256/abc' });
+    wc.emit('did-start-loading');
+    expect(last()[0]).not.toHaveProperty('certificate');
+  });
+
+  it('trusts the refused certificate for its host in every tab and loads the page again', async () => {
+    const { tabs, browser, open } = setup();
+    const id = await open();
+    const other = tabs.forBay('dev.hangar.other');
+    await other.open('https://example.com/');
+    const [wc, otherWc] = [FakeView.all[0]!.webContents, FakeView.all[1]!.webContents];
+    certError(wc, 'https://self.test:8443/app', 'sha256/abc');
+    const load = vi.spyOn(wc, 'loadURL');
+    await browser.trustCertificate(id, { host: 'self.test', fingerprint: 'sha256/abc' });
+    expect(load).toHaveBeenCalledWith('https://self.test:8443/app');
+    expect(certError(wc, 'https://self.test:8443/app', 'sha256/abc')).toEqual({
+      trusted: true,
+      prevented: true,
+    });
+    // Same host, other port, a frame, another bay's tab: the same certificate is trusted there.
+    expect(certError(otherWc, 'https://self.test:3000/', 'sha256/abc', false).trusted).toBe(true);
+    // Another certificate of the host, or the certificate for another host: refused.
+    expect(certError(wc, 'https://self.test:8443/', 'sha256/new').trusted).toBe(false);
+    expect(certError(wc, 'https://evil.test/', 'sha256/abc').trusted).toBe(false);
+  });
+
+  it('trusts nothing without a refused certificate, and not for tabs of other bays', async () => {
+    const { tabs, browser, open } = setup();
+    const id = await open();
+    await expect(
+      browser.trustCertificate(id, { host: 'self.test', fingerprint: 'sha256/abc' }),
+    ).rejects.toThrow('No refused certificate');
+    certError(FakeView.all[0]!.webContents, 'https://self.test/', 'sha256/abc');
+    expect(() =>
+      tabs
+        .forBay('dev.hangar.other')
+        .trustCertificate(id, { host: 'self.test', fingerprint: 'sha256/abc' }),
+    ).toThrow(`Unknown tab "${id}"`);
+  });
+
+  it('trusts only the certificate the person saw (Codex)', async () => {
+    const { browser, open } = setup();
+    const id = await open();
+    const wc = FakeView.all[0]!.webContents;
+    certError(wc, 'https://b.test/', 'sha256/b');
+    const load = vi.spyOn(wc, 'loadURL');
+    // The person saw A; the agent moved the tab to B meanwhile.
+    await expect(
+      browser.trustCertificate(id, { host: 'b.test', fingerprint: 'sha256/a' }),
+    ).rejects.toThrow('The certificate changed');
+    // Same certificate, another host (a shared dev certificate): refused too (Codex round 2).
+    await expect(
+      browser.trustCertificate(id, { host: 'a.test', fingerprint: 'sha256/b' }),
+    ).rejects.toThrow('The certificate changed');
+    expect(load).not.toHaveBeenCalled();
+    expect(certError(wc, 'https://b.test/', 'sha256/b').trusted).toBe(false);
+  });
+
+  it('drops the certificate when another navigation starts, the error when a page commits (Codex)', async () => {
+    const { open, last } = setup();
+    await open();
+    const wc = FakeView.all[0]!.webContents;
+    certError(wc, 'https://a.test/', 'sha256/a');
+    wc.emit('did-fail-load', {}, -202, 'ERR_CERT_AUTHORITY_INVALID', 'https://a.test/', true);
+    // B starts while the load of A has not stopped: no new did-start-loading.
+    wc.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false });
+    expect(last()[0]).not.toHaveProperty('certificate');
+    wc.emit('did-navigate', {}, 'https://b.test/', 200, 'OK');
+    expect(last()[0]).not.toHaveProperty('error');
+  });
+});
+
+describe('BrowserTabs: OpenCode review (ADR 0042)', () => {
+  it('caps the text of an entry', async () => {
+    const { browser, open } = setup();
+    const id = await open();
+    const wc = FakeView.all[0]!.webContents;
+    const long = 'x'.repeat(50_000);
+    wc.emit('console-message', { level: 'error', message: long, lineNumber: 1, sourceId: long });
+    const [entry] = browser.errors(id);
+    expect(entry!.message.length).toBeLessThanOrEqual(2_000);
+    expect(entry!.message.endsWith('…')).toBe(true);
+    expect(entry!.source!.length).toBeLessThanOrEqual(2_000);
+  });
+
+  it('has no status for a page without HTTP, and forgets the find result of the old page', async () => {
+    const { browser, open, last } = setup();
+    const id = await open();
+    const wc = FakeView.all[0]!.webContents;
+    browser.find(id, 'x');
+    wc.emit('found-in-page', {}, { activeMatchOrdinal: 1, matches: 3, finalUpdate: true });
+    wc.emit('did-navigate', {}, 'about:blank', -1, '');
+    expect(last()[0]).not.toHaveProperty('status');
+    expect(last()[0]).not.toHaveProperty('find');
+  });
+
+  it('ends a navigation that never commits (HTTP 204, abort): a later refused load keeps the page', async () => {
+    const { browser, open, last } = setup();
+    const id = await open();
+    const wc = FakeView.all[0]!.webContents;
+    wc.emit('did-navigate', {}, 'https://a.test/', 500, 'Internal Server Error');
+    wc.emit('did-start-navigation', {
+      isMainFrame: true,
+      isSameDocument: false,
+      url: 'https://a.test/204',
+    });
+    // Electron 45 emits no event for a navigation without commit, loading just stops (Codex).
+    wc.emit('did-stop-loading');
+    wc.emit('did-fail-load', {}, -300, 'ERR_INVALID_URL', 'https://example.test:99999/', true);
+    expect(last()[0]!.status).toBe(500);
+    expect(browser.errors(id).map((e) => e.message)).toEqual(['HTTP 500', 'ERR_INVALID_URL']);
+  });
+
+  it('keeps the next navigation when the aborted one reports late', async () => {
+    const { browser, open } = setup();
+    const id = await open();
+    const wc = FakeView.all[0]!.webContents;
+    wc.emit('did-navigate', {}, 'https://a.test/', 500, 'Internal Server Error');
+    wc.emit('did-start-navigation', {
+      isMainFrame: true,
+      isSameDocument: false,
+      url: 'https://one.test/',
+    });
+    wc.emit('did-start-navigation', {
+      isMainFrame: true,
+      isSameDocument: false,
+      url: 'https://two.test/',
+    });
+    wc.emit('did-fail-load', {}, -102, 'ERR_CONNECTION_REFUSED', 'https://two.test/', true);
+    expect(browser.errors(id).map((e) => e.message)).toEqual(['ERR_CONNECTION_REFUSED']);
+  });
+
+  it('forgets the find result when a started navigation fails (Codex)', async () => {
+    const { browser, open, last } = setup();
+    const id = await open();
+    const wc = FakeView.all[0]!.webContents;
+    browser.find(id, 'x');
+    wc.emit('found-in-page', {}, { activeMatchOrdinal: 2, matches: 7, finalUpdate: true });
+    wc.emit('did-start-navigation', {
+      isMainFrame: true,
+      isSameDocument: false,
+      url: 'http://127.0.0.1:9/',
+    });
+    // Real Electron reports the refusal as provisional failure first (E2E).
+    wc.emit(
+      'did-fail-provisional-load',
+      {},
+      -102,
+      'ERR_CONNECTION_REFUSED',
+      'http://127.0.0.1:9/',
+      true,
+    );
+    wc.emit('did-fail-load', {}, -102, 'ERR_CONNECTION_REFUSED', 'http://127.0.0.1:9/', true);
+    expect(last()[0]).not.toHaveProperty('find');
+    expect(browser.errors(id).map((e) => e.message)).toEqual(['ERR_CONNECTION_REFUSED']);
   });
 });
