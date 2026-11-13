@@ -98,6 +98,10 @@ function fakeApi(initial: ShellState) {
     getLocalServer: vi.fn(async () => null),
     setLocalServer: vi.fn(async () => {}),
     relaunch: vi.fn(),
+    getNotifications: vi.fn(async () => ({ supported: true, platform: 'darwin' })),
+    testNotification: vi.fn(async () => ({ result: 'shown' as const })),
+    openNotificationSettings: vi.fn(async () => {}),
+    onNotifications: vi.fn(() => () => {}),
     onState: (l) => {
       listener = l;
       return () => {};

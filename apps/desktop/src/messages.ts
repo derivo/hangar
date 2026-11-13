@@ -213,6 +213,33 @@ const de = {
   afterRelaunch: 'Gilt nach dem Neustart von Hangar.',
   localServerForced: 'Festgelegt durch HANGAR_LOCAL_SERVER.',
   relaunch: 'Hangar neu starten',
+  // System notifications (ADR 0044)
+  notifications: 'Mitteilungen',
+  notificationsHint:
+    'Hangar meldet sich, wenn ein Agent auf dich wartet. Ob die Mitteilung erscheint, entscheidet das System.',
+  notificationsUnsupported:
+    'Dieses System zeigt keine Mitteilungen von Hangar (unter Linux fehlt meist libnotify).',
+  notificationsFailed: (error: string) =>
+    `Das System hat die letzte Mitteilung abgelehnt: ${error}`,
+  notificationTest: 'Testmitteilung senden',
+  notificationTestTitle: 'Hangar: Testmitteilung',
+  notificationTestBody: 'Mitteilungen von Hangar kommen an.',
+  notificationShown:
+    'Das System hat die Testmitteilung angenommen. Ist sie erschienen? Wenn nicht, unterdrückt sie vermutlich „Nicht stören“ oder ein Fokus.',
+  notificationRefused: (error: string) =>
+    `Das System hat die Testmitteilung abgelehnt: ${error}. Schalte Mitteilungen für Hangar in den Systemeinstellungen ein.`,
+  notificationWaiting: 'Warte auf die Antwort des Systems …',
+  notificationUnknown:
+    'Das System hat nicht geantwortet. Ist die Testmitteilung oder eine Abfrage erschienen?',
+  notificationSettings: 'Mitteilungen im System einschalten',
+  notificationsWhere: {
+    darwin:
+      'Systemeinstellungen → Mitteilungen → Hangar: „Mitteilungen erlauben“ einschalten. Beim ersten Test fragt macOS selbst nach. Ein Fokus wie „Nicht stören“ hält sie zurück. Fehlt Hangar in der Liste, hat macOS noch nicht gefragt: Testmitteilung senden. Builds ohne Signatur (Entwicklung) zeigen unter macOS keine Mitteilungen.',
+    win32:
+      'Einstellungen → System → Benachrichtigungen: Benachrichtigungen und Hangar einschalten. „Nicht stören“ hält sie zurück.',
+    linux:
+      'Einstellungen der Desktop-Umgebung → Benachrichtigungen (GNOME: Einstellungen → Benachrichtigungen, KDE: Systemeinstellungen → Benachrichtigungen): Hangar einschalten.',
+  } as Record<string, string>,
   localServerStarting: 'Lokaler Server startet …',
   localBay: (bay: string, status: string) => `${bay} (${status})`,
   restartLocalServer: 'Lokalen Server neu starten',
@@ -552,6 +579,30 @@ const en: typeof de = {
   afterRelaunch: 'Takes effect after Hangar restarts.',
   localServerForced: 'Set by HANGAR_LOCAL_SERVER.',
   relaunch: 'Restart Hangar',
+  notifications: 'Notifications',
+  notificationsHint:
+    'Hangar tells you when an agent waits for you. Whether the notification appears is up to the system.',
+  notificationsUnsupported:
+    'This system shows no notifications from Hangar (on Linux libnotify is usually missing).',
+  notificationsFailed: (error) => `The system refused the last notification: ${error}`,
+  notificationTest: 'Send test notification',
+  notificationTestTitle: 'Hangar: test notification',
+  notificationTestBody: 'Notifications from Hangar arrive.',
+  notificationShown:
+    'The system took the test notification. Did it appear? If not, Do Not Disturb or a Focus probably holds it back.',
+  notificationRefused: (error) =>
+    `The system refused the test notification: ${error}. Turn on notifications for Hangar in the system settings.`,
+  notificationWaiting: 'Waiting for the system to answer …',
+  notificationUnknown: 'The system did not answer. Did the test notification or a prompt appear?',
+  notificationSettings: 'Turn on notifications in the system',
+  notificationsWhere: {
+    darwin:
+      'System Settings → Notifications → Hangar: turn on “Allow notifications”. macOS asks itself at the first test. A Focus such as Do Not Disturb holds them back. If Hangar is missing from the list, macOS has not asked yet: send a test notification. Unsigned (development) builds show no notifications on macOS.',
+    win32:
+      'Settings → System → Notifications: turn on notifications and Hangar. Do Not Disturb holds them back.',
+    linux:
+      'Settings of the desktop environment → Notifications (GNOME: Settings → Notifications, KDE: System Settings → Notifications): turn on Hangar.',
+  },
   localServerStarting: 'Local server is starting …',
   localBay: (bay, status) => `${bay} (${status})`,
   restartLocalServer: 'Restart local server',

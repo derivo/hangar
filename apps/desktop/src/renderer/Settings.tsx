@@ -10,6 +10,7 @@ import type {
 } from '../shared';
 import { BayCatalog } from './BayCatalog';
 import { Jobs } from './Jobs';
+import { Notifications } from './Notifications';
 import { Permissions } from './Permissions';
 import { Workspaces } from './Workspaces';
 
@@ -47,6 +48,10 @@ interface Props {
     | 'getLocalServer'
     | 'setLocalServer'
     | 'relaunch'
+    | 'getNotifications'
+    | 'onNotifications'
+    | 'testNotification'
+    | 'openNotificationSettings'
   >;
 }
 
@@ -147,6 +152,7 @@ export function Settings({ api }: Props) {
           </div>
         </>
       )}
+      <Notifications api={api} />
       {bays.length > 0 && (
         <>
           <h2>{t.baySettings}</h2>

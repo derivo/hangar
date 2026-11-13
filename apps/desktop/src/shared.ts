@@ -213,6 +213,14 @@ export interface ShellApi {
   getLocalServer(): Promise<{ enabled: boolean; active: boolean; forced?: boolean } | null>;
   setLocalServer(enabled: boolean): Promise<void>;
   relaunch(): void;
+  /** System notifications (ADR 0044). */
+  getNotifications(): Promise<NotificationStatus>;
+  /** The system answered a notification (shown or refused). */
+  onNotifications(listener: () => void): () => void;
+  /** Sends a test notification; resolves with the system's answer (at most 10 s). */
+  testNotification(): Promise<NotificationTest>;
+  /** Opens the notification settings of the system; only where `settings` is set. */
+  openNotificationSettings(): Promise<void>;
   /** Adds a path from the file dialog; resolves to false if it was cancelled (ADR 0027). */
   pickShortcut(kind: 'file' | 'folder'): Promise<boolean>;
   /** Adds a website; rejects with `Invalid URL` unless it is http or https. */
@@ -249,4 +257,22 @@ export interface ShellApi {
   /** The previous version runs from the next start. */
   rollbackBay(id: string): Promise<void>;
   onState(listener: (state: ShellState) => void): () => void;
+}
+
+/** What Hangar knows about system notifications (ADR 0044). */
+export interface NotificationStatus {
+  /** Electron can show notifications here (Linux: libnotify). */
+  supported: boolean;
+  /** `process.platform`: picks the hint where to switch them on. */
+  platform: string;
+  /** The system has a notification settings page Hangar can open (macOS, Windows). */
+  settings?: true;
+  /** Why the system refused the last notification, until one is shown again. */
+  error?: string;
+}
+
+/** Answer of the system to a test notification. `unknown`: no answer within 10 s (Linux). */
+export interface NotificationTest {
+  result: 'shown' | 'failed' | 'unknown' | 'unsupported';
+  error?: string;
 }

@@ -19,14 +19,14 @@ locally on macOS (arm64). The gaps are listed below, the next steps in [roadmap.
 
 ## Results (local, macOS arm64)
 
-| Command                                      | Result                                                                                                                                                                                                                                                |
-| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm install`, `lint`, `typecheck`, `build` | Exit 0                                                                                                                                                                                                                                                |
-| `pnpm test`                                  | 100 files, 1482 tests green, 2 skipped, random order; coverage 98.95 % / 97.3 % (gate incl. desktop main process, 2026-11-13, ADR 0042, 0043)                                                                                                         |
-| `pnpm test:e2e`                              | 64 green, 2 skipped, 1 failed with error gate (2026-11-13, ADR 0042, 0043): `local-server.spec.ts:307` is the feeds flake fixed on main by #21, green after the rebase onto it; `pnpm test:ssh` 3 of 3 (as of ADR 0025); `pnpm test:container` 3 of 3 |
-| E2E against package                          | 26 of 26 green against `release/0.1.0/mac-arm64/Hangar.app` (as of after phase 8); 2026-11-04 `secrets-board`, `local-server`, `sidebar-bays` 9 of 9 against a fresh package (`--mac dir`, unsigned)                                                  |
-| Lint rule `packages/host`                    | Probe file with `import { app } from 'electron'` → `no-restricted-imports` error; `packages/host/src` 100 % lines, 98.11 % branches                                                                                                                   |
-| `pnpm docs:api`                              | typedoc without warnings; every public SDK interface is documented                                                                                                                                                                                    |
+| Command                                      | Result                                                                                                                                                                                               |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm install`, `lint`, `typecheck`, `build` | Exit 0                                                                                                                                                                                               |
+| `pnpm test`                                  | 101 files, 1509 tests green, 2 skipped, random order; coverage 98.91 % / 97.28 % (gate incl. desktop main process, 2026-11-13, ADR 0042 to 0044)                                                     |
+| `pnpm test:e2e`                              | 66 green, 2 skipped, with error gate (2026-11-13, ADR 0042 to 0044); `pnpm test:ssh` 3 of 3 (as of ADR 0025); `pnpm test:container` 3 of 3                                                           |
+| E2E against package                          | 26 of 26 green against `release/0.1.0/mac-arm64/Hangar.app` (as of after phase 8); 2026-11-04 `secrets-board`, `local-server`, `sidebar-bays` 9 of 9 against a fresh package (`--mac dir`, unsigned) |
+| Lint rule `packages/host`                    | Probe file with `import { app } from 'electron'` → `no-restricted-imports` error; `packages/host/src` 100 % lines, 98.11 % branches                                                                  |
+| `pnpm docs:api`                              | typedoc without warnings; every public SDK interface is documented                                                                                                                                   |
 
 **Icons** (phase 5): The package `release/0.1.0/mac-arm64/Hangar.app` was built
 with the new app icon (`icon.icns` checked); the tray image in the package is a
@@ -546,6 +546,16 @@ test:linux-server`) and its setup over SSH (`pnpm test:linux-setup`, ADR
   disconnect the bus stores nothing (`server.test.ts`, `bridge.test.ts`); only the
   desktop that was asked answers, only with a matching choice; a server that floods
   questions gets at most 10 open ones (`client.test.ts`).
+- **Checking notifications in the settings** (ADR 0044, 2026-11-13): refusal
+  kept from `failed`, test notification (`shown`, `failed`, `unknown` after
+  10 s, `unsupported`) and the settings page per platform in `host.test.ts`;
+  section with every answer, Linux without a settings page and the double click
+  in `Notifications.test.tsx`; E2E `m7-notify.spec.ts`: keyboard (focus, Enter),
+  recorded test notification, `shell.openExternal` stubbed with the macOS page,
+  axe light and dark 0 findings, 200 % zoom. Not checked: real delivery by
+  macOS, Windows or Linux (the E2E records instead of showing), Windows and
+  Linux at all (no machine); on the person's Mac `dev.hangar.app` had no entry
+  under Notifications, cause not yet confirmed.
 - **Notifications, badges and jobs of the server, part 11c/11d** (ADR 0019):
   `e2e/server.spec.ts` – a job (`hangar status waiting`) runs on the server
   while the desktop is disconnected; after connecting, the notification

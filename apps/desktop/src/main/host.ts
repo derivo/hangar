@@ -63,6 +63,8 @@ import {
 import {
   UPDATE_HINT_HEIGHT,
   type JobsView,
+  type NotificationStatus,
+  type NotificationTest,
   type OverviewView,
   type PermissionsView,
   type Selection,
@@ -131,6 +133,14 @@ function toFront(win: BrowserWindow): void {
   win.focus();
 }
 
+/** Notification settings page of the system (ADR 0044); Linux has no common one. */
+const NOTIFICATION_SETTINGS: Record<string, string> = {
+  darwin: 'x-apple.systempreferences:com.apple.Notifications-Settings.extension',
+  win32: 'ms-settings:notifications',
+};
+/** How long a test notification waits for `show` or `failed` (Linux sends neither on failure). */
+const NOTIFICATION_ANSWER_MS = 10_000;
+
 /** Notification as recorded instead of shown when `HANGAR_E2E` is set. */
 export interface RecordedNotification extends HangarNotification {
   bayId: string;
@@ -149,6 +159,8 @@ export class Host {
   private tray?: Tray;
   /** Keeps shown notifications alive so their click handler survives GC. */
   private readonly notifications = new Set<Notification>();
+  /** Why the system refused the last notification (ADR 0044). */
+  private notificationError?: string;
   readonly runtimes = new Map<string, BayRuntime>();
   /** Bays starting from `addBay`, by id. */
   private readonly adding = new Map<string, Promise<void>>();
@@ -1111,6 +1123,11 @@ export class Host {
     if (this.window?.isDestroyed() === false) this.window.webContents.send('shell:workspaces');
   }
 
+  /** The system answered a notification; an open settings page reads the status again. */
+  private notificationsChanged(): void {
+    if (this.window?.isDestroyed() === false) this.window.webContents.send('shell:notifications');
+  }
+
   jobsChanged(): void {
     if (this.window?.isDestroyed() === false) this.window.webContents.send('shell:jobs');
   }
@@ -1123,11 +1140,71 @@ export class Host {
       return;
     }
     if (!Notification.isSupported()) return;
+    this.showNotification(n, (notification) => notification.on('click', click));
+  }
+
+  /** Shows a notification; the system's refusal stays in `notificationStatus` (ADR 0044). */
+  private showNotification(
+    n: HangarNotification,
+    listen: (notification: Notification) => void,
+  ): void {
     const notification = new Notification({ title: n.title, body: n.body ?? '' });
     this.notifications.add(notification);
-    notification.on('click', click);
-    notification.on('close', () => this.notifications.delete(notification));
+    // A click may end the native notification without `close` (Codex).
+    for (const event of ['close', 'click'] as const) {
+      notification.on(event as 'close', () => this.notifications.delete(notification));
+    }
+    notification.on('show', () => {
+      this.notificationError = undefined;
+      this.notificationsChanged();
+    });
+    notification.on('failed', (_e, error) => {
+      this.notificationError = error;
+      this.notifications.delete(notification);
+      this.notificationsChanged();
+    });
+    // Before `show()`: Linux sends `show` inside it (Codex).
+    listen(notification);
     notification.show();
+  }
+
+  notificationStatus(): NotificationStatus {
+    return {
+      // Recorded under HANGAR_E2E, so supported there on any machine.
+      supported: !!process.env.HANGAR_E2E || Notification.isSupported(),
+      platform: process.platform,
+      ...(NOTIFICATION_SETTINGS[process.platform] && { settings: true }),
+      ...(this.notificationError && { error: this.notificationError }),
+    };
+  }
+
+  /** Sends a test notification and waits for the system's answer. */
+  testNotification(): Promise<NotificationTest> {
+    const n = { title: t.notificationTestTitle, body: t.notificationTestBody };
+    if (process.env.HANGAR_E2E) {
+      (globalThis.__hangarNotifications ??= []).push({ bayId: '', ...n, click: () => {} });
+      return Promise.resolve({ result: 'shown' });
+    }
+    if (!Notification.isSupported()) return Promise.resolve({ result: 'unsupported' });
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve({ result: 'unknown' }), NOTIFICATION_ANSWER_MS);
+      this.showNotification(n, (notification) => {
+        notification.once('show', () => {
+          clearTimeout(timer);
+          resolve({ result: 'shown' });
+        });
+        notification.once('failed', (_e, error) => {
+          clearTimeout(timer);
+          resolve({ result: 'failed', error });
+        });
+      });
+    });
+  }
+
+  async openNotificationSettings(): Promise<void> {
+    const url = NOTIFICATION_SETTINGS[process.platform];
+    if (!url) throw new Error('No notification settings page on this system');
+    await shell.openExternal(url);
   }
 
   private badgeChanged(): void {
@@ -1423,6 +1500,9 @@ export class Host {
     ipcMain.on('shell:shortcut.open', (_e, id: unknown) => void this.openShortcut(id));
     ipcMain.on('shell:shortcutMenu', (_e, id: unknown) => this.shortcutMenu(id));
     ipcMain.handle('shell:overview', () => this.overview());
+    ipcMain.handle('shell:notifications', () => this.notificationStatus());
+    ipcMain.handle('shell:notifications.test', () => this.testNotification());
+    ipcMain.handle('shell:notifications.settings', () => this.openNotificationSettings());
     ipcMain.handle('shell:permissions', () => this.permissions());
     ipcMain.handle('shell:revoke', (_e, g: Grant) =>
       this.bus.revoke(g.subject, g.target, g.sessionId),
