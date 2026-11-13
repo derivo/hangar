@@ -67,6 +67,20 @@ describe('Settings', () => {
     ),
     setLocalServer: vi.fn(async () => {}),
     relaunch: vi.fn(),
+    getNotifications: vi.fn(async () => ({
+      supported: true,
+      platform: 'darwin',
+      settings: true as const,
+    })),
+    testNotification: vi.fn(async () => ({ result: 'shown' as const })),
+    openNotificationSettings: vi.fn(async () => {}),
+    onNotifications: vi.fn(() => () => {}),
+  });
+
+  it('has a section for system notifications (ADR 0044)', async () => {
+    render(<Settings api={settingsApi()} />);
+    expect(await screen.findByRole('heading', { name: 'Mitteilungen' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Testmitteilung senden' })).toBeEnabled();
   });
 
   it('switches the local server for the next start, asking before it ends shells (ADR 0036)', async () => {

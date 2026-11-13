@@ -649,3 +649,10 @@ li:has(> .sidebar-item[aria-current='page'])::before,
   gap: var(--hangar-space-2);
   margin-left: auto;
 }
+
+/* Notifications in the settings (ADR 0044): the buttons wrap at 200 % zoom. */
+.notification-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hangar-space-2);
+}

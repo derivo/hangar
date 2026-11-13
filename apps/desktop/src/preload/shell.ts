@@ -45,6 +45,14 @@ const api: ShellApi = {
   getLocalServer: () => ipcRenderer.invoke('shell:localServer.setting'),
   setLocalServer: (enabled) => ipcRenderer.invoke('shell:localServer.enable', enabled),
   relaunch: () => ipcRenderer.send('shell:relaunch'),
+  getNotifications: () => ipcRenderer.invoke('shell:notifications'),
+  onNotifications(listener) {
+    const handler = () => listener();
+    ipcRenderer.on('shell:notifications', handler);
+    return () => ipcRenderer.removeListener('shell:notifications', handler);
+  },
+  testNotification: () => ipcRenderer.invoke('shell:notifications.test'),
+  openNotificationSettings: () => ipcRenderer.invoke('shell:notifications.settings'),
   pickShortcut: (kind) => ipcRenderer.invoke('shell:shortcut.pick', kind),
   addUrlShortcut: (url) => ipcRenderer.invoke('shell:shortcut.url', url),
   openShortcut: (id) => ipcRenderer.send('shell:shortcut.open', id),

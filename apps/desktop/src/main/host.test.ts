@@ -121,10 +121,12 @@ class FakeNotification extends EventEmitter {
   static supported = true;
   static all: FakeNotification[] = [];
   static isSupported = () => FakeNotification.supported;
+  static onCreate?: (n: FakeNotification) => void;
   show = vi.fn();
   constructor(public options: { title: string; body: string }) {
     super();
     FakeNotification.all.push(this);
+    FakeNotification.onCreate?.(this);
   }
 }
 
@@ -993,6 +995,125 @@ describe('Host: notifications', () => {
       { bayId: 'dev.test.a', title: 'x', click: expect.any(Function) },
     ]);
     globalThis.__hangarNotifications = undefined;
+  });
+});
+
+describe('Host: checking notifications (ADR 0044)', () => {
+  const onPlatform = async (platform: string, fn: () => Promise<void>) => {
+    const real = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    Object.defineProperty(process, 'platform', { value: platform });
+    try {
+      await fn();
+    } finally {
+      Object.defineProperty(process, 'platform', real);
+    }
+  };
+
+  it('remembers why the system refused a notification, until one is shown', async () => {
+    const { host, window } = await started();
+    expect(host.notificationStatus()).toMatchObject({
+      supported: true,
+      platform: process.platform,
+    });
+    expect(host.notificationStatus()).not.toHaveProperty('error');
+    host.notify('dev.test.a', { title: 'x' });
+    FakeNotification.all[0]!.emit('failed', {}, 'UNErrorDomain error 1');
+    expect(host.notificationStatus().error).toBe('UNErrorDomain error 1');
+    // Late refusals reach an open settings page (Codex round 2).
+    expect(window().webContents.send).toHaveBeenLastCalledWith('shell:notifications');
+    host.notify('dev.test.a', { title: 'y' });
+    FakeNotification.all[1]!.emit('show');
+    expect(host.notificationStatus()).not.toHaveProperty('error');
+  });
+
+  it('sends a test notification and says whether the system showed it', async () => {
+    const { host } = await started();
+    const shown = host.testNotification();
+    const [n] = FakeNotification.all;
+    expect(n!.options.title).toBe('Hangar: Testmitteilung');
+    expect(n!.show).toHaveBeenCalled();
+    n!.emit('show');
+    await expect(shown).resolves.toEqual({ result: 'shown' });
+
+    const failed = host.testNotification();
+    FakeNotification.all[1]!.emit('failed', {}, 'not allowed');
+    await expect(failed).resolves.toEqual({ result: 'failed', error: 'not allowed' });
+    expect(host.notificationStatus().error).toBe('not allowed');
+  });
+
+  it('hears a show the system sends inside show() (Linux, Codex)', async () => {
+    const { host } = await started();
+    FakeNotification.onCreate = (n) =>
+      n.show.mockImplementation(function (this: FakeNotification) {
+        this.emit('show');
+      });
+    try {
+      await expect(host.testNotification()).resolves.toEqual({ result: 'shown' });
+    } finally {
+      FakeNotification.onCreate = undefined;
+    }
+  });
+
+  it('forgets notifications that were clicked or failed (Codex)', async () => {
+    const { host } = await started();
+    const open = () => (host as unknown as { notifications: Set<unknown> }).notifications.size;
+    host.notify('dev.test.a', { title: 'x' });
+    host.notify('dev.test.a', { title: 'y' });
+    expect(open()).toBe(2);
+    FakeNotification.all[0]!.emit('click');
+    FakeNotification.all[1]!.emit('failed', {}, 'nope');
+    expect(open()).toBe(0);
+  });
+
+  it('answers unknown when the system says nothing (Linux) within 10 s', async () => {
+    const { host } = await started();
+    vi.useFakeTimers();
+    try {
+      const answer = host.testNotification();
+      await vi.advanceTimersByTimeAsync(10_000);
+      await expect(answer).resolves.toEqual({ result: 'unknown' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('sends no test where notifications are not supported, records it under HANGAR_E2E', async () => {
+    FakeNotification.supported = false;
+    const { host } = await started();
+    expect(host.notificationStatus().supported).toBe(false);
+    await expect(host.testNotification()).resolves.toEqual({ result: 'unsupported' });
+    expect(FakeNotification.all).toEqual([]);
+    FakeNotification.supported = true;
+    process.env.HANGAR_E2E = '1';
+    globalThis.__hangarNotifications = [];
+    // Recorded, so supported, also on a machine without libnotify (OpenCode).
+    FakeNotification.supported = false;
+    expect(host.notificationStatus().supported).toBe(true);
+    await expect(host.testNotification()).resolves.toEqual({ result: 'shown' });
+    expect(globalThis.__hangarNotifications).toEqual([
+      expect.objectContaining({ title: 'Hangar: Testmitteilung' }),
+    ]);
+    globalThis.__hangarNotifications = undefined;
+  });
+
+  it('opens the notification settings of macOS and Windows; Linux has no common page', async () => {
+    const { host } = await started();
+    await onPlatform('darwin', async () => {
+      expect(host.notificationStatus().settings).toBe(true);
+      await host.openNotificationSettings();
+    });
+    await onPlatform('win32', async () => {
+      expect(host.notificationStatus().settings).toBe(true);
+      await host.openNotificationSettings();
+    });
+    expect(electron.shell.openExternal.mock.calls.slice(-2).map(([url]) => url)).toEqual([
+      'x-apple.systempreferences:com.apple.Notifications-Settings.extension',
+      'ms-settings:notifications',
+    ]);
+    await onPlatform('linux', async () => {
+      expect(host.notificationStatus()).not.toHaveProperty('settings');
+      await expect(host.openNotificationSettings()).rejects.toThrow('No notification settings');
+    });
   });
 });
 
