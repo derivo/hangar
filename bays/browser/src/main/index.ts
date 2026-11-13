@@ -16,6 +16,7 @@ const NavigateArgs = z.object({ id: Id, url: Url });
 const TabArgs = z.object({ id: Id });
 const ClickArgs = z.object({ id: Id, selector: z.string().min(1).max(1000) });
 const FillArgs = ClickArgs.extend({ value: z.string().max(100_000) });
+const ErrorsArgs = TabArgs.extend({ since: z.number().optional() });
 
 function parse<T extends z.ZodType>(schema: T, args: unknown): z.output<T> {
   const result = schema.safeParse(args);
@@ -196,6 +197,15 @@ function provideFunctions(ctx: BayContext, bay: BrowserBay, browser: BayBrowser)
     schema(FillArgs),
   );
   ctx.provide(
+    'page.errors',
+    (args, info) => {
+      const { id, since = 0 } = parse(ErrorsArgs, args);
+      bay.tab(id, info);
+      return { errors: browser.errors(id).filter((e) => e.time > since) };
+    },
+    schema(ErrorsArgs),
+  );
+  ctx.provide(
     'page.screenshot',
     async (args, info) => {
       const { id } = parse(TabArgs, args);
@@ -225,6 +235,17 @@ const bay: BayMain = {
     ui.handle('tab.reload', (id) => browser.reload(id as string));
     ui.handle('tab.resetZoom', (id) => browser.resetZoom(id as string));
     ui.handle('tab.close', (id) => browser.close(id as string));
+    ui.handle('tab.errors', (id) => browser.errors(id as string));
+    ui.handle('tab.find', (id, text, options) =>
+      browser.find(id as string, text as string, options as object),
+    );
+    ui.handle('tab.stopFind', (id) => browser.stopFind(id as string));
+    ui.handle('tab.focus', (id) => browser.focus(id as string));
+    // Only the person decides; no function for agents (ADR 0043).
+    ui.handle('tab.trustCertificate', (id, shown) =>
+      browser.trustCertificate(id as string, shown as { host: string; fingerprint: string }),
+    );
+    browser.onFindRequest((id) => ui.send('find', id));
     // A session's tabs go with it (ADR 0016).
     ctx.onAgentSessionEnded((session) => {
       const partition = sessionPartition(session);

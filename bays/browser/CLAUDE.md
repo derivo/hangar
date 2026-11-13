@@ -11,7 +11,10 @@ are shown by the host as a separate `WebContentsView` per tab (host module `brow
   - `index.ts` – `activate(ctx)`: UI channels, bus functions, restoring the person's tabs.
   - `url.ts` – `normalizeUrl`: address bar input → URL (`localhost:5173` → `http://`, `example.com` → `https://`), only http, https, `about:blank`.
   - `test-ctx.ts` – fake context with an in-memory browser.
-- `src/ui/` – React: tab bar (agent tabs with the label "Agent"), back/forward/reload, address bar, page zoom ("110 %" next to the address when not 100 %, click resets), page area. Texts in `messages.ts` (de/en).
+- `src/ui/` – React: tab bar (agent tabs with the label "Agent", red error count), back/forward/reload, address bar, page zoom ("110 %" next to the address when not 100 %, click resets), "Open in browser" (`window.open`, the host hands it to the system browser), page area. Texts in `messages.ts` (de/en).
+  - Page errors (ADR 0042): a failed load replaces the page by an error page (reload, open in browser); HTTP 400+ of the page is named above it; "Errors (n)" opens `ErrorsPanel.tsx` below the page (warnings on request).
+  - Certificate errors (ADR 0043): with `certificate` on the tab the error page shows host and fingerprint and "Trust this host" (UI channel `tab.trustCertificate`; no function for agents, by design).
+  - `FindBar.tsx`: find in page, opened by Cmd/Ctrl+F in the bay or in the page (host event `find`); Enter/Cmd+G next, Shift previous, Esc closes.
 
 ## Tabs and partitions
 
@@ -23,25 +26,28 @@ are shown by the host as a separate `WebContentsView` per tab (host module `brow
 
 ## Functions
 
-| Function          | Effect                                                              |
-| ----------------- | ------------------------------------------------------------------- |
-| `tab.open`        | `{ url }` → tab (`id`, `url`, `title`, `error` …) after loading     |
-| `tab.navigate`    | `{ id, url }` → tab                                                 |
-| `tab.list`        | own tabs                                                            |
-| `tab.close`       | `{ id }` → `{ ok: true }`                                           |
-| `page.text`       | `{ id }` → `{ text, truncated }` (at most 100 000 characters)       |
-| `page.click`      | `{ id, selector }` → `{ ok: true }`                                 |
-| `page.fill`       | `{ id, selector, value }` → `{ ok: true }` (fires `input`/`change`) |
-| `page.screenshot` | `{ id }` → `{ path }` (PNG under `screenshots/` in the data folder) |
+| Function          | Effect                                                                |
+| ----------------- | --------------------------------------------------------------------- |
+| `tab.open`        | `{ url }` → tab (`id`, `url`, `title`, `error` …) after loading       |
+| `tab.navigate`    | `{ id, url }` → tab                                                   |
+| `tab.list`        | own tabs                                                              |
+| `tab.close`       | `{ id }` → `{ ok: true }`                                             |
+| `page.text`       | `{ id }` → `{ text, truncated }` (at most 100 000 characters)         |
+| `page.click`      | `{ id, selector }` → `{ ok: true }`                                   |
+| `page.fill`       | `{ id, selector, value }` → `{ ok: true }` (fires `input`/`change`)   |
+| `page.errors`     | `{ id, since? }` → `{ errors }` (ADR 0042, at most 200, oldest first) |
+| `page.screenshot` | `{ id }` → `{ path }` (PNG under `screenshots/` in the data folder)   |
 
 ## UI channels (`window.hangar.invoke`)
 
 `state`, `tab.open`, `tab.navigate`, `tab.back`, `tab.forward`, `tab.reload`,
-`tab.resetZoom`, `tab.close`. Event: `state`. Placement: `window.hangar.browser.show(id, rect)`.
+`tab.resetZoom`, `tab.close`, `tab.errors`, `tab.find`, `tab.stopFind`, `tab.focus`, `tab.trustCertificate`. Events:
+`state`, `find` (Cmd/Ctrl+F in a page, with the tab id). Placement: `window.hangar.browser.show(id, rect)`.
 
 ## Pitfalls
 
 - All functions are `openToAgents` (ADR 0016): agents of any bay call them without asking. Therefore each may reach only tabs of the caller's partition (`tab()`).
 - The tab view lies above the bay UI: whatever is in the page area (dialogs, menus) would be covered. Without a shown tab the UI calls `show(undefined)`.
+- The host collects page errors per tab (`ctx.browser.errors`); the list starts over when another document replaces the page (`did-navigate`) or a load fails (`did-fail-load`, no `did-navigate` for Electron's error page), not when loading starts. Tabs carry `status` and `errors` (count of level `error`).
 - If an agent session ends (`ctx.onAgentSessionEnded`), the bay closes its tabs. A restart of the shell does not end the session.
 - Guide: `docs/bay-development.md`.

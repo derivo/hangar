@@ -19,14 +19,14 @@ locally on macOS (arm64). The gaps are listed below, the next steps in [roadmap.
 
 ## Results (local, macOS arm64)
 
-| Command                                      | Result                                                                                                                                                                                                                |
-| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm install`, `lint`, `typecheck`, `build` | Exit 0                                                                                                                                                                                                                |
-| `pnpm test`                                  | 98 files, 1376 tests green, 2 skipped, random order; coverage 98.85 % / 97.25 % (gate incl. desktop main process, 2026-11-09)                                                                                         |
-| `pnpm test:e2e`                              | 62 green, 2 skipped, with error gate (2026-11-09; `i18n`, `sidebar-bays`, `sidebar-order` rerun after adding the feeds bay to their bay lists); `pnpm test:ssh` 3 of 3 (as of ADR 0025); `pnpm test:container` 3 of 3 |
-| E2E against package                          | 26 of 26 green against `release/0.1.0/mac-arm64/Hangar.app` (as of after phase 8); 2026-11-04 `secrets-board`, `local-server`, `sidebar-bays` 9 of 9 against a fresh package (`--mac dir`, unsigned)                  |
-| Lint rule `packages/host`                    | Probe file with `import { app } from 'electron'` → `no-restricted-imports` error; `packages/host/src` 100 % lines, 98.11 % branches                                                                                   |
-| `pnpm docs:api`                              | typedoc without warnings; every public SDK interface is documented                                                                                                                                                    |
+| Command                                      | Result                                                                                                                                                                                                                                                |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm install`, `lint`, `typecheck`, `build` | Exit 0                                                                                                                                                                                                                                                |
+| `pnpm test`                                  | 100 files, 1482 tests green, 2 skipped, random order; coverage 98.95 % / 97.3 % (gate incl. desktop main process, 2026-11-13, ADR 0042, 0043)                                                                                                         |
+| `pnpm test:e2e`                              | 64 green, 2 skipped, 1 failed with error gate (2026-11-13, ADR 0042, 0043): `local-server.spec.ts:307` is the feeds flake fixed on main by #21, green after the rebase onto it; `pnpm test:ssh` 3 of 3 (as of ADR 0025); `pnpm test:container` 3 of 3 |
+| E2E against package                          | 26 of 26 green against `release/0.1.0/mac-arm64/Hangar.app` (as of after phase 8); 2026-11-04 `secrets-board`, `local-server`, `sidebar-bays` 9 of 9 against a fresh package (`--mac dir`, unsigned)                                                  |
+| Lint rule `packages/host`                    | Probe file with `import { app } from 'electron'` → `no-restricted-imports` error; `packages/host/src` 100 % lines, 98.11 % branches                                                                                                                   |
+| `pnpm docs:api`                              | typedoc without warnings; every public SDK interface is documented                                                                                                                                                                                    |
 
 **Icons** (phase 5): The package `release/0.1.0/mac-arm64/Hangar.app` was built
 with the new app icon (`icon.icns` checked); the tray image in the package is a
@@ -165,6 +165,21 @@ test:linux-server`) and its setup over SSH (`pnpm test:linux-setup`, ADR
   both backed in `e2e/browser.spec.ts`. Page zoom (2026-11-07): keys,
   percent and reset in `browser-tabs.test.ts`, button in `App.test.tsx`,
   E2E `browser.spec.ts` (native key events, axe light and dark 0 findings).
+  Page errors, find in page, open outside (ADR 0042, 2026-11-12): host events
+  and request errors in `browser-tabs.test.ts`, `page.errors` in
+  `bays/browser/src/main/index.test.ts`, error page, panel and find bar
+  (edge cases per key and button) in `App.test.tsx`; E2E `browser.spec.ts`
+  against a local server answering HTTP 500 with a console error, a 404 request
+  and an uncaught exception (agent via MCP and the person's UI), native Cmd+F in
+  the page, find counts, `shell.openExternal` stubbed, axe light and dark 0
+  findings for panel, find bar and error page, 200 % zoom.
+  Trusting a certificate (ADR 0043, 2026-11-13): `certificate-error` handling
+  in `browser-tabs.test.ts`, UI channel without agent function in
+  `bays/browser/src/main/index.test.ts`, button, hint and failure in
+  `App.test.tsx`; E2E `browser.spec.ts` against a local HTTPS server with a
+  self-signed certificate (openssl): `ERR_CERT_AUTHORITY_INVALID` for the agent
+  tab and the person's tab, axe light and dark 0 findings, after the click page
+  and its script load, and the agent tab in its own partition loads too.
 - **Bays in the sidebar** (ADR 0017): empty start with plus, selection modal,
   removal via right-click; backed by `src/renderer/Sidebar.test.tsx` and
   `e2e/sidebar-bays.spec.ts` (keyboard, axe light/dark for the modal, restart,

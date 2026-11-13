@@ -23,6 +23,11 @@ export { expect, type ElectronApplication, type Locator, type Page } from '@play
 
 /** Uncaught errors and unhandled rejections of every page of the apps launched in a test. */
 let pageErrors: string[] = [];
+/** Errors a test provokes on purpose (a web page in a browser tab throwing); reset per test. */
+let expectedErrors: RegExp[] = [];
+
+/** Lets the running test's pages throw errors matching `pattern`. */
+export const expectPageError = (pattern: RegExp) => void expectedErrors.push(pattern);
 
 /** Fails a test whose pages threw, even when everything it checked looked right. */
 export const test = base.extend<{ noPageErrors: void }>({
@@ -31,8 +36,10 @@ export const test = base.extend<{ noPageErrors: void }>({
     // eslint-disable-next-line no-empty-pattern
     async ({}, use) => {
       pageErrors = [];
+      expectedErrors = [];
       await use();
-      expect(pageErrors, 'uncaught errors in the app pages').toEqual([]);
+      const unexpected = pageErrors.filter((e) => !expectedErrors.some((p) => p.test(e)));
+      expect(unexpected, 'uncaught errors in the app pages').toEqual([]);
     },
     { auto: true },
   ],

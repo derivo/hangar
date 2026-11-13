@@ -10,20 +10,24 @@ import type {
   BrowserTab,
   BrowserTabOptions,
   CallInfo,
+  PageError,
 } from '@hangar/sdk';
 
 export interface FakeTab extends BrowserTab {
   options: BrowserTabOptions;
   /** Result of `evaluate` in this tab. */
   result?: unknown;
+  /** What `errors` returns for this tab. */
+  pageErrors?: PageError[];
 }
 
 export function fakeBrowser() {
   const tabs = new Map<string, FakeTab>();
   const listeners: ((tabs: BrowserTab[]) => void)[] = [];
+  const findListeners: ((id: string) => void)[] = [];
   let next = 0;
   const list = (): BrowserTab[] =>
-    [...tabs.values()].map(({ options: _o, result: _r, ...tab }) => tab);
+    [...tabs.values()].map(({ options: _o, result: _r, pageErrors: _e, ...tab }) => tab);
   const changed = () => listeners.forEach((l) => l(list()));
   const get = (id: string) => {
     const tab = tabs.get(id);
@@ -63,7 +67,17 @@ export function fakeBrowser() {
     onChange: (listener: (tabs: BrowserTab[]) => void) => void listeners.push(listener),
     screenshot: vi.fn(async (id: string) => (get(id), new Uint8Array([137, 80, 78, 71]))),
     evaluate: vi.fn(async (id: string, _script: string) => get(id).result),
+    errors: vi.fn((id: string) => get(id).pageErrors ?? []),
+    find: vi.fn((id: string, _text: string, _options?: object) => void get(id)),
+    stopFind: vi.fn((id: string) => void get(id)),
+    focus: vi.fn((id: string) => void get(id)),
+    onFindRequest: (listener: (id: string) => void) => void findListeners.push(listener),
+    trustCertificate: vi.fn(
+      async (id: string, _shown: { host: string; fingerprint: string }) => void get(id),
+    ),
   } satisfies BayBrowser;
+  /** The person pressed Cmd/Ctrl+F in the page of tab `id`. */
+  const requestFind = (id: string) => findListeners.forEach((l) => l(id));
   /** Simulates a page opening a window: a new tab with `openerId`. */
   const popup = (openerId: string, url: string) => {
     const opener = get(openerId);
@@ -72,7 +86,7 @@ export function fakeBrowser() {
     changed();
     return id;
   };
-  return { browser, tabs, popup };
+  return { browser, tabs, popup, requestFind };
 }
 
 export function fakeContext(dataDir = mkdtempSync(join(tmpdir(), 'hangar-browser-'))) {

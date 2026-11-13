@@ -185,6 +185,7 @@ const electron = {
     fromPartition: () => ({
       setPermissionRequestHandler: vi.fn(),
       setPermissionCheckHandler: vi.fn(),
+      webRequest: { onCompleted: vi.fn(), onErrorOccurred: vi.fn() },
     }),
   },
   screen: { getAllDisplays: () => [{ workArea: { x: 0, y: 0, width: 1920, height: 1080 } }] },

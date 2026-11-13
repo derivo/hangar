@@ -264,20 +264,29 @@ them in the tab bar with the mark "Agent". All functions are not sensitive and
 open to agents of every bay, without prompt (ADR 0016). When the session ends,
 its tabs close.
 
-| Tool              | Parameters                | Response                                                                                 |
-| ----------------- | ------------------------- | ---------------------------------------------------------------------------------------- |
-| `tab.open`        | `url`                     | Tab: `id`, `url`, `title`, `loading`, `canGoBack`, `canGoForward`, `partition`, `error?` |
-| `tab.navigate`    | `id`, `url`               | Tab                                                                                      |
-| `tab.list`        | –                         | List of the own tabs                                                                     |
-| `tab.close`       | `id`                      | `{ "ok": true }`                                                                         |
-| `page.text`       | `id`                      | `{ "text": "…", "truncated": false }` (at most 100,000 characters)                       |
-| `page.click`      | `id`, `selector` (CSS)    | `{ "ok": true }`                                                                         |
-| `page.fill`       | `id`, `selector`, `value` | `{ "ok": true }`; sets the value and triggers `input`/`change`                           |
-| `page.screenshot` | `id`                      | `{ "path": "…/screenshots/<id>-<zeit>.png" }`                                            |
+| Tool              | Parameters                | Response                                                                                                                                |
+| ----------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `tab.open`        | `url`                     | Tab: `id`, `url`, `title`, `loading`, `canGoBack`, `canGoForward`, `partition`, `error?`, `status?`, `errors?`, `find?`, `certificate?` |
+| `tab.navigate`    | `id`, `url`               | Tab                                                                                                                                     |
+| `tab.list`        | –                         | List of the own tabs                                                                                                                    |
+| `tab.close`       | `id`                      | `{ "ok": true }`                                                                                                                        |
+| `page.text`       | `id`                      | `{ "text": "…", "truncated": false }` (at most 100,000 characters)                                                                      |
+| `page.click`      | `id`, `selector` (CSS)    | `{ "ok": true }`                                                                                                                        |
+| `page.fill`       | `id`, `selector`, `value` | `{ "ok": true }`; sets the value and triggers `input`/`change`                                                                          |
+| `page.errors`     | `id`, `since?`            | `{ "errors": [{ "time", "kind", "level", "message", "source?", "line?" }] }`                                                            |
+| `page.screenshot` | `id`                      | `{ "path": "…/screenshots/<id>-<zeit>.png" }`                                                                                           |
 
 `url` as in the address bar: `localhost:5173` → `http://localhost:5173`,
 `example.com` → `https://example.com`; http and https only. Loading waits at
-most 30 seconds; if it fails, the reason is in `error`.
+most 30 seconds; if it fails, the reason is in `error`. `status` is the HTTP
+status of the page (absent without HTTP, e.g. `about:blank`), `errors` the number of errors on it (absent at 0). `page.errors`
+lists them (ADR 0042): `kind` `load` (the page failed or answered with HTTP 400 or
+higher), `console` (console errors and warnings, uncaught exceptions included) or
+`request` (another request failed); `level` `error` or `warning`; `time` in
+milliseconds since the epoch, `since` returns only newer entries. The list starts
+over when the tab loads another page and keeps the last 200 entries. A page
+refused for its certificate has `certificate` (`host`, `fingerprint`) in the
+tab; only the person can trust it in the browser bay (ADR 0043), agents cannot.
 
 ```json
 { "url": "localhost:5173" }

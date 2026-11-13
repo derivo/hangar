@@ -21,7 +21,8 @@ bay context (main) and `window.hangar` (UI).
 - ADR 0023, 0025: manifest `settings` (`SettingSchema`, `boolean` or `text`, key unique per
   bay) → `ctx.settings.get(key)` (`SettingValue`), `ctx.settings.onChange(listener)`.
 - Host module `browser` (ADR 0015): manifest `hostModules: ["browser"]` → `ctx.browser`
-  (`BayBrowser`: open, navigate, close tabs, `evaluate`, `screenshot`) and
+  (`BayBrowser`: open, navigate, close tabs, `evaluate`, `screenshot`, page errors and
+  find in page, ADR 0042; `trustCertificate` for the person only, ADR 0043) and
   `window.hangar.browser.show(id, rect)` (`BayBrowserView`).
 - Host module `workspaces` (ADR 0030): `hostModules: ["workspaces"]` → `ctx.workspaces`
   (`BayWorkspaces`: `publish(state)` to the bay with the same id of all members, `states()`,

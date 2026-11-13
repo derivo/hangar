@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 're
 import type { BrowserApi } from './api';
 import type { BrowserState } from '../main/types';
 import { normalizeUrl } from '../main/url';
+import { ErrorsPanel } from './ErrorsPanel';
+import { FindBar, isModKey } from './FindBar';
 import { t } from './messages';
 
 interface Props {
@@ -24,6 +26,10 @@ export function App({ api }: Props) {
   const [error, setError] = useState<string>();
   const page = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
+  /** The tab the find bar is open for, and a counter to focus its field again. */
+  const [findTab, setFindTab] = useState<string>();
+  const [findFocus, setFindFocus] = useState(0);
 
   useEffect(() => {
     // An event can overtake the first answer; it is newer then.
@@ -43,6 +49,31 @@ export function App({ api }: Props) {
       : state.tabs.at(-1)?.id;
   const tab = newTab ? undefined : state.tabs.find((x) => x.id === current);
   const tabId = tab?.id;
+  // A page that failed to load gives way to the error page (ADR 0042).
+  const shownId = tab?.error ? undefined : tabId;
+
+  const openFind = (id: string | undefined) => {
+    if (!id) return;
+    setFindTab(id);
+    setFindFocus((n) => n + 1);
+  };
+  useEffect(() => api.onFind(openFind), [api]);
+  useEffect(() => {
+    const keyDown = (e: KeyboardEvent) => {
+      if (!isModKey(e) || e.altKey || e.shiftKey || e.key.toLowerCase() !== 'f') return;
+      e.preventDefault();
+      openFind(tabId);
+    };
+    window.addEventListener('keydown', keyDown);
+    return () => window.removeEventListener('keydown', keyDown);
+  }, [tabId]);
+
+  // Another tab closes the find bar for good: it does not come back with the tab (OpenCode).
+  const [findOn, setFindOn] = useState(tabId);
+  if (tabId !== findOn) {
+    setFindOn(tabId);
+    setFindTab(undefined);
+  }
 
   // The address bar follows the shown page until the next navigation.
   const shown = `${tabId}|${tab?.url}`;
@@ -62,14 +93,14 @@ export function App({ api }: Props) {
       if (!/Unknown tab/.test(String(e))) throw e;
     };
     const place = () => {
-      if (!tabId) return void api.show(undefined).catch(ignore);
+      if (!shownId) return void api.show(undefined).catch(ignore);
       const r = el.getBoundingClientRect();
-      void api.show(tabId, { x: r.x, y: r.y, width: r.width, height: r.height }).catch(ignore);
+      void api.show(shownId, { x: r.x, y: r.y, width: r.width, height: r.height }).catch(ignore);
     };
     const observer = new ResizeObserver(place);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [api, tabId]);
+  }, [api, shownId]);
 
   // Actions still running, by key: pressing the button again before the answer does nothing.
   const pending = useRef(new Set<string>());
@@ -114,7 +145,8 @@ export function App({ api }: Props) {
     input.current?.focus();
   };
 
-  const status = tab?.error ? t.loadFailed(tab.error) : tab?.loading ? t.loading : '';
+  const status = tab?.loading ? t.loading : '';
+  const external = tab && /^https?:\/\//i.test(tab.url) ? tab.url : undefined;
 
   return (
     <div className="layout">
@@ -123,6 +155,7 @@ export function App({ api }: Props) {
           {state.tabs.map((x) => {
             const title = x.title || x.url || t.untitled;
             const active = x.id === tab?.id;
+            const failed = x.error ? t.tabLoadFailed : x.errors && t.tabErrors(x.errors);
             return (
               <li key={x.id} className={`tab${active ? ' tab-active' : ''}`}>
                 <button
@@ -137,7 +170,17 @@ export function App({ api }: Props) {
                     </span>
                   )}
                   {x.owner === 'agent' && ' '}
-                  <span className="tab-title">{title}</span>
+                  <span className="tab-title">
+                    {title}
+                    {/* The space as text: name computations drop it inside the hidden span. */}
+                    {failed && ' '}
+                    {failed && <span className="visually-hidden">{failed}</span>}
+                  </span>
+                  {failed && (
+                    <span className="tab-errors" aria-hidden="true">
+                      {x.error ? '!' : x.errors}
+                    </span>
+                  )}
                 </button>
                 <button
                   type="button"
@@ -217,6 +260,26 @@ export function App({ api }: Props) {
           </button>
         )}
         <button
+          type="button"
+          className="icon-button"
+          aria-label={t.openExternal}
+          title={t.openExternal}
+          disabled={!external}
+          onClick={() => external && api.openExternal(external)}
+        >
+          ↗
+        </button>
+        {tab && (
+          <button
+            type="button"
+            className={`button${tab.errors ? ' error' : ''}`}
+            aria-expanded={panelOpen}
+            onClick={() => setPanelOpen(!panelOpen)}
+          >
+            {t.errorsButton(tab.errors ?? 0)}
+          </button>
+        )}
+        <button
           type="submit"
           className="button"
           // Not the second click of a double click: the first one opened the tab (ADR 0028).
@@ -225,18 +288,84 @@ export function App({ api }: Props) {
           {t.open}
         </button>
       </form>
+      {tab && findTab === tab.id && (
+        <FindBar
+          api={api}
+          tab={tab}
+          focusKey={findFocus}
+          onClose={() => {
+            setFindTab(undefined);
+            void run(() => api.focus(tab.id));
+          }}
+        />
+      )}
       <div className="messages">
         {error && (
           <p id="address-error" role="alert" className="error">
             {error}
           </p>
         )}
+        {tab?.status !== undefined && tab.status >= 400 && (
+          <p className="error">{t.httpStatus(tab.status)}</p>
+        )}
         <p role="status" className="muted">
           {status}
         </p>
       </div>
-      <div ref={page} id="page" className="page">
-        {!tab && <p className="muted empty">{t.empty}</p>}
+      <div className="main">
+        <div ref={page} id="page" className="page">
+          {!tab && <p className="muted empty">{t.empty}</p>}
+          {tab?.error && (
+            <div role="alert" className="load-error">
+              <h2 className="error">{t.loadFailedTitle}</h2>
+              <p className="error">{tab.error}</p>
+              {tab.error.startsWith('ERR_CERT_') && <p>{t.certHint}</p>}
+              <p className="muted">{tab.url}</p>
+              {tab.certificate && (
+                <>
+                  <p className="muted">
+                    {t.certificate(tab.certificate.host, tab.certificate.fingerprint)}
+                  </p>
+                  <p>{t.trustHint}</p>
+                </>
+              )}
+              <p className="actions">
+                <button
+                  type="button"
+                  className="button"
+                  onClick={() => void run(() => api.reload(tab.id))}
+                >
+                  {t.reload}
+                </button>
+                {tab.certificate && (
+                  <button
+                    type="button"
+                    className="button"
+                    // Host and fingerprint shown here: the click trusts only those (Codex).
+                    onClick={() =>
+                      void run(
+                        () => api.trustCertificate(tab.id, tab.certificate!),
+                        `trust:${tab.id}`,
+                      )
+                    }
+                  >
+                    {t.trustHost}
+                  </button>
+                )}
+                {external && (
+                  <button
+                    type="button"
+                    className="button"
+                    onClick={() => api.openExternal(external)}
+                  >
+                    {t.openExternal}
+                  </button>
+                )}
+              </p>
+            </div>
+          )}
+        </div>
+        {tab && panelOpen && <ErrorsPanel api={api} tab={tab} />}
       </div>
     </div>
   );
