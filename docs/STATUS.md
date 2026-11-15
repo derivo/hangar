@@ -28,11 +28,16 @@ locally on macOS (arm64). The gaps are listed below, the next steps in [roadmap.
 | Lint rule `packages/host`                    | Probe file with `import { app } from 'electron'` → `no-restricted-imports` error; `packages/host/src` 100 % lines, 98.11 % branches                                                                  |
 | `pnpm docs:api`                              | typedoc without warnings; every public SDK interface is documented                                                                                                                                   |
 
-**Icons** (phase 5): The package `release/0.1.0/mac-arm64/Hangar.app` was built
-with the new app icon (`icon.icns` checked); the tray image in the package is a
-template image (`isTemplateImage()` true, scales 1 and 2). Contrast of the
-sidebar icons against the dock (WCAG formula, axe does not check graphics):
-glyph 7.59:1 (light) and 11.22:1 (dark), agent bay 14.22:1 and 15.85:1.
+**Icons:** The app icon source (`apps/desktop/build/icon.svg`) and rendered PNG
+follow ADR 0026: dock-glow orange (`#ff8a2a`) on near-black (`#111214`), fine
+lines and no grid, with the original silhouette, macOS tile shape and padding.
+The phase 5 package `release/0.1.0/mac-arm64/Hangar.app` was checked with the
+previous app icon (`icon.icns`); the updated icon still needs a package check.
+The tray image remains a black template (phase 5 package check:
+`isTemplateImage()` true, scales 1 and 2).
+Silhouette against the tile 7.96:1. Contrast of the sidebar icons against
+the dock (WCAG formula, axe does not check graphics): glyph 7.59:1 (light) and
+11.22:1 (dark), agent bay 14.22:1 and 15.85:1.
 
 The package (`electron-builder --mac dir --arm64`) thus covers all specs,
 including grid, separate windows, permissions and jobs with the login shell of
