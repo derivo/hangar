@@ -3,6 +3,8 @@ import * as nodePty from 'node-pty';
 
 /** The subset of a pseudo terminal the bay uses; faked in unit tests. */
 export interface PtyProcess {
+  /** Process id of the shell; agents started in it are found under it (ADR 0045). */
+  pid: number;
   onData(listener: (data: string) => void): void;
   onExit(listener: (exitCode: number) => void): void;
   write(data: string): void;
@@ -24,6 +26,7 @@ export type SpawnPty = (options: SpawnOptions) => PtyProcess;
 export const spawnNodePty: SpawnPty = ({ file, args, cwd, env, cols, rows }) => {
   const pty = nodePty.spawn(file, args, { name: 'xterm-256color', cwd, env, cols, rows });
   return {
+    pid: pty.pid,
     onData: (listener) => void pty.onData(listener),
     onExit: (listener) => void pty.onExit((e) => listener(e.exitCode)),
     write: (data) => pty.write(data),

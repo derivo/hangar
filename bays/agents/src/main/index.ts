@@ -1,4 +1,5 @@
 import { homedir } from 'node:os';
+import { listProcesses } from './agents';
 import { join } from 'node:path';
 import type { BayContext, BayMain } from '@hangar/sdk';
 import { allocatePortBase } from './ports';
@@ -30,6 +31,7 @@ export function createAgentsBay(
       setLocale(ctx.locale);
       ctx.onLocaleChange(setLocale);
       const manager = new SessionManager({
+        listProcesses,
         dataDir: ctx.dataDir,
         spawn,
         shell,

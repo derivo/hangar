@@ -1,3 +1,4 @@
+import type { AgentKind } from './agents';
 import type { SessionStatus } from './status';
 
 /** Every session gets a block of this many ports starting at HANGAR_PORT_BASE. */
@@ -110,6 +111,8 @@ export interface BayState {
 /** What the UI sees of a session. */
 export interface SessionView extends SessionRecord {
   running: boolean;
+  /** AI agent running in the shell, if one is recognised (ADR 0045). */
+  agent?: AgentKind;
 }
 
 export interface StateView {

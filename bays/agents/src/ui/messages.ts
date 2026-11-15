@@ -158,6 +158,8 @@ const de = {
     `Reset ${at.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`,
   quotaResetDate: (at: Date) =>
     `Reset ${at.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', '')}`,
+  // AI agent running in a session (ADR 0045); the name is the product's.
+  agentActive: (name: string) => `${name} aktiv`,
 };
 
 const en: typeof de = {
@@ -310,6 +312,7 @@ const en: typeof de = {
     `resets ${at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`,
   quotaResetDate: (at) =>
     `resets ${at.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).replace(',', '')}`,
+  agentActive: (name: string) => `${name} running`,
 };
 
 /** Texts in the app language; German until `setLocale` runs (and in unit tests). */

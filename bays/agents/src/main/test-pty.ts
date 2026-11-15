@@ -18,6 +18,8 @@ export interface FakeSpawn extends SpawnPty {
   failOnce?: boolean;
 }
 
+let nextPid = 4000;
+
 export function fakeSpawn(): FakeSpawn {
   const all: FakePty[] = [];
   const fake: FakeSpawn = Object.assign(
@@ -30,6 +32,7 @@ export function fakeSpawn(): FakeSpawn {
       let onData: (d: string) => void = () => {};
       let onExit: (c: number) => void = () => {};
       const pty: FakePty = {
+        pid: nextPid++,
         options,
         written: [],
         size: [options.cols, options.rows],

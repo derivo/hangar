@@ -1010,3 +1010,65 @@ describe('runCommand', () => {
     expect(() => manager.runCommand('nope', 'ls')).toThrow('Unbekannte Session: nope');
   });
 });
+
+describe('the agent running in a session (ADR 0045)', () => {
+  it('shows the agent found under the shell, follows changes and skips overlapping reads', async () => {
+    let table = '';
+    let reads = 0;
+    let release: () => void = () => {};
+    deps.listProcesses = async () => {
+      reads++;
+      await new Promise<void>((r) => (release = r));
+      return table;
+    };
+    const { manager, session, pty } = await withSession();
+    const agent = () => manager.view().sessions.find((s) => s.id === session.id)?.agent;
+    table = `${pty.pid} 1 /bin/zsh -l\n900 ${pty.pid} node /x/bin/codex`;
+    manager.tick();
+    manager.tick(); // the first read still runs
+    expect(reads).toBe(1);
+    deps.emit.mockClear();
+    release();
+    await vi.waitFor(() => expect(agent()).toBe('codex'));
+    expect(deps.emit).toHaveBeenCalledWith('state', expect.anything());
+
+    deps.emit.mockClear();
+    manager.tick();
+    release();
+    await vi.waitFor(() => expect(reads).toBe(2));
+    await Promise.resolve();
+    expect(deps.emit).not.toHaveBeenCalledWith('state', expect.anything()); // unchanged
+
+    table = `${pty.pid} 1 /bin/zsh -l`;
+    manager.tick();
+    release();
+    await vi.waitFor(() => expect(agent()).toBeUndefined());
+    expect(manager.view().sessions[0]).not.toHaveProperty('agent');
+  });
+
+  it('forgets the agent when the shell ends, and reads nothing without running shells', async () => {
+    let reads = 0;
+    deps.listProcesses = async () => {
+      reads++;
+      return `${deps.spawn.all[0]!.pid} 1 zsh\n901 ${deps.spawn.all[0]!.pid} claude`;
+    };
+    const { manager, pty } = await withSession();
+    manager.tick();
+    await vi.waitFor(() => expect(manager.view().sessions[0]!.agent).toBe('claude'));
+    pty.emitExit(0);
+    expect(manager.view().sessions[0]).not.toHaveProperty('agent');
+    manager.tick();
+    await Promise.resolve();
+    expect(reads).toBe(1);
+  });
+
+  it('keeps going when the process list cannot be read', async () => {
+    deps.listProcesses = async () => {
+      throw new Error('no ps');
+    };
+    const { manager } = await withSession();
+    manager.tick();
+    await Promise.resolve();
+    expect(manager.view().sessions[0]).not.toHaveProperty('agent');
+  });
+});

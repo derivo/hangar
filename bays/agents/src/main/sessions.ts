@@ -1,4 +1,5 @@
 import { sharedState, type SharedState } from './share';
+import { agentOf, parseProcesses, type AgentKind } from './agents';
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
@@ -102,6 +103,8 @@ export interface ManagerDeps {
   resolveSecrets?(names: string[]): Promise<Record<string, string>>;
   /** A session was closed (its jobs go with it). */
   sessionClosed?(sessionId: string): void;
+  /** The process table (`ps`), to find the agent in each shell (ADR 0045); unset: none shown. */
+  listProcesses?(): Promise<string>;
 }
 
 interface Live {
@@ -118,6 +121,8 @@ interface Live {
   jobs?: Set<JobProcess>;
   /** Counts shell starts; a password answer for an older start is dropped. */
   start?: number;
+  /** AI agent found in the shell (ADR 0045). */
+  agent?: AgentKind;
 }
 
 /** Projects, sessions and their shells. Everything the agent bay does lives here. */
@@ -181,6 +186,7 @@ export class SessionManager {
       sessions: this.state.sessions.map((s) => ({
         ...s,
         running: this.live.get(s.id)?.pty !== undefined,
+        ...(this.live.get(s.id)?.agent && { agent: this.live.get(s.id)!.agent }),
       })),
     };
   }
@@ -507,6 +513,32 @@ export class SessionManager {
       if (live) this.setStatus(s.id, afterQuiet(s.status, live.lastOutputAt, now));
     }
     this.flushScrollback();
+    void this.findAgents();
+  }
+
+  private findingAgents = false;
+
+  /** Which agent runs in each shell, from one read of the process table (ADR 0045). */
+  private async findAgents(): Promise<void> {
+    const shells = [...this.live.values()].filter((l) => l.pty);
+    if (!this.deps.listProcesses || this.findingAgents || shells.length === 0) return;
+    this.findingAgents = true;
+    try {
+      const processes = parseProcesses(await this.deps.listProcesses());
+      let changed = false;
+      for (const live of shells) {
+        if (!live.pty) continue; // ended while reading
+        const agent = agentOf(live.pty.pid, processes);
+        if (agent === live.agent) continue;
+        live.agent = agent;
+        changed = true;
+      }
+      if (changed) this.changed();
+    } catch {
+      // No process table (yet): the icons stay as they are.
+    } finally {
+      this.findingAgents = false;
+    }
   }
 
   /** Persists scrollback and kills all shells (on quit). */
@@ -601,6 +633,7 @@ export class SessionManager {
     pty.onExit((exitCode) => {
       if (live.pty !== pty) return; // an old shell after restart
       live.pty = undefined;
+      live.agent = undefined;
       this.deps.emit('session.exit', { id: session.id, exitCode });
       this.changed();
     });
@@ -611,6 +644,7 @@ export class SessionManager {
     const pty = live?.pty;
     if (!live || !pty) return;
     live.pty = undefined;
+    live.agent = undefined;
     pty.kill();
   }
 
