@@ -363,7 +363,7 @@ body {
 .tree-session {
   width: 100%;
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr);
+  grid-template-columns: 22px minmax(0, 1fr) auto;
   align-items: center;
   gap: 1px 10px;
   padding: 9px 12px 9px 10px;
@@ -416,6 +416,53 @@ body {
   white-space: nowrap;
   font: 400 11.5px/1.3 var(--hangar-font-mono);
   color: var(--hangar-color-text-muted);
+}
+
+/* Logo of the AI agent running in the session (ADR 0045). */
+.tree-session-agent {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+}
+
+.agent-logo,
+.agent-logo svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* OpenCode: the light glyph (first) on the dark theme, the dark one on the light theme. */
+.agent-logo-1 {
+  display: none;
+}
+
+.tree-session-agent:has(.agent-logo-1) .agent-logo-0 {
+  display: none;
+}
+
+.tree-session-agent .agent-logo-1 {
+  display: block;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .tree-session-agent:has(.agent-logo-1) .agent-logo-0 {
+    display: block;
+  }
+
+  :root:not([data-theme='light']) .tree-session-agent .agent-logo-1 {
+    display: none;
+  }
+}
+
+:root[data-theme='dark'] .tree-session-agent:has(.agent-logo-1) .agent-logo-0 {
+  display: block;
+}
+
+:root[data-theme='dark'] .tree-session-agent .agent-logo-1 {
+  display: none;
 }
 
 .tree-foot {

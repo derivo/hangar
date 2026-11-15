@@ -1,5 +1,10 @@
 import { useCallback, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import claudeLogo from './logos/claude.svg?raw';
+import codexLogo from './logos/codex.svg?raw';
+import openCodeDark from './logos/opencode-dark.svg?raw';
+import openCodeLight from './logos/opencode-light.svg?raw';
 import { TAB_COLORS, type SessionView, type StateView, type TabColor } from '../main/types';
+import type { AgentKind } from '../main/agents';
 import { Menu, type MenuEntry } from './Menu';
 import { branchOf, sessionName, t } from './messages';
 import { tabColorStyle } from './SessionPane';
@@ -362,6 +367,7 @@ export function ProjectTree(props: Props) {
                         {s.description && (
                           <span className="tree-session-branch">{branchOf(s)}</span>
                         )}
+                        {s.agent && <AgentLogo agent={s.agent} />}
                       </button>
                     </li>
                   ))}
@@ -388,5 +394,34 @@ export function ProjectTree(props: Props) {
         </li>
       </ul>
     </nav>
+  );
+}
+
+/** Product names and the makers' logos, unchanged (ADR 0045, `logos/README.md`). */
+const AGENTS: Record<AgentKind, { name: string; logos: string[] }> = {
+  claude: { name: 'Claude Code', logos: [claudeLogo] },
+  codex: { name: 'Codex', logos: [codexLogo] },
+  // One per color scheme: light glyph on the dark theme, dark one on the light theme.
+  opencode: { name: 'OpenCode', logos: [openCodeDark, openCodeLight] },
+};
+
+function AgentLogo({ agent }: { agent: AgentKind }) {
+  const { name, logos } = AGENTS[agent];
+  return (
+    <span
+      className="tree-session-agent"
+      role="img"
+      aria-label={t.agentActive(name)}
+      title={t.agentActive(name)}
+    >
+      {logos.map((svg, i) => (
+        // Our own files from the repository, not page content.
+        <span
+          key={i}
+          className={`agent-logo agent-logo-${i}`}
+          dangerouslySetInnerHTML={{ __html: svg }}
+        />
+      ))}
+    </span>
   );
 }

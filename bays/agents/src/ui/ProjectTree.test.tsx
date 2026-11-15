@@ -484,3 +484,42 @@ describe('ProjectTree', () => {
     });
   });
 });
+
+describe('ProjectTree: the agent in a session (ADR 0045)', () => {
+  it('shows the logo of the running agent at the right of the session, named for screen readers', () => {
+    renderTree({
+      state: {
+        ...state,
+        sessions: [
+          session({ id: 's1', agent: 'claude' }),
+          session({ id: 's2', agent: 'codex' }),
+          session({ id: 's4', agent: 'opencode' }),
+          session({ id: 's3', projectId: 'p2' }),
+        ],
+      },
+    });
+    const icon = (id: string) => within(screen.getByTestId(`session-${id}`));
+    expect(icon('s1').getByRole('img', { name: 'Claude Code aktiv' })).toHaveAttribute(
+      'title',
+      'Claude Code aktiv',
+    );
+    expect(
+      icon('s2').getByRole('img', { name: 'Codex aktiv' }).querySelector('svg'),
+    ).not.toBeNull();
+    // OpenCode brings one logo per color scheme; CSS shows the matching one.
+    expect(
+      icon('s4').getByRole('img', { name: 'OpenCode aktiv' }).querySelectorAll('svg'),
+    ).toHaveLength(2);
+    expect(screen.getByTestId('session-s3').querySelector('.tree-session-agent')).toBeNull();
+  });
+
+  it('names the agent in English too', () => {
+    setLocale('en');
+    try {
+      renderTree({ state: { ...state, sessions: [session({ id: 's1', agent: 'codex' })] } });
+      expect(screen.getByRole('img', { name: 'Codex running' })).toBeVisible();
+    } finally {
+      setLocale('de');
+    }
+  });
+});

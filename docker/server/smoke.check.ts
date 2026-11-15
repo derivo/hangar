@@ -85,6 +85,10 @@ it('runs as a user without root rights and owns its volumes', () => {
   ]);
 });
 
+it('has ps, which the agent bay reads the agents in its shells from (ADR 0045)', () => {
+  expect(exec('ps', '-A', '-o', 'pid=,ppid=,args=')).toMatch(/^\s*1\s+0\s+\S/m);
+});
+
 it('is healthy, loads the agent bay and listens on the loopback only', async () => {
   await expect.poll(status, { timeout: 60_000 }).toBe('healthy');
   const { bays, errors } = health();

@@ -22,8 +22,8 @@ locally on macOS (arm64). The gaps are listed below, the next steps in [roadmap.
 | Command                                      | Result                                                                                                                                                                                               |
 | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pnpm install`, `lint`, `typecheck`, `build` | Exit 0                                                                                                                                                                                               |
-| `pnpm test`                                  | 101 files, 1509 tests green, 2 skipped, random order; coverage 98.91 % / 97.28 % (gate incl. desktop main process, 2026-11-13, ADR 0042 to 0044)                                                     |
-| `pnpm test:e2e`                              | 66 green, 2 skipped, with error gate (2026-11-13, ADR 0042 to 0044); `pnpm test:ssh` 3 of 3 (as of ADR 0025); `pnpm test:container` 3 of 3                                                           |
+| `pnpm test`                                  | 102 files, 1534 tests green, 2 skipped, random order; coverage 98.92 % / 97.28 % (gate incl. desktop main process, 2026-11-15, ADR 0045)                                                             |
+| `pnpm test:e2e`                              | 67 green, 2 skipped, with error gate (2026-11-15, ADR 0045); `pnpm test:ssh` 3 of 3 (as of ADR 0025); `pnpm test:container` 6 of 6 (2026-11-15, `ps` check of ADR 0045)                              |
 | E2E against package                          | 26 of 26 green against `release/0.1.0/mac-arm64/Hangar.app` (as of after phase 8); 2026-11-04 `secrets-board`, `local-server`, `sidebar-bays` 9 of 9 against a fresh package (`--mac dir`, unsigned) |
 | Lint rule `packages/host`                    | Probe file with `import { app } from 'electron'` → `no-restricted-imports` error; `packages/host/src` 100 % lines, 98.11 % branches                                                                  |
 | `pnpm docs:api`                              | typedoc without warnings; every public SDK interface is documented                                                                                                                                   |
@@ -561,6 +561,12 @@ test:linux-server`) and its setup over SSH (`pnpm test:linux-setup`, ADR
   macOS, Windows or Linux (the E2E records instead of showing), Windows and
   Linux at all (no machine); on the person's Mac `dev.hangar.app` had no entry
   under Notifications, cause not yet confirmed.
+- **Agent logo in the session entry** (ADR 0045, 2026-11-15): the project
+  tree shows the logo of Claude Code, Codex or OpenCode running in a session's
+  shell, found with `ps` every 5 seconds (not on Windows). `e2e/agent-icon.spec.ts`
+  runs a program called `claude` in a session: logo at the right, axe light and
+  dark 0, 200 % zoom without overflow, gone after Ctrl+C. Codex review in
+  `docs/reviews/2026-11-15-session-agent-logo.md`.
 - **Notifications, badges and jobs of the server, part 11c/11d** (ADR 0019):
   `e2e/server.spec.ts` – a job (`hangar status waiting`) runs on the server
   while the desktop is disconnected; after connecting, the notification

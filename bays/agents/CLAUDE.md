@@ -40,6 +40,7 @@ description, environment variables, status bar, scheduled commands ("Schedule jo
   the badge of the bay is the number of waiting sessions. It reports the number of
   running shells on every change with `ctx.setRunning` (tray of the local server).
 - Passwords (ADR 0021): a value in `Project.env`/`SessionRecord.env` is a text or `{ secret: NAME }` (`EnvValue`, `isSecretRef`); the UI writes `KEY=@secret:NAME` (`env-text.ts`, no escape) and shows the passwords below the field (`SecretsHint`, `aria-describedby`). On shell start `ManagerDeps.resolveSecrets` (`dev.hangar.secrets/secret.resolve`) resolves the references; only the answer of the last start counts (`Live.start`). If it fails, the terminal writes `Shell not started: <reason>` and the bay reports `session.exit` with -1. Values are never in `state.json`.
+- Agent logo (ADR 0045): `agents.ts` finds the AI agent in each shell from `ps` (closest descendant of `PtyProcess.pid`; program name, or the script of `node`/`bun`/`deno`), read in `tick()` via `ManagerDeps.listProcesses` (unset in tests: none), `SessionView.agent`. `ProjectTree.tsx` shows the maker's logo from `src/ui/logos/` (inlined with `?raw`; sources in its `README.md`), OpenCode's two variants switched by the color scheme in `styles.css` (`e2e/agent-icon.spec.ts`).
 - For bays (`bayOnly`): `session.info` (`{ projectId, project, name }`) and `project.list` (`[{ id, name, shared }]`), used by the board (ADR 0037).
 
 ## UI channels (`window.hangar.invoke`)

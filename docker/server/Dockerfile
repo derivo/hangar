@@ -11,7 +11,7 @@ RUN npm install --no-save --no-audit --no-fund node-pty@${NODE_PTY_VERSION}
 FROM node:24-bookworm-slim
 # git for worktrees, openssh-client for deploy keys, tini forwards SIGTERM to node.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends git openssh-client ca-certificates tini \
+ && apt-get install -y --no-install-recommends git openssh-client ca-certificates tini procps \
  && rm -rf /var/lib/apt/lists/* \
  && mkdir /data /projects \
  && chown node:node /data /projects \
