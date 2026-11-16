@@ -635,6 +635,20 @@ the index (it expires) belong to this phase.
 1. The release workflow publishes a signed index; Hangar reports an update and
    installs it after confirmation.
 
+## Workspaces: inbox and activity log (ADR 0046, proposed)
+
+**Goal:** Work from other instances (tasks, handovers) waits in an inbox until
+the person accepts it or trusts the sender; every remote call shows in a local
+activity log. Steps and acceptance in the ADR. Before the first real test with
+two people over a public relay.
+
+## Workers on virtual machines (ADR 0047, proposed)
+
+**Goal:** Hangar servers on Linux machines work the tasks of the owner's board:
+claim with a lease, run the agent in a worktree per task, push a branch, note
+and complete; robust against restarts, lost connections, cancellation and usage
+limits. Requires ADR 0046. Steps and acceptance in the ADR.
+
 ## Outside this roadmap
 
 Third-party bays (not planned for now: only a registry with own bays; would
