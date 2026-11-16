@@ -203,7 +203,7 @@ describe('Inbox (ADR 0046)', () => {
 });
 
 describe('Inbox, Codex review of step 1-3', () => {
-  it('puts an entry back to pending when a resume cannot check it yet (not connected)', async () => {
+  it('resumes a reserved entry without checking again: the checks passed when it was accepted', async () => {
     const inbox = new MemoryInboxStore();
     const entry = {
       id: 'i1',
@@ -215,16 +215,23 @@ describe('Inbox, Codex review of step 1-3', () => {
       state: 'accepting' as const,
       executionId: 'e1',
     };
-    inbox.save([entry]);
+    inbox.save([entry, { ...entry, id: 'i2', target: `${board}/later.add` }]);
     const { bus, access, handler, activity } = setup({ inbox });
+    // Not connected yet after a restart: no member is known.
     access.member = false;
     await bus.resumeInbox();
-    expect(bus.inboxEntries()).toEqual([{ ...entry, state: 'pending' }]);
-    expect(activity).toEqual([]);
-    // Accepted again later, it keeps its execution id: a run before the crash is not repeated.
-    access.member = true;
-    await bus.acceptInbox('i1');
     expect(handler).toHaveBeenCalledWith({ title: 'x' }, { caller: ben, executionId: 'e1' });
+    expect(activity.map((e) => e.outcome)).toEqual(['accepted']);
+    // A bay not loaded yet: the entry stays reserved for the next start, never pending again.
+    expect(bus.inboxEntries()).toEqual([{ ...entry, id: 'i2', target: `${board}/later.add` }]);
+  });
+
+  it('checks before it reserves: a denied accept leaves nothing reserved', async () => {
+    const { bus, access } = setup();
+    const { queued } = (await bus.call(ben, add, {})) as { queued: string };
+    access.shared = false;
+    await expect(bus.acceptInbox(queued)).rejects.toThrow('Access denied');
+    expect(bus.inboxEntries()).toEqual([]);
   });
 });
 

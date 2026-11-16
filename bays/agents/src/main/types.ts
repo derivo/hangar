@@ -98,6 +98,10 @@ export interface Handover {
   remote?: string;
   context?: string;
   at: string;
+  /** Remote only: the sending instance, from the authenticated caller (ADR 0046). */
+  instance?: { name: string; fingerprint: string; workspace: string };
+  /** The accepted inbox call that created it; a repeat creates no second session (ADR 0046). */
+  executionId?: string;
 }
 
 /** Where a new session runs (ADR 0022). */

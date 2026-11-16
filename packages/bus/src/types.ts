@@ -9,9 +9,17 @@ export type Caller =
   | { kind: 'session'; bayId: string; sessionId: string }
   /**
    * A bay or agent of another Hangar instance (ADR 0011). `instance` is its fingerprint,
-   * `workspace` comes from the authenticated header; `sessionId` is for display only.
+   * `workspace` comes from the authenticated header; `sessionId` and `name` (from the signed
+   * member list) are for display only.
    */
-  | { kind: 'remote'; instance: string; workspace: string; bayId: string; sessionId?: string }
+  | {
+      kind: 'remote';
+      instance: string;
+      workspace: string;
+      bayId: string;
+      sessionId?: string;
+      name?: string;
+    }
   /**
    * A bay or agent of the Hangar server on this machine calling a bay of the app (ADR 0036);
    * the server checked the call before, the app checks it again under its own subject.

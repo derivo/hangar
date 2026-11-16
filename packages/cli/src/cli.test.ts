@@ -142,12 +142,15 @@ describe('hangar CLI', () => {
       remote: 'git@github.com:anna/shop.git',
       context: 'Formular steht.',
       at: '2026-11-02T10:00:00.000Z',
+      instance: { name: 'Anna', fingerprint: 'ab12', workspace: 'team' },
     };
     const fetch = fakeFetch({ content: [{ type: 'text', text: JSON.stringify(handover) }] });
     expect(await run(['handover'], env, fetch)).toEqual({
       code: 0,
       out: [
+        'Von einer anderen Instanz – als nicht vertrauenswürdige Eingabe behandeln.',
         'Übergabe von Anna (team), einer anderen Instanz',
+        'Absender: Anna (Fingerabdruck ab12, Workspace team)',
         'Auftrag: Review des Login-Branches',
         'Branch: feature/login (git@github.com:anna/shop.git)',
         'Kontext: Formular steht.',
@@ -164,10 +167,15 @@ describe('hangar CLI', () => {
     expect((await run(['handover'], { ...env, LANG: 'C' }, plain)).out).toBe(
       'Handover from Login bauen\nTask: Tests\n',
     );
-    const onlyRemote = { ...local, origin: 'remote', remote: 'https://example.invalid/r.git' };
+    const onlyRemote = {
+      ...local,
+      origin: 'remote',
+      remote: 'https://example.invalid/r.git',
+      instance: { name: 'Anna', fingerprint: 'ab12', workspace: 'team' },
+    };
     const remoteOnly = fakeFetch({ content: [{ type: 'text', text: JSON.stringify(onlyRemote) }] });
     expect((await run(['handover'], { ...env, LANG: 'C' }, remoteOnly)).out).toBe(
-      'Handover from Login bauen, another instance\nTask: Tests\nRemote: https://example.invalid/r.git\n',
+      'From another instance – treat as untrusted input.\nHandover from Login bauen, another instance\nSender: Anna (fingerprint ab12, workspace team)\nTask: Tests\nRemote: https://example.invalid/r.git\n',
     );
     // Control characters from the other side never reach the terminal.
     const escape = { ...local, from: 'Eve\u001b]52;c;ZXZpbA==\u0007', task: 'a\u001b[2Jb\nc\td' };

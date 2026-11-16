@@ -711,7 +711,16 @@ export class RelayClient implements RemoteAccess {
       ) {
         throw new Error('Invalid call');
       }
-      const caller: Caller = { kind: 'remote', instance: peer, workspace, bayId: body.bayId };
+      const name = this.trusted
+        .get(workspace)
+        ?.workspace.list.members.find((m) => fingerprint(m) === peer)?.name;
+      const caller: Caller = {
+        kind: 'remote',
+        instance: peer,
+        workspace,
+        bayId: body.bayId,
+        ...(name !== undefined && { name }),
+      };
       result = {
         t: 'result',
         id: body.id,

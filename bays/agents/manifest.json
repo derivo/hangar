@@ -45,7 +45,8 @@
       "name": "handover.create",
       "sensitive": false,
       "remote": true,
-      "description": "Hands work over to a new session: task, optional context, project, branch and Git remote. Text and Git references only."
+      "inbox": true,
+      "description": "Hands work over to a new session: task, optional context, project, branch and Git remote. Text and Git references only. From another instance the call waits in the person's inbox and answers { queued: <id> }, unless they trust your instance (then the real result)."
     },
     {
       "name": "handover.get",

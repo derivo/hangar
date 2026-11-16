@@ -26,3 +26,22 @@ Reviewer: Codex (read-only, `codex exec -s read-only`), on the implementation of
    restart" (red before the fix).
 5. **[P2] Pruning truncated the log in place;** a crash in that window lost the
    history. Fixed: rewrites go through `writeDurable` (temporary file, rename).
+
+## Round 2: step 4 (origin, execution ids, manifests, CLI)
+
+1. **[P1] A `task.done` without a note ran twice** after the fix of round 1,
+   finding 1: an entry back in `pending` could be accepted again after the
+   person reopened the task. **[P2] Deleting the task or closing the handover
+   session lost the dedupe record** in the same window. Root cause: the way back
+   from `accepting` to `pending`. Fixed in the bus instead of the handlers:
+   `acceptInbox` checks first and reserves after the check; `resumeInbox` runs a
+   reserved entry without checking again (the checks passed when the person
+   accepted, and after a restart no relay is connected yet); an entry whose bay
+   is not loaded stays reserved for the next start. No path leads back to
+   `pending`. Tests: `inbox.test.ts` "resumes a reserved entry without checking
+   again" and "checks before it reserves" (red before the fix). Replaces the fix
+   of round 1, finding 1.
+2. **[P2] `hangar handover` did not show the authenticated sender;** two members
+   with the same name looked alike. Fixed: a line with name, fingerprint and
+   workspace from `handover.instance`. Test: `cli.test.ts` "hangar handover
+   prints the handover of the own session" (red before the fix).

@@ -153,18 +153,33 @@ export class Bus {
   }
 
   /**
-   * Runs an inbox entry after checking the caller again (membership, share, denial). The
-   * entry is reserved first, so a second accept or a reject of the same entry fails.
+   * Runs an inbox entry after checking the caller again (membership, share, denial). Checked
+   * first, then reserved: a second accept or a reject of the same entry fails from then on.
    */
   async acceptInbox(id: string): Promise<unknown> {
+    const open = (entries: InboxEntry[]) => {
+      const entry = entries.find((e) => e.id === id && e.state === 'pending');
+      if (!entry) throw new Error(`No open inbox entry: ${id}`);
+      return entry;
+    };
+    const first = open(this.inbox.load());
+    const log = this.logger(first.caller, first.target, first.preview, id);
+    const fn = this.functions.get(first.target);
+    try {
+      if (!fn) throw new Error(`Unknown function: ${first.target}`);
+      await this.authorize(first.caller, fn);
+    } catch (error) {
+      this.inbox.save(this.inbox.load().filter((e) => e.id !== id));
+      log('denied');
+      throw error;
+    }
+    // Reserved only now, after the await: an accept that ran meanwhile wins.
     const entries = this.inbox.load();
-    const entry = entries.find((e) => e.id === id && e.state === 'pending');
-    if (!entry) throw new Error(`No open inbox entry: ${id}`);
+    const entry = open(entries);
     entry.state = 'accepting';
-    // Kept from an earlier reservation: a run before a crash is not repeated.
-    entry.executionId ??= randomUUID();
+    entry.executionId = randomUUID();
     this.inbox.save(entries);
-    return this.runAccepted(entry);
+    return this.run(entry, fn);
   }
 
   /** Drops an open inbox entry; the caller learns nothing (ADR 0046). */
@@ -177,32 +192,20 @@ export class Bus {
   }
 
   /**
-   * Runs the entries a crash left in `accepting` again, with their execution id. One that
-   * cannot pass the checks yet (relay not connected, bay not loaded) waits as `pending` again.
+   * Runs the entries a crash left reserved, with their execution id, so handlers ignore a run
+   * that finished before the crash. Not checked again: the checks passed when the person
+   * accepted, and right after a restart no relay is connected yet. An entry whose bay is not
+   * loaded stays reserved for the next start.
    */
   async resumeInbox(): Promise<void> {
-    for (const entry of this.inbox.load().filter((e) => e.state === 'accepting'))
-      await this.runAccepted(entry, true).catch(() => {});
+    for (const entry of this.inbox.load().filter((e) => e.state === 'accepting')) {
+      const fn = this.functions.get(entry.target);
+      if (fn) await this.run(entry, fn).catch(() => {});
+    }
   }
 
-  private async runAccepted(entry: InboxEntry, resuming = false): Promise<unknown> {
+  private async run(entry: InboxEntry, fn: Entry): Promise<unknown> {
     const log = this.logger(entry.caller, entry.target, entry.preview, entry.id);
-    const done = () => this.inbox.save(this.inbox.load().filter((e) => e.id !== entry.id));
-    const fn = this.functions.get(entry.target);
-    try {
-      if (!fn) throw new Error(`Unknown function: ${entry.target}`);
-      await this.authorize(entry.caller, fn);
-    } catch (error) {
-      if (resuming) {
-        this.inbox.save(
-          this.inbox.load().map((e) => (e.id === entry.id ? { ...e, state: 'pending' } : e)),
-        );
-      } else {
-        done();
-        log('denied');
-      }
-      throw error;
-    }
     try {
       const info = { caller: entry.caller, executionId: entry.executionId! };
       const value = await fn.transport.invoke(entry.target, entry.args, info);
@@ -212,7 +215,7 @@ export class Bus {
       log('failed');
       throw error;
     } finally {
-      done();
+      this.inbox.save(this.inbox.load().filter((e) => e.id !== entry.id));
     }
   }
 
