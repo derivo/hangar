@@ -150,6 +150,50 @@ describe('Workspaces (host)', () => {
     expect(w.isTrusted('team', 'SHA256:ben')).toBe(false);
   });
 
+  it('shows the inbox and the log and accepts or rejects entries by id (ADR 0046)', async () => {
+    const { w, bus } = hangar(mkdtempSync(join(tmpdir(), 'hangar-ws-')), 'mac');
+    const run = vi.fn(() => 'done');
+    bus.register('dev.hangar.board', { name: 'task.add', sensitive: false, inbox: true }, run);
+    vi.spyOn(w, 'isMember').mockReturnValue(true);
+    vi.spyOn(w, 'isShared').mockReturnValue(true);
+    vi.spyOn(w, 'memberName').mockReturnValue('Ben');
+    const remote = { kind: 'remote' as const, instance: 'SHA256:b', workspace: 'team', bayId: 'x' };
+    const spec = bus.list().find((f) => f.id === 'dev.hangar.board/task.add')!.spec;
+    spec.remote = true;
+    const first = (await bus.call(remote, 'dev.hangar.board/task.add', { title: 'A' })) as {
+      queued: string;
+    };
+    const second = (await bus.call(remote, 'dev.hangar.board/task.add', { title: 'B' })) as {
+      queued: string;
+    };
+    const log = { list: () => [{ outcome: 'queued' }] };
+    expect(await workspaceAction(w, bus, 'view', [], log)).toMatchObject({ inbox: 2 });
+    expect(await workspaceAction(w, bus, 'activity', [], log)).toEqual({
+      inbox: [
+        {
+          id: first.queued,
+          at: expect.any(String),
+          workspace: 'team',
+          instance: 'SHA256:b',
+          name: 'Ben',
+          target: 'dev.hangar.board/task.add',
+          preview: 'A',
+        },
+        expect.objectContaining({ id: second.queued, preview: 'B' }),
+      ],
+      log: [{ outcome: 'queued' }],
+    });
+    expect(await workspaceAction(w, bus, 'acceptInbox', [first.queued], log)).toBe('done');
+    await workspaceAction(w, bus, 'rejectInbox', [second.queued], log);
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(await workspaceAction(w, bus, 'view', [], log)).toMatchObject({ inbox: 0 });
+    await expect(workspaceAction(w, bus, 'acceptInbox', [1], log)).rejects.toThrow(
+      'Invalid arguments for acceptInbox',
+    );
+    // Without a log (older callers) the list is empty.
+    expect(await workspaceAction(w, bus, 'activity', [])).toEqual({ inbox: [], log: [] });
+  });
+
   it('connects, founds a workspace, invites, both confirm, and states flow', async () => {
     const root = mkdtempSync(join(tmpdir(), 'hangar-ws-'));
     const url = await startOn(join(root, 'relay.json'));

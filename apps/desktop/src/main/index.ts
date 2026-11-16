@@ -194,6 +194,8 @@ async function start(): Promise<void> {
     prompter: dialogPrompter,
     cli: { execPath: process.execPath, cliPath },
     onJobsChanged: () => host?.jobsChanged(),
+    // Refreshes the page and the badge; a rise of the count raises the notification.
+    onActivity: () => host?.workspacesChanged(),
     remote: {
       isMember: (w, i) => workspaces?.isMember(w, i) ?? false,
       isShared: (w, t) => workspaces?.isShared(w, t) ?? false,
@@ -306,11 +308,14 @@ async function start(): Promise<void> {
   // the local server they run there (ADR 0036, point 11).
   const workspace = (action: string, args: unknown[]) =>
     ws
-      ? workspaceAction(ws, core!.bus, action, args)
+      ? workspaceAction(ws, core!.bus, action, args, core!.activity)
       : host!.localWorkspaces(
           action,
           args.map((a) => (typeof a === 'boolean' ? a : String(a))),
         );
+  // Badge on the settings: open inbox entries, also those of the local server (ADR 0046).
+  host.countInbox = async () => ((await workspace('view', [])) as { inbox?: number }).inbox ?? 0;
+  host.workspacesChanged();
   const str = (v: unknown) => String(v);
   ipcMain.handle('shell:workspaces', () => workspace('view', []));
   ipcMain.handle('shell:workspace.connect', (_e, ...args: unknown[]) => workspace('connect', args));
@@ -321,6 +326,15 @@ async function start(): Promise<void> {
   ipcMain.handle('shell:workspace.reject', (_e, ...args: unknown[]) => workspace('reject', args));
   ipcMain.handle('shell:workspace.remove', (_e, ...args: unknown[]) => workspace('remove', args));
   ipcMain.handle('shell:workspace.share', (_e, ...args: unknown[]) => workspace('share', args));
+  ipcMain.handle('shell:workspace.trust', (_e, ...args: unknown[]) => workspace('trust', args));
+  ipcMain.handle('shell:workspace.activity', () => workspace('activity', []));
+  // Accepting returns the call's result; the page needs none of it.
+  ipcMain.handle('shell:workspace.acceptInbox', async (_e, ...args: unknown[]) => {
+    await workspace('acceptInbox', args);
+  });
+  ipcMain.handle('shell:workspace.rejectInbox', (_e, ...args: unknown[]) =>
+    workspace('rejectInbox', args),
+  );
 
   ipcMain.handle('shell:bay.catalog', () =>
     indexUrl && indexKey ? store.catalog(readSettings(settingsFile).updateChannel) : null,

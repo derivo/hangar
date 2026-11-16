@@ -64,6 +64,8 @@ export async function startServer(
       cliPath: options.cli ?? join(import.meta.dirname, '../../../packages/cli/dist/hangar.mjs'),
     },
     onJobsChanged: () => bridge.jobsChanged(),
+    // The paired desktop reads inbox and badge again and notifies on a rise (ADR 0046).
+    onActivity: () => bridge.workspacesChanged(),
     remote: {
       isMember: (w, i) => workspaces?.isMember(w, i) === true,
       isShared: (w, t) => workspaces?.isShared(w, t) === true,
@@ -135,7 +137,7 @@ export async function startServer(
     desktopClosed: () => messages(locale).desktopClosed,
     ...(workspaces && {
       workspaces: (action: string, args: unknown[]) =>
-        workspaceAction(workspaces, core.bus, action, args),
+        workspaceAction(workspaces, core.bus, action, args, core.activity),
     }),
     jobs: () => core.scheduler.list(),
     job: async (action, id) => {

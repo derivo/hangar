@@ -79,9 +79,10 @@ interface Stored {
  */
 export async function workspaceAction(
   ws: Workspaces,
-  bus: Pick<Bus, 'list'>,
+  bus: Pick<Bus, 'list' | 'inboxEntries' | 'acceptInbox' | 'rejectInbox'>,
   action: string,
   args: unknown[],
+  activity?: { list(): unknown[] },
 ): Promise<unknown> {
   // Texts, and for `share` on or off: a missing value must not switch a share off (Codex).
   const texts = {
@@ -94,6 +95,8 @@ export async function workspaceAction(
     remove: 2,
     share: 2,
     trust: 2,
+    acceptInbox: 1,
+    rejectInbox: 1,
   }[action];
   const toggle = action === 'share' || action === 'trust';
   if (
@@ -104,10 +107,13 @@ export async function workspaceAction(
   )
     throw new Error(`Invalid arguments for ${action}`);
   const [a, b, c] = args.map((v) => String(v));
+  const pending = () => bus.inboxEntries().filter((e) => e.state === 'pending');
   switch (action) {
     case 'view':
       return {
         ...ws.view(),
+        // Open inbox entries, for the badge on the settings (ADR 0046).
+        inbox: pending().length,
         functions: bus
           .list()
           .filter(
@@ -136,6 +142,27 @@ export async function workspaceAction(
       return ws.setShared(a!, b!, args[2] === true);
     case 'trust':
       return ws.setTrusted(a!, b!, args[2] === true);
+    // Inbox and log (ADR 0046): what came in and what waits; no arguments but the preview.
+    case 'activity':
+      return {
+        inbox: pending().map((e) => {
+          const name = ws.memberName(e.caller.workspace, e.caller.instance);
+          return {
+            id: e.id,
+            at: e.at,
+            workspace: e.caller.workspace,
+            instance: e.caller.instance,
+            ...(name !== undefined && { name }),
+            target: e.target,
+            preview: e.preview,
+          };
+        }),
+        log: activity?.list() ?? [],
+      };
+    case 'acceptInbox':
+      return bus.acceptInbox(a!);
+    case 'rejectInbox':
+      return bus.rejectInbox(a!);
     default:
       throw new Error(`Unknown workspace action: ${action}`);
   }

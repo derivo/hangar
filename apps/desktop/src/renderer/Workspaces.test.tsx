@@ -1,8 +1,9 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Workspaces } from './Workspaces';
-import type { WorkspacesSettingsView } from '../shared';
+import type { ActivityEvent } from '@hangar/bus';
+import type { InboxItem, WorkspaceActivity, WorkspacesSettingsView } from '../shared';
 
 const me = 'a'.repeat(64);
 const ben = 'b'.repeat(64);
@@ -36,9 +37,13 @@ const view = (over: Partial<WorkspacesSettingsView> = {}): WorkspacesSettingsVie
 const remote = (channel: string, message: string) =>
   new Error(`Error invoking remote method 'shell:workspace.${channel}': Error: ${message}`);
 
-function setup(initial = view()) {
-  let changed = () => {};
+function setup(initial = view(), activity: WorkspaceActivity = { inbox: [], log: [] }) {
+  const listeners = new Set<() => void>();
   const api = {
+    setWorkspaceTrust: vi.fn(async (_n: string, _f: string, _on: boolean) => {}),
+    getWorkspaceActivity: vi.fn(async () => activity),
+    acceptInbox: vi.fn(async (_id: string) => {}),
+    rejectInbox: vi.fn(async (_id: string) => {}),
     getWorkspaces: vi.fn(async () => initial),
     connectRelay: vi.fn(async (_url: string) => {}),
     createWorkspace: vi.fn(async (_name: string, _token: string) => {}),
@@ -53,12 +58,12 @@ function setup(initial = view()) {
     removeMember: vi.fn(async (_n: string, _f: string) => {}),
     setWorkspaceShare: vi.fn(async (_n: string, _t: string, _on: boolean) => {}),
     onWorkspaces: vi.fn((listener: () => void) => {
-      changed = listener;
-      return () => {};
+      listeners.add(listener);
+      return () => listeners.delete(listener);
     }),
   };
   render(<Workspaces api={api} />);
-  return { api, changed: () => act(() => changed()) };
+  return { api, changed: () => act(() => listeners.forEach((l) => l())) };
 }
 
 const form = (name: string) => screen.getByRole('form', { name });
@@ -399,5 +404,151 @@ describe('Workspaces (ADR 0030)', () => {
       await changed();
       await vi.waitFor(() => expect(screen.queryByRole('region', { name: 'team' })).toBeNull());
     });
+  });
+});
+
+const item = (over: Partial<InboxItem> = {}): InboxItem => ({
+  id: 'i1',
+  at: '2026-11-16T10:00:00.000Z',
+  workspace: 'team',
+  instance: ben,
+  name: 'ben-pc',
+  target: 'dev.hangar.board/task.add',
+  preview: 'Login reparieren',
+  ...over,
+});
+const logged = (over: Partial<ActivityEvent> = {}): ActivityEvent => ({
+  at: '2026-11-16T10:00:00.000Z',
+  direction: 'in',
+  workspace: 'team',
+  instance: ben,
+  name: 'ben-pc',
+  target: 'dev.hangar.board/task.add',
+  outcome: 'queued',
+  ...over,
+});
+
+describe('Workspaces – trust and activity (ADR 0046)', () => {
+  it('switches trust per member by fingerprint, never for this instance', async () => {
+    const { api } = setup(view({ workspaces: [{ ...view().workspaces[0]!, trusted: [ben] }] }));
+    const trust = await screen.findByRole('checkbox', {
+      name: 'Arbeit von ben-pc automatisch annehmen',
+    });
+    expect(trust).toBeChecked();
+    expect(
+      screen.queryByRole('checkbox', { name: 'Arbeit von anna-mac automatisch annehmen' }),
+    ).toBeNull();
+    fireEvent.click(trust);
+    await waitFor(() => expect(api.setWorkspaceTrust).toHaveBeenCalledWith('team', ben, false));
+  });
+
+  it('says when nothing waits and nothing happened', async () => {
+    setup();
+    expect(await screen.findByRole('heading', { name: 'Aktivität' })).toBeVisible();
+    expect(screen.getByText('Nichts wartet auf Freigabe.')).toBeVisible();
+    expect(screen.getByText('Noch keine Aktivität.')).toBeVisible();
+  });
+
+  it('accepts and rejects waiting work and loads again', async () => {
+    const { api } = setup(view(), {
+      inbox: [item(), item({ id: 'i2', preview: 'Docs' })],
+      log: [],
+    });
+    const waiting = await screen.findByRole('list', { name: 'Wartet auf Freigabe' });
+    expect(within(waiting).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(waiting).getAllByText('ben-pc (team)')[0]).toBeVisible();
+    expect(within(waiting).getByText('Login reparieren')).toBeVisible();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Annehmen: Login reparieren – ben-pc (team)' }),
+    );
+    await waitFor(() => expect(api.acceptInbox).toHaveBeenCalledWith('i1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Ablehnen: Docs – ben-pc (team)' }));
+    await waitFor(() => expect(api.rejectInbox).toHaveBeenCalledWith('i2'));
+    await waitFor(() => expect(api.getWorkspaceActivity).toHaveBeenCalledTimes(3));
+  });
+
+  it('says so when an entry is gone in between or no longer allowed', async () => {
+    const { api } = setup(view(), { inbox: [item()], log: [] });
+    api.acceptInbox.mockRejectedValueOnce(remote('acceptInbox', 'No open inbox entry: i1'));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Annehmen: Login reparieren – ben-pc (team)' }),
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent('Der Eintrag ist nicht mehr offen.');
+    api.acceptInbox.mockRejectedValueOnce(
+      remote('acceptInbox', 'Access denied: remote:x/y → dev.hangar.board/task.add'),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Annehmen: Login reparieren – ben-pc (team)' }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Nicht mehr erlaubt: Die Instanz ist kein Mitglied mehr oder die Funktion nicht mehr freigegeben.',
+      ),
+    );
+  });
+
+  it('tells two members of one name apart by fingerprint (Codex)', async () => {
+    const twin = { name: 'ben-pc', fingerprint: eve };
+    const base = view().workspaces[0]!;
+    setup(view({ workspaces: [{ ...base, members: [...base.members, twin] }] }));
+    const boxes = await screen.findAllByRole('checkbox', {
+      name: 'Arbeit von ben-pc automatisch annehmen',
+    });
+    expect(boxes.map((b) => b.getAttribute('aria-describedby') ?? '')).toHaveLength(2);
+    expect(boxes[0]).toHaveAccessibleDescription(expect.stringContaining(ben));
+    expect(boxes[1]).toHaveAccessibleDescription(expect.stringContaining(eve));
+  });
+
+  it('hides waiting entries and says why when the activity cannot be read (Codex)', async () => {
+    const { api, changed } = setup(view(), { inbox: [item()], log: [] });
+    await screen.findByRole('button', { name: /Annehmen: Login reparieren/ });
+    api.getWorkspaceActivity.mockRejectedValueOnce(
+      new Error("Error invoking remote method 'shell:workspace.activity': Error: Server down"),
+    );
+    changed();
+    expect(await screen.findByText('Aktivität nicht lesbar: Server down')).toBeVisible();
+    expect(screen.queryByRole('button', { name: /Annehmen/ })).toBeNull();
+  });
+
+  it('warns when the inbox is full', async () => {
+    const inbox = Array.from({ length: 200 }, (_, i) => item({ id: `i${i}`, preview: `t${i}` }));
+    setup(view(), { inbox, log: [] });
+    expect(
+      await screen.findByText('Die Inbox ist voll: Neue Einträge verdrängen die ältesten.'),
+    ).toBeVisible();
+  });
+
+  it('lists the log newest first and filters by workspace and instance', async () => {
+    setup(view(), {
+      inbox: [],
+      log: [
+        logged({ outcome: 'accepted' }),
+        logged({
+          direction: 'out',
+          outcome: 'ran',
+          workspace: 'club',
+          instance: eve,
+          name: 'eve-pc',
+        }),
+        logged({ outcome: 'denied', preview: 'x' }),
+      ],
+    });
+    const table = await screen.findByRole('table', { name: 'Protokoll' });
+    const rows = () => within(table).getAllByRole('row').slice(1);
+    expect(rows().map((r) => within(r).getAllByRole('cell')[3]!.textContent)).toEqual([
+      'angenommen',
+      'ausgeführt',
+      'verweigert',
+    ]);
+    expect(within(rows()[1]!).getByText('ausgehend')).toBeVisible();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Workspace' }), {
+      target: { value: 'club' },
+    });
+    expect(rows()).toHaveLength(1);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Workspace' }), {
+      target: { value: '' },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Instanz' }), { target: { value: ben } });
+    expect(rows()).toHaveLength(2);
   });
 });

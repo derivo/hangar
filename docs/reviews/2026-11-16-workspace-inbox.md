@@ -45,3 +45,22 @@ Reviewer: Codex (read-only, `codex exec -s read-only`), on the implementation of
    with the same name looked alike. Fixed: a line with name, fingerprint and
    workspace from `handover.instance`. Test: `cli.test.ts` "hangar handover
    prints the handover of the own session" (red before the fix).
+
+## Round 3: step 5 (desktop settings, badge, notification)
+
+1. **[P2] With the local server, clicking the inbox notification opened the
+   board,** which does not show waiting work. Fixed: one path for both cases –
+   the desktop counts open entries (own core or local server) when the
+   workspaces change and notifies on a rise; the click opens the settings. The
+   server only asks the desktop to read again. Test: `host.test.ts` "tells about
+   waiting inbox work; clicking it opens the settings" and "counts waiting inbox
+   entries …" (red before the fix).
+2. **[P2] A failed reload left stale Accept buttons.** Fixed: the section then
+   shows why and no entries. Test: `Workspaces.test.tsx` "hides waiting entries
+   and says why when the activity cannot be read".
+3. **[P2] Two members of one name had trust checkboxes that a screen reader
+   could not tell apart.** Fixed: the fingerprint is part of the description.
+   Test: "tells two members of one name apart by fingerprint".
+4. **[P2] Accept and Reject of two entries with the same text had the same
+   name.** Fixed: the name carries text and sender. Test: "accepts and rejects
+   waiting work and loads again".

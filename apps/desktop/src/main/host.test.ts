@@ -978,6 +978,23 @@ describe('Host: notifications', () => {
     expect(FakeNotification.all[1]!.options.body).toBe('');
   });
 
+  it('tells about waiting inbox work; clicking it opens the settings (ADR 0046)', async () => {
+    const { host, window } = await started();
+    window().hide();
+    let count = 0;
+    host.countInbox = async () => count;
+    host.workspacesChanged();
+    await vi.waitFor(() => expect(host.state().settingsBadge).toBeUndefined());
+    count = 1;
+    host.workspacesChanged();
+    await vi.waitFor(() => expect(FakeNotification.all).toHaveLength(1));
+    const [n] = FakeNotification.all;
+    expect(n!.options).toEqual({ title: 'Neue Arbeit wartet auf Freigabe (1)', body: '' });
+    n!.emit('click');
+    expect(window().shown).toBe(true);
+    expect(host.state().selected).toBe('settings');
+  });
+
   it('shows nothing where notifications are not supported', async () => {
     FakeNotification.supported = false;
     const { host } = await started();
@@ -1807,6 +1824,32 @@ describe('Host: settings pages', () => {
     await host.start();
     host.workspacesChanged();
     expect(FakeWindow.all[0]!.webContents.send).toHaveBeenCalledWith('shell:workspaces');
+  });
+
+  it('counts waiting inbox entries for the settings badge when the workspaces change', async () => {
+    const { host } = setup();
+    await host.start();
+    expect(host.state().settingsBadge).toBeUndefined();
+    let count = 2;
+    host.countInbox = async () => count;
+    host.workspacesChanged();
+    await vi.waitFor(() => expect(host.state().settingsBadge).toBe(2));
+    // The first count after the start tells nothing; a rise does, also for the local server.
+    expect(FakeNotification.all).toEqual([]);
+    count = 3;
+    host.workspacesChanged();
+    await vi.waitFor(() => expect(host.state().settingsBadge).toBe(3));
+    expect(FakeNotification.all.map((n) => n.options.title)).toEqual([
+      'Neue Arbeit wartet auf Freigabe (3)',
+    ]);
+    count = 0;
+    host.workspacesChanged();
+    await vi.waitFor(() => expect(host.state().settingsBadge).toBeUndefined());
+    // A failing count (local server gone) keeps the last one.
+    host.countInbox = async () => Promise.reject(new Error('down'));
+    host.workspacesChanged();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(host.state().settingsBadge).toBeUndefined();
   });
 });
 
