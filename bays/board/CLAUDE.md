@@ -53,3 +53,4 @@ Tasks per project of the agent bay in three columns: open, in progress, done
   Integration test over a real relay: `apps/relay/src/board.integration.test.ts`.
 - A double click on add, done, reopen, delete takes effect once
   (ADR 0028, `e2e/chaos.spec.ts`).
+- `task.add`, `task.note` and `task.done` are inbox functions (ADR 0046): a remote call arrives only after the person accepted it (or at once from a trusted member). Tasks and notes of another instance carry `origin` from the authenticated caller; `executionId` dedupes a repeated accepted call.

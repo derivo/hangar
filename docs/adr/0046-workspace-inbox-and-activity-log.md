@@ -1,6 +1,6 @@
 # ADR 0046 – Workspaces: inbox for incoming work and activity log
 
-Status: proposed 2026-11-16. Extends [ADR 0011](0011-relay.md),
+Status: accepted 2026-11-16 (implemented, see "Implementation notes"). Extends [ADR 0011](0011-relay.md),
 [ADR 0030](0030-workspaces-ui.md), [ADR 0031](0031-handovers.md) and
 [ADR 0037](0037-board-bay.md).
 
@@ -93,6 +93,30 @@ virtual machines that work the tasks the person gives them.
   desktop). Everyone else stays behind the gate.
 - `docs/mcp.md`, the SDK types (`FunctionSpec.inbox`), the manifests of board
   and agent bay and the settings change.
+
+## Implementation notes (2026-11-16)
+
+- **Accepting replaces the permission dialog** for inbox functions; trusting a
+  member does too. A stored denial still applies first.
+- **Accept checks, then reserves, then runs.** A crash leaves an entry in
+  `accepting`; on the next start `resumeInbox` runs it with the same execution
+  id without checking again (the checks passed when the person accepted, and
+  right after a start no relay is connected). There is no way back to
+  `pending`. An entry whose bay is not loaded stays reserved.
+- **The preview takes only text fields** (`title`, `description`, `task`,
+  `context`, `text`, `note`), never a Git remote or other arguments.
+- `FileInboxStore` lives in `packages/host` and writes durably
+  (`writeDurable`): the relay will not deliver a call again.
+- The handover keeps `origin: 'local' | 'remote'`; the sender is in the new
+  field `instance` (`name`, `fingerprint`, `workspace`).
+- The desktop counts open entries (own or local server) when the workspaces
+  change; a rise raises one notification ("New work is waiting for approval
+  (n)") that opens the settings. No sender name in it, so the local server
+  needs no notification of its own.
+- The remote `Caller` gains `name` (from the signed member list, display only).
+- Not built yet: a `hangar-server` option to trust a member when joining; it
+  comes with the worker setup of ADR 0047. The paired desktop can set trust
+  for the local server today.
 
 ## Plan
 

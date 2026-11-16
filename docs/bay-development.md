@@ -69,14 +69,15 @@ Relative paths must not start with `/` or a drive letter and must not contain
 
 Each function:
 
-| Field          | Required | Rule                                                                                                         |
-| -------------- | -------- | ------------------------------------------------------------------------------------------------------------ |
-| `name`         | yes      | `^[a-zA-Z][a-zA-Z0-9]*(\.[a-zA-Z][a-zA-Z0-9]*)*$`, e.g. `session.setStatus`; unique                          |
-| `sensitive`    | no       | default `false`; Hangar never releases sensitive functions to agents automatically                           |
-| `openToAgents` | no       | `true`: agents of any bay call without a prompt; not together with `sensitive` (ADR 0016)                    |
-| `remote`       | no       | `true`: other Hangar instances may call if released; not together with `sensitive` (ADR 0011)                |
-| `bayOnly`      | no       | `true`: only bays call, no MCP tool, never an agent; not together with `openToAgents` or `remote` (ADR 0021) |
-| `description`  | no       | description of the MCP tool; if missing, the name is used                                                    |
+| Field          | Required | Rule                                                                                                                           |
+| -------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `name`         | yes      | `^[a-zA-Z][a-zA-Z0-9]*(\.[a-zA-Z][a-zA-Z0-9]*)*$`, e.g. `session.setStatus`; unique                                            |
+| `sensitive`    | no       | default `false`; Hangar never releases sensitive functions to agents automatically                                             |
+| `openToAgents` | no       | `true`: agents of any bay call without a prompt; not together with `sensitive` (ADR 0016)                                      |
+| `remote`       | no       | `true`: other Hangar instances may call if released; not together with `sensitive` (ADR 0011)                                  |
+| `inbox`        | no       | `true`: calls of other instances wait in the inbox for the person, unless the member is trusted; only with `remote` (ADR 0046) |
+| `bayOnly`      | no       | `true`: only bays call, no MCP tool, never an agent; not together with `openToAgents` or `remote` (ADR 0021)                   |
+| `description`  | no       | description of the MCP tool; if missing, the name is used                                                                      |
 
 An invalid manifest prevents loading; the bay appears in the sidebar with a
 readable error message, e.g. `id: must be in reverse-domain style` or
@@ -295,6 +296,13 @@ ADR 0006.
   workspace, and the instance is a member of it. Only then does the stored
   permission count (subject `remote:<fingerprint>/<bay-id>`), otherwise Hangar
   asks. The manifest rejects bay identifiers with the prefix `remote.`.
+- **Inbox** (`inbox`, ADR 0046): for functions that store text of another
+  instance. After the checks above the bus queues the call instead of asking and
+  answers `{ queued: <id> }`; the person accepts or rejects it under Settings →
+  Workspaces → Activity. Accepting checks again and passes `info.executionId`:
+  the handler must ignore a repeat of the same id (a run cut short by a crash
+  runs again). Take the origin of the text from `info.caller`, never from an
+  argument.
 - **Bays only** (`bayOnly`, ADR 0021): Agents, other instances and agents of
   the local server are rejected before any rule, without a dialog;
   `tools/list` does not show the function. The local server itself (without a

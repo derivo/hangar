@@ -5,9 +5,10 @@ No Electron dependency.
 
 ## Interfaces
 
-- `new Bus({ permissions, prompter, remote?, now? })` – `now` only for tests (timestamps); `remote` (`RemoteAccess`: `isMember`, `isShared`) for callers of other instances, without it every remote call is rejected.
+- `new Bus({ permissions, prompter, remote?, now?, inbox?, onActivity? })` – `inbox` (`InboxStore`, default in memory) and `onActivity` for ADR 0046 – `now` only for tests (timestamps); `remote` (`RemoteAccess`: `isMember`, `isShared`) for callers of other instances, without it every remote call is rejected.
 - `register(bayId, spec, handler)` / `registerTransport(bayId, spec, transport)` / `unregisterBay(bayId)`
 - `call(caller, '<bay-id>/<function>', args, signal?)` – checks the permission first; if `signal` is aborted afterwards (caller gone, e.g. the local server during the permission dialog), nothing runs.
+- Inbox (ADR 0046): `inboxEntries()`, `acceptInbox(id)` (checks, then reserves with an execution id, then runs), `rejectInbox(id)`, `resumeInbox()` (runs entries a crash left reserved, without checking again); `MemoryInboxStore`, `previewOf(args)`
 - `grants()` (with `grantedAt` and `lastUsed`), `setMode(subject, target, mode)` (settings: `allow`/`deny`, `ask` only for sensitive, never `session`, no rule for own non-sensitive functions), `revoke(subject, target, sessionId?)`, `endSession(sessionId)`, `startSession(sessionId)` (session runs again, e.g. after a failed restore; the host calls it when issuing a token)
 - `MemoryPermissionStore`, `FilePermissionStore(file)`
 - `subjectOf(caller)` – subject of the permissions: bay id, remote `remote:<fingerprint>/<bay-id>`, local server `local-server:<bay-id>`.
@@ -24,3 +25,6 @@ No Electron dependency.
 - `FunctionSpec.bayOnly` (ADR 0021): rejected before every rule, without a dialog, for sessions, remote callers and the local server with `sessionId`; bays and the local server without a session still go through the rules.
 - A new transport (e.g. relay) implements only `Transport.invoke`; permission stays in the bus. Exception `Transport.authorizes` (ADR 0036, addendum): the other side asks and holds the rules; the bus checks only `bayOnly` and remote callers. Only the server sets it, for functions of the app.
 - Caller `local-server` (ADR 0036): bays and agents of the server on this machine that call bays of the app. The rule "own bay" never applies; with `sessionId` like a session (`openToAgents`, session permissions), without like a bay. The server checks beforehand only `bayOnly` (`Transport.authorizes`, ADR 0036 addendum).
+- Inbox functions (`FunctionSpec.inbox`, ADR 0046): for remote callers, after membership, share list and a stored denial, the call is queued (`{ queued }`) or, for a trusted member (`RemoteAccess.isTrusted`), runs at once; accepting in the inbox replaces the permission dialog. Local callers are not affected.
+- `onActivity` sees every remote call (`ran`, `queued`, `accepted`, `rejected`, `denied`, `failed`) with a preview only of the text fields (`previewOf`); never other arguments or results.
+- No path leads from `accepting` back to `pending`: a resumed entry keeps its execution id, so handlers dedupe a run from before a crash.
