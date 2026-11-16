@@ -9,3 +9,5 @@ export * from './bay-index';
 export * from './bay-package';
 export * from './bay-store';
 export * from './key-protection';
+export * from './activity-log';
+export * from './inbox-store';

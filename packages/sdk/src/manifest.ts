@@ -29,6 +29,8 @@ const FunctionSchema = z.object({
   remote: z.boolean().optional(),
   /** Only other bays may call it: no MCP tool, never an agent or another instance (ADR 0021). */
   bayOnly: z.boolean().optional(),
+  /** Remote calls wait in the receiver's inbox for the person; only with `remote` (ADR 0046). */
+  inbox: z.boolean().optional(),
   /** Shown to MCP clients as the tool description. */
   description: z.string().optional(),
 });
@@ -137,6 +139,13 @@ export const BayManifestSchema = z
           code: 'custom',
           path: ['functions'],
           message: `Function "${f.name}" is only for bays`,
+        });
+      }
+      if (f.inbox && !f.remote) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['functions'],
+          message: `Function "${f.name}" is an inbox function and must be remote`,
         });
       }
       if (f.sensitive && f.remote) {

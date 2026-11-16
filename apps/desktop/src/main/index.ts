@@ -197,6 +197,8 @@ async function start(): Promise<void> {
     remote: {
       isMember: (w, i) => workspaces?.isMember(w, i) ?? false,
       isShared: (w, t) => workspaces?.isShared(w, t) ?? false,
+      isTrusted: (w, i) => workspaces?.isTrusted(w, i) ?? false,
+      memberName: (w, i) => workspaces?.memberName(w, i),
     },
   });
   // With the local server, its agent bay holds the workspaces (ADR 0036, point 11).
@@ -210,6 +212,7 @@ async function start(): Promise<void> {
           bus: core.bus,
           protect,
           onChange: () => host?.workspacesChanged(),
+          onActivity: (e) => core?.record(e),
         });
   } catch (e) {
     // E.g. `pass:` keys without the right HANGAR_KEY_PASSPHRASE: run without workspaces and
@@ -295,6 +298,8 @@ async function start(): Promise<void> {
     );
   }
   core.scheduler.start();
+  // Entries a crash left half accepted run again, now that the bays are loaded (ADR 0046).
+  void core.bus.resumeInbox();
   void ws?.start();
 
   // Workspaces (ADR 0030): thin wrappers, the checks are in `Workspaces` and on the relay; with

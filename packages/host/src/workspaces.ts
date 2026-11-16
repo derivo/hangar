@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Bus, RemoteAccess } from '@hangar/bus';
+import type { ActivityEvent, Bus, RemoteAccess } from '@hangar/bus';
 import type { BayWorkspaces, RemoteBayState } from '@hangar/sdk';
 import {
   createIdentity,
@@ -41,6 +41,8 @@ export interface WorkspacesView {
     joined: { name: string; fingerprint: string; inviter?: string }[];
     /** Functions `<bay-id>/<name>` the workspace may call. */
     shared: string[];
+    /** Fingerprints whose inbox calls run at once (ADR 0046). */
+    trusted: string[];
   }[];
 }
 
@@ -57,6 +59,8 @@ export interface WorkspacesOptions {
   retryMs?: number;
   /** Renew own member lists older than this, so a quiet workspace does not expire (7 days). */
   renewMs?: number;
+  /** Outgoing calls over the relay, for the activity log (ADR 0046). */
+  onActivity?: (event: ActivityEvent) => void;
 }
 
 interface Stored {
@@ -64,6 +68,8 @@ interface Stored {
   workspaces: StoredWorkspace[];
   shared: Record<string, string[]>;
   waiting: Record<string, string>;
+  /** Per workspace the fingerprints trusted to bring in work (ADR 0046); missing in older files. */
+  trusted?: Record<string, string[]>;
 }
 
 /**
@@ -87,12 +93,14 @@ export async function workspaceAction(
     reject: 2,
     remove: 2,
     share: 2,
+    trust: 2,
   }[action];
+  const toggle = action === 'share' || action === 'trust';
   if (
     texts !== undefined &&
-    (args.length !== texts + (action === 'share' ? 1 : 0) ||
+    (args.length !== texts + (toggle ? 1 : 0) ||
       args.slice(0, texts).some((v) => typeof v !== 'string') ||
-      (action === 'share' && typeof args[2] !== 'boolean'))
+      (toggle && typeof args[2] !== 'boolean'))
   )
     throw new Error(`Invalid arguments for ${action}`);
   const [a, b, c] = args.map((v) => String(v));
@@ -126,6 +134,8 @@ export async function workspaceAction(
       return ws.remove(a!, b!);
     case 'share':
       return ws.setShared(a!, b!, args[2] === true);
+    case 'trust':
+      return ws.setTrusted(a!, b!, args[2] === true);
     default:
       throw new Error(`Unknown workspace action: ${action}`);
   }
@@ -184,6 +194,7 @@ export class Workspaces implements RemoteAccess {
           bus: this.options.bus,
           dataDir: this.file('replay'),
           shared: (w) => this.sharedOf(w),
+          ...(this.options.onActivity && { onActivity: this.options.onActivity }),
         },
         this.stored.workspaces,
         this.stored.waiting,
@@ -284,6 +295,27 @@ export class Workspaces implements RemoteAccess {
 
   async remove(workspace: string, instance: string): Promise<void> {
     await this.relay().removeMember(workspace, instance);
+    if (this.isTrusted(workspace, instance)) this.setTrusted(workspace, instance, false);
+  }
+
+  /** Inbox calls of this member run without asking (ADR 0046); by fingerprint, never by name. */
+  setTrusted(workspace: string, instance: string, on: boolean): void {
+    const trusted = (this.stored.trusted ??= {});
+    const list = this.trustedOf(workspace).filter((f) => f !== instance);
+    trusted[workspace] = on ? [...list, instance] : list;
+    this.save();
+    this.options.onChange();
+  }
+
+  isTrusted(workspace: string, instance: string): boolean {
+    return this.trustedOf(workspace).includes(instance);
+  }
+
+  /** The member's name in the current list, for the activity log. */
+  memberName(workspace: string, instance: string): string | undefined {
+    return this.stored.workspaces
+      .find((s) => s.list.workspace === workspace)
+      ?.list.members.find((m) => fingerprint(m) === instance)?.name;
   }
 
   setShared(workspace: string, target: string, on: boolean): void {
@@ -339,6 +371,7 @@ export class Workspaces implements RemoteAccess {
         inviter,
       })),
       shared: this.sharedOf(s.list.workspace),
+      trusted: this.trustedOf(s.list.workspace),
     }));
     const waiting = Object.keys(this.stored.waiting).map((name) => ({
       name,
@@ -346,6 +379,7 @@ export class Workspaces implements RemoteAccess {
       members: [],
       joined: [],
       shared: [],
+      trusted: [],
     }));
     return {
       ...(this.stored.relay && { relay: this.stored.relay }),
@@ -391,6 +425,11 @@ export class Workspaces implements RemoteAccess {
   }
 
   /** Workspace names are object keys: `constructor` must not read `Object.prototype`. */
+  private trustedOf(workspace: string): string[] {
+    const trusted = this.stored.trusted ?? {};
+    return Object.hasOwn(trusted, workspace) ? trusted[workspace]! : [];
+  }
+
   private sharedOf(workspace: string): string[] {
     return Object.hasOwn(this.stored.shared, workspace) ? this.stored.shared[workspace]! : [];
   }

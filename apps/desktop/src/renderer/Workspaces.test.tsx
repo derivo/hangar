@@ -23,6 +23,7 @@ const view = (over: Partial<WorkspacesSettingsView> = {}): WorkspacesSettingsVie
       ],
       joined: [{ name: 'eve-pc', fingerprint: eve }],
       shared: ['dev.hangar.notes/read'],
+      trusted: [],
     },
   ],
   functions: [
@@ -378,8 +379,8 @@ describe('Workspaces (ADR 0030)', () => {
         view({
           functions: [],
           workspaces: [
-            { name: 'team', waiting: false, members: [], joined: [], shared: [] },
-            { name: 'club', waiting: true, members: [], joined: [], shared: [] },
+            { name: 'team', waiting: false, members: [], joined: [], shared: [], trusted: [] },
+            { name: 'club', waiting: true, members: [], joined: [], shared: [], trusted: [] },
           ],
         }),
       );

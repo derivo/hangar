@@ -1,8 +1,8 @@
-import { existsSync, mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { RemoteAccess } from '@hangar/bus';
+import type { ActivityEvent, RemoteAccess } from '@hangar/bus';
 import { startCore, type Core } from './core';
 
 let core: Core | undefined;
@@ -11,11 +11,16 @@ afterEach(async () => {
   core = undefined;
 });
 
-const start = (onJobsChanged = () => {}, remote?: RemoteAccess) => {
+const start = (
+  onJobsChanged = () => {},
+  remote?: RemoteAccess,
+  onActivity?: (e: ActivityEvent) => void,
+) => {
   const dataDir = mkdtempSync(join(tmpdir(), 'hangar-core-'));
   return startCore({
     dataDir,
     ...(remote && { remote }),
+    ...(onActivity && { onActivity }),
     version: '1.2.3',
     prompter: { ask: async () => 'allow' },
     cli: { execPath: '/usr/bin/node', cliPath: '/opt/hangar/cli.mjs' },
@@ -39,6 +44,34 @@ describe('startCore', () => {
     const { core } = await start(undefined, { isMember: () => true, isShared: () => true });
     core.services.provide('dev.test', spec, () => 'ok');
     await expect(core.services.call(caller, 'dev.test/read', {})).resolves.toBe('ok');
+  });
+
+  it('keeps the inbox and the activity log in the data folder (ADR 0046)', async () => {
+    const caller = { kind: 'remote' as const, instance: 'SHA256:b', workspace: 'team', bayId: 'x' };
+    const seen = vi.fn();
+    const { core, dataDir } = await start(
+      undefined,
+      { isMember: () => true, isShared: () => true },
+      seen,
+    );
+    core.services.provide(
+      'dev.test',
+      { name: 'add', sensitive: false, remote: true, inbox: true },
+      () => 1,
+    );
+    const { queued } = (await core.services.call(caller, 'dev.test/add', { title: 'hi' })) as {
+      queued: string;
+    };
+    expect(core.bus.inboxEntries().map((e) => e.id)).toEqual([queued]);
+    expect(readFileSync(join(dataDir, 'inbox.json'), 'utf8')).toContain(queued);
+    expect(core.activity.list()).toEqual([
+      expect.objectContaining({ outcome: 'queued', preview: 'hi' }),
+    ]);
+    expect(readFileSync(join(dataDir, 'workspace-log.jsonl'), 'utf8')).toContain('"queued"');
+    expect(seen).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'queued' }));
+    // Outgoing calls of the relay go to the same log.
+    core.record({ ...core.activity.list()[0]!, direction: 'out', outcome: 'ran' });
+    expect(core.activity.list()[0]).toMatchObject({ direction: 'out', outcome: 'ran' });
   });
 
   it('gives agent sessions a token, the MCP URL and the CLI folder, and revokes it at the end', async () => {

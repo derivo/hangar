@@ -2,7 +2,7 @@ import { sign } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Bus, MemoryPermissionStore } from '@hangar/bus';
+import { Bus, MemoryPermissionStore, type ActivityEvent } from '@hangar/bus';
 import {
   CALL_TIMEOUT_MS,
   createIdentity,
@@ -52,6 +52,7 @@ async function instance(
     shared?: string[] | ((workspace: string) => string[]);
     timeout?: number;
     handler?: () => unknown;
+    onActivity?: (event: ActivityEvent) => void;
   } = {},
 ) {
   const ref: { client?: RelayClient } = {};
@@ -78,6 +79,7 @@ async function instance(
         ? opts.shared(w)
         : (opts.shared ?? ['dev.hangar.notes/note.read']),
     ...(opts.timeout && { callTimeoutMs: opts.timeout }),
+    ...(opts.onActivity && { onActivity: opts.onActivity }),
   });
   ref.client = client;
   closers.push(() => client.close());
@@ -215,6 +217,33 @@ describe('RelayClient', () => {
       },
     });
     await expect(b.bus.call(agent, id, {})).rejects.toThrow('note missing');
+  });
+
+  it('logs outgoing calls as ran, queued or failed, without arguments (ADR 0046)', async () => {
+    const events: ActivityEvent[] = [];
+    const answers: unknown[] = ['ok', { queued: 'q1' }];
+    const { b, id, anna } = await pair({
+      onActivity: (e) => events.push(e),
+      handler: () => {
+        if (!answers.length) throw new Error('note missing');
+        return answers.shift();
+      },
+    });
+    await b.bus.call(agent, id, { text: 'secret' });
+    await b.bus.call(agent, id, {});
+    await expect(b.bus.call(agent, id, {})).rejects.toThrow('note missing');
+    const out = events.filter((e) => e.direction === 'out');
+    expect(out.map((e) => e.outcome)).toEqual(['ran', 'queued', 'failed']);
+    expect(out[0]).toEqual({
+      at: expect.any(String),
+      direction: 'out',
+      workspace: 'team',
+      instance: anna.fingerprint,
+      name: 'Anna Laptop',
+      target: 'dev.hangar.notes/note.read',
+      outcome: 'ran',
+    });
+    expect(out[1]?.inboxId).toBe('q1');
   });
 
   it('gives up after the call timeout and limits open calls per instance', async () => {

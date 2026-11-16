@@ -1,5 +1,5 @@
 import { randomUUID, sign } from 'node:crypto';
-import type { Caller, FunctionSpec, RemoteAccess, Transport } from '@hangar/bus';
+import type { ActivityEvent, Caller, FunctionSpec, RemoteAccess, Transport } from '@hangar/bus';
 import { join } from 'node:path';
 import { WebSocket } from 'ws';
 import { Endpoint } from './endpoint';
@@ -34,6 +34,8 @@ export interface RelayClientOptions {
   /** Waiting for a result, for the relay's handshake and its answers (ADR 0011: 60 s). */
   callTimeoutMs?: number;
   now?: () => number;
+  /** Every outgoing call, for the activity log (ADR 0046); the bus logs the incoming ones. */
+  onActivity?: (event: ActivityEvent) => void;
 }
 
 // Requests carry an id the client assigns.
@@ -600,7 +602,10 @@ export class RelayClient implements RemoteAccess {
             ...(isObject(f.spec?.inputSchema) && { inputSchema: f.spec.inputSchema }),
           },
           {
-            invoke: (_t, args, info) => this.callRemote(workspace, peer, target, args, info.caller),
+            invoke: (_t, args, info) =>
+              this.logged(workspace, peer, doc.name, target, () =>
+                this.callRemote(workspace, peer, target, args, info.caller),
+              ),
           },
         );
         bays.add(bayId);
@@ -616,6 +621,35 @@ export class RelayClient implements RemoteAccess {
     for (const [key, functions] of this.offers) {
       const [ws, p] = key.split('\n') as [string, string];
       if (p === peer && key !== except) this.registerRemote(ws, p, functions, false);
+    }
+  }
+
+  private async logged(
+    workspace: string,
+    instance: string,
+    name: string,
+    target: string,
+    call: () => Promise<unknown>,
+  ): Promise<unknown> {
+    const log = (outcome: ActivityEvent['outcome'], inboxId?: unknown) =>
+      this.options.onActivity?.({
+        at: new Date(this.now()).toISOString(),
+        direction: 'out',
+        workspace,
+        instance,
+        name,
+        target,
+        outcome,
+        ...(typeof inboxId === 'string' && { inboxId }),
+      });
+    try {
+      const value = await call();
+      const queued = isObject(value) ? value.queued : undefined;
+      log(typeof queued === 'string' ? 'queued' : 'ran', queued);
+      return value;
+    } catch (error) {
+      log('failed');
+      throw error;
     }
   }
 

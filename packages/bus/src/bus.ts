@@ -1,10 +1,15 @@
+import { randomUUID } from 'node:crypto';
+import { MemoryInboxStore, previewOf } from './inbox';
 import { MemoryPermissionStore } from './permissions';
 import type {
+  ActivityEvent,
   Caller,
   FunctionHandler,
   FunctionSpec,
   Grant,
   GrantMode,
+  InboxEntry,
+  InboxStore,
   PermissionStore,
   Prompter,
   RemoteAccess,
@@ -49,7 +54,14 @@ export interface BusOptions {
   remote?: RemoteAccess;
   /** Clock for `grantedAt` and `lastUsed` (tests). */
   now?: () => Date;
+  /** Remote calls of inbox functions waiting for the person (ADR 0046); default in memory. */
+  inbox?: InboxStore;
+  /** Every remote call and inbox decision, for the activity log (ADR 0046). */
+  onActivity?: (event: ActivityEvent) => void;
 }
+
+/** Open inbox entries; a new one beyond it rejects the oldest (ADR 0046). */
+const INBOX_MAX = 200;
 
 /**
  * Central message bus: bays register functions, callers (bays or agent sessions)
@@ -67,12 +79,16 @@ export class Bus {
   /** Last successful use per grant. Memory only, a file write per call is too much. */
   private readonly lastUsed = new Map<string, string>();
   private readonly now: () => Date;
+  private readonly inbox: InboxStore;
+  private readonly onActivity?: (event: ActivityEvent) => void;
 
   constructor(options: BusOptions) {
     this.permissions = options.permissions ?? new MemoryPermissionStore();
     this.prompter = options.prompter;
     this.remote = options.remote;
     this.now = options.now ?? (() => new Date());
+    this.inbox = options.inbox ?? new MemoryInboxStore();
+    this.onActivity = options.onActivity;
   }
 
   /** Registers a function implemented in this process. */
@@ -106,9 +122,139 @@ export class Bus {
   ): Promise<unknown> {
     const entry = this.functions.get(target);
     if (!entry) throw new Error(`Unknown function: ${target}`);
-    await this.authorize(caller, entry);
+    if (caller.kind !== 'remote') {
+      await this.authorize(caller, entry);
+      signal?.throwIfAborted();
+      return entry.transport.invoke(target, args, { caller });
+    }
+    const log = this.logger(caller, target, entry.spec.inbox ? previewOf(args) : undefined);
+    let verdict: 'queue' | 'run' | void;
+    try {
+      verdict = await this.authorize(caller, entry);
+    } catch (error) {
+      log('denied');
+      throw error;
+    }
     signal?.throwIfAborted();
-    return entry.transport.invoke(target, args, { caller });
+    if (verdict === 'queue') return { queued: this.enqueue(caller, target, args) };
+    try {
+      const value = await entry.transport.invoke(target, args, { caller });
+      log('ran');
+      return value;
+    } catch (error) {
+      log('failed');
+      throw error;
+    }
+  }
+
+  /** Open inbox entries, oldest first. */
+  inboxEntries(): InboxEntry[] {
+    return this.inbox.load();
+  }
+
+  /**
+   * Runs an inbox entry after checking the caller again (membership, share, denial). The
+   * entry is reserved first, so a second accept or a reject of the same entry fails.
+   */
+  async acceptInbox(id: string): Promise<unknown> {
+    const entries = this.inbox.load();
+    const entry = entries.find((e) => e.id === id && e.state === 'pending');
+    if (!entry) throw new Error(`No open inbox entry: ${id}`);
+    entry.state = 'accepting';
+    // Kept from an earlier reservation: a run before a crash is not repeated.
+    entry.executionId ??= randomUUID();
+    this.inbox.save(entries);
+    return this.runAccepted(entry);
+  }
+
+  /** Drops an open inbox entry; the caller learns nothing (ADR 0046). */
+  rejectInbox(id: string): void {
+    const entries = this.inbox.load();
+    const entry = entries.find((e) => e.id === id && e.state === 'pending');
+    if (!entry) throw new Error(`No open inbox entry: ${id}`);
+    this.inbox.save(entries.filter((e) => e !== entry));
+    this.logger(entry.caller, entry.target, entry.preview, id)('rejected');
+  }
+
+  /**
+   * Runs the entries a crash left in `accepting` again, with their execution id. One that
+   * cannot pass the checks yet (relay not connected, bay not loaded) waits as `pending` again.
+   */
+  async resumeInbox(): Promise<void> {
+    for (const entry of this.inbox.load().filter((e) => e.state === 'accepting'))
+      await this.runAccepted(entry, true).catch(() => {});
+  }
+
+  private async runAccepted(entry: InboxEntry, resuming = false): Promise<unknown> {
+    const log = this.logger(entry.caller, entry.target, entry.preview, entry.id);
+    const done = () => this.inbox.save(this.inbox.load().filter((e) => e.id !== entry.id));
+    const fn = this.functions.get(entry.target);
+    try {
+      if (!fn) throw new Error(`Unknown function: ${entry.target}`);
+      await this.authorize(entry.caller, fn);
+    } catch (error) {
+      if (resuming) {
+        this.inbox.save(
+          this.inbox.load().map((e) => (e.id === entry.id ? { ...e, state: 'pending' } : e)),
+        );
+      } else {
+        done();
+        log('denied');
+      }
+      throw error;
+    }
+    try {
+      const info = { caller: entry.caller, executionId: entry.executionId! };
+      const value = await fn.transport.invoke(entry.target, entry.args, info);
+      log('accepted');
+      return value;
+    } catch (error) {
+      log('failed');
+      throw error;
+    } finally {
+      done();
+    }
+  }
+
+  private enqueue(caller: Extract<Caller, { kind: 'remote' }>, target: string, args: unknown) {
+    const entry: InboxEntry = {
+      id: randomUUID(),
+      at: this.now().toISOString(),
+      caller,
+      target,
+      args,
+      preview: previewOf(args),
+      state: 'pending',
+    };
+    const entries = [...this.inbox.load(), entry];
+    const pending = entries.filter((e) => e.state === 'pending');
+    const dropped = pending.slice(0, Math.max(0, pending.length - INBOX_MAX));
+    this.inbox.save(entries.filter((e) => !dropped.includes(e)));
+    this.logger(caller, target, entry.preview, entry.id)('queued');
+    for (const d of dropped) this.logger(d.caller, d.target, d.preview, d.id)('rejected');
+    return entry.id;
+  }
+
+  private logger(
+    caller: Extract<Caller, { kind: 'remote' }>,
+    target: string,
+    preview?: string,
+    inboxId?: string,
+  ) {
+    return (outcome: ActivityEvent['outcome']) => {
+      const name = this.remote?.memberName?.(caller.workspace, caller.instance);
+      this.onActivity?.({
+        at: this.now().toISOString(),
+        direction: 'in',
+        workspace: caller.workspace,
+        instance: caller.instance,
+        ...(name !== undefined && { name }),
+        target,
+        outcome,
+        ...(preview !== undefined && { preview }),
+        ...(inboxId !== undefined && { inboxId }),
+      });
+    };
   }
 
   /** Stored grants plus the in-memory session grants. */
@@ -158,7 +304,8 @@ export class Bus {
     this.endedSessions.delete(sessionId);
   }
 
-  private async authorize(caller: Caller, entry: Entry): Promise<void> {
+  /** `queue`/`run`: remote call of an inbox function, after every check but the dialog. */
+  private async authorize(caller: Caller, entry: Entry): Promise<'queue' | 'run' | void> {
     const { id: target, spec } = entry;
     const sensitive = spec.sensitive;
     const deny = () => {
@@ -183,6 +330,11 @@ export class Bus {
       return deny();
     if (caller.kind === 'remote') {
       if (remoteClosed()) return deny();
+      // Inbox (ADR 0046): accepting in the inbox or trusting the member replaces the dialog.
+      if (spec.inbox) {
+        if (this.permissions.get(subjectOf(caller), target)?.mode === 'deny') return deny();
+        return this.remote?.isTrusted?.(caller.workspace, caller.instance) ? 'run' : 'queue';
+      }
     } else if (
       caller.kind !== 'local-server' &&
       caller.bayId === entry.bayId &&
