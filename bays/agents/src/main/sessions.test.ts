@@ -241,6 +241,22 @@ describe('sessions', () => {
     expect(manager.buffer('unknown')).toBe('');
   });
 
+  it('starts a shell in the size the terminal last sent, also one sent before the shell ran', async () => {
+    let answer: (values: Record<string, string>) => void = () => {};
+    deps.resolveSecrets = vi.fn(() => new Promise<Record<string, string>>((r) => (answer = r)));
+    const { manager, session } = await withSession({ TOKEN: { secret: 'GITHUB_TOKEN' } });
+    // The terminal fits while the shell waits for the password.
+    manager.resize(session.id, 180, 90);
+    answer({ GITHUB_TOKEN: 'x' });
+    await vi.waitFor(() => expect(deps.spawn.all).toHaveLength(1));
+    expect(deps.spawn.all[0]!.size).toEqual([180, 90]);
+    // A restarted shell keeps it; the terminal keeps its size and sends none.
+    manager.restart(session.id);
+    answer({ GITHUB_TOKEN: 'x' });
+    await vi.waitFor(() => expect(deps.spawn.all).toHaveLength(2));
+    expect(deps.spawn.all[1]!.size).toEqual([180, 90]);
+  });
+
   it('applies the status heuristic: output → working, 30 s quiet → idle', async () => {
     const { manager, session, pty } = await withSession();
     pty.emitData('x');
@@ -804,6 +820,13 @@ describe('restoreSuffix', () => {
     for (const mode of ['1000', '1002', '1003', '1006', '1004']) {
       expect(suffix).toContain(`\x1b[?${mode}l`);
     }
+  });
+
+  it('lets the whole screen scroll again after a program that kept to a scroll region', () => {
+    // Otherwise only the lines of the old region (e.g. 68–90) move; the rest stands still.
+    const suffix = restoreSuffix('\x1b[68;90rclaude');
+    expect(suffix).toContain('\x1b7\x1b[r\x1b8');
+    expect(suffix.endsWith(restoreMarker())).toBe(true);
   });
 });
 
