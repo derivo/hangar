@@ -87,6 +87,7 @@ function shownError(e: Error): string {
   if (message.startsWith('Cannot reach')) return t.unreachable;
   if (message.startsWith('SSH failed: ')) return t.sshFailed(message.slice('SSH failed: '.length));
   if (message === 'Wrong pairing code') return t.wrongCode;
+  if (message === 'Too many pairing attempts') return t.tooManyPairings;
   if (message === 'Pairing has ended') return t.pairingEnded;
   if (message === 'Invalid URL') return t.invalidUrl;
   return message;

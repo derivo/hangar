@@ -95,6 +95,8 @@ const MAX_KEPT_NOTIFICATIONS = 50;
 
 // No 0/O and 1/I: the code is typed from a log.
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+/** After a wrong pairing code no socket may try for this long: one guess per second at ~2^40 codes. */
+const PAIR_BLOCK_MS = 1000;
 const sha256 = (s: string) => createHash('sha256').update(s).digest();
 
 /** The server's Ed25519 key in `<data>/identity.json`, created on first start. */
@@ -231,6 +233,7 @@ export function attachBridge(http: Server, options: BridgeOptions): Bridge {
   newCode();
 
   const paired = new Set<WebSocket>();
+  let pairBlockedUntil = 0;
   // In memory; a server restart loses them, like the desktop's own notifications.
   const kept: ServerMessage[] = [];
   const badges = new Map<string, number>();
@@ -278,6 +281,8 @@ export function attachBridge(http: Server, options: BridgeOptions): Bridge {
   void options.ready?.finally(() => (ready = true));
   http.on('upgrade', (req, socket, head) => {
     if (req.url !== '/connect') return void socket.destroy();
+    // Browsers always send an Origin, the desktop's Node WebSocket never: no web page gets in.
+    if (req.headers.origin !== undefined) return void socket.end('HTTP/1.1 403 Forbidden\r\n\r\n');
     // Still starting: the desktop tries again (ServerConnections retries, pairWhenReady too).
     if (!ready) return void socket.end('HTTP/1.1 503 Service Unavailable\r\n\r\n');
     wss.handleUpgrade(req, socket, head, (ws) => serve(ws));
@@ -352,7 +357,9 @@ export function attachBridge(http: Server, options: BridgeOptions): Bridge {
       }
       if (m.type === 'pair') {
         return void reply(() => {
+          if (Date.now() < pairBlockedUntil) throw new Error('Too many pairing attempts');
           if (m.code.length !== code.length || !timingSafeEqual(sha256(m.code), sha256(code))) {
+            pairBlockedUntil = Date.now() + PAIR_BLOCK_MS;
             throw new Error('Wrong pairing code');
           }
           const token = randomBytes(32).toString('base64url');

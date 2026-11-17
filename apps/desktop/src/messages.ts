@@ -60,6 +60,7 @@ const de = {
     `SSH-Verbindung fehlgeschlagen (${detail}). Klappt ssh im Terminal ohne Passwortabfrage?`,
   codeMissing: 'Kopplungscode fehlt.',
   wrongCode: 'Kopplungscode falsch.',
+  tooManyPairings: 'Zu viele Kopplungsversuche. Bitte eine Sekunde warten und erneut versuchen.',
   pairingEnded: 'Kopplung abgebrochen. Bitte neu verbinden.',
   // Setup on a Linux machine (ADR 0041)
   setUp: 'Hangar dort einrichten (Linux)',
@@ -434,6 +435,7 @@ const en: typeof de = {
     `SSH connection failed (${detail}). Does ssh work in a terminal without a password prompt?`,
   codeMissing: 'Pairing code is missing.',
   wrongCode: 'Wrong pairing code.',
+  tooManyPairings: 'Too many pairing attempts. Wait a second and try again.',
   pairingEnded: 'Pairing was cancelled. Please connect again.',
   setUp: 'Set up Hangar there (Linux)',
   setUpHint:

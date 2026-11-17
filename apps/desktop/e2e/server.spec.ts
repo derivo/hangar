@@ -73,7 +73,20 @@ test('pairs with a server and works with its agent bay as if it ran here (ADR 00
       await first.shell.emulateMedia({ colorScheme });
       expect(await violations(first.shell), `pairing (${colorScheme})`).toEqual([]);
     }
+    // A wrong code blocks pairing for a second, also the right code (security audit 2026-11-17).
+    await dialog.getByLabel('Kopplungscode').fill('WRON-GCOD');
+    await dialog.getByLabel('Kopplungscode').press('Enter');
+    await expect(dialog.getByRole('alert')).toHaveText('Kopplungscode falsch.');
     await dialog.getByLabel('Kopplungscode').fill(s.code());
+    await dialog.getByLabel('Kopplungscode').press('Enter');
+    await expect(dialog.getByRole('alert')).toHaveText(
+      'Zu viele Kopplungsversuche. Bitte eine Sekunde warten und erneut versuchen.',
+    );
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await first.shell.emulateMedia({ colorScheme });
+      expect(await violations(first.shell), `pairing blocked (${colorScheme})`).toEqual([]);
+    }
+    await first.shell.waitForTimeout(1100);
     await dialog.getByLabel('Kopplungscode').press('Enter');
     await expect(dialog).toBeHidden();
 
