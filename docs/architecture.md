@@ -112,6 +112,8 @@ flowchart TD
   `bay.js`, which provides `window.hangar`. The theme CSS is inserted at
   `dom-ready`. Navigation is blocked; `window.open` with an `http(s)` URL opens
   the default browser, everything else is rejected.
+  The main window (preload `shell.js`) blocks navigation and every
+  `window.open` as well, so no other page gets its `shell:*` channels.
 - **IPC**: `window.hangar.invoke` goes through the channel `bay:invoke` to the
   host, which maps the sender to its bay and calls `BayRuntime.handleUi`.
   `ctx.ui.send` sends through `bay:event` to the view of the bay and its windows.
