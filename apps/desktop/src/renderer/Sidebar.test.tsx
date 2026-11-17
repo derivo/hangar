@@ -668,6 +668,19 @@ describe('Sidebar: pairing a server (one wrong field each)', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
+  it('says to wait after too many pairing attempts', async () => {
+    const api = themeApi();
+    api.pairServer.mockRejectedValueOnce(remote('Too many pairing attempts'));
+    const { ui } = await open(api);
+    await userEvent.type(ui.getByLabelText('Name'), 'Heimserver');
+    await userEvent.type(ui.getByLabelText('Adresse'), '127.0.0.1:7420{Enter}');
+    await userEvent.type(ui.getByLabelText('Kopplungscode'), 'ABCD-EFGH{Enter}');
+    expect(ui.getByRole('alert')).toHaveTextContent(
+      'Zu viele Kopplungsversuche. Bitte eine Sekunde warten und erneut versuchen.',
+    );
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
   it('says when the pairing has ended', async () => {
     const api = themeApi();
     api.pairServer.mockRejectedValueOnce(remote('Pairing has ended'));

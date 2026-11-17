@@ -131,6 +131,7 @@ All notable changes to this project. Format based on
 
 ### Fixed
 
+- Security, server: web pages can no longer open the server's WebSocket `/connect` (a request with an `Origin` header gets 403; the desktop sends none), and after a wrong pairing code every pairing attempt, from any connection, is refused for one second ("Too many pairing attempts. Wait a second and try again."). Until now a page in any browser on the machine, or anyone reaching the port, could try codes without limit.
 - Agent bay: a shell that starts after its terminal sent its size (restart from the session menu, start after the password answer) starts in that size instead of 100 × 30; before, programs like Claude Code redrew only the bottom 30 lines and the rest of the terminal stood still until the window was resized. After a restart the restored scrollback also resets a scroll region the killed program had set, so the whole screen scrolls again.
 - Feeds bay: a call to its server that fails while the bay loads, on its fetch interval or on unsubscribe (e.g. "Not connected" while the app quits) shows the error above the list instead of throwing an uncaught error.
 - Local server: after an update of the app the server, still running the old build, shows the UI of its own copy again. Since the bays keep their version across builds, the app used to load its own, newer UI, whose calls the old server might not know (ADR 0036, point 5).

@@ -24,7 +24,7 @@ Hangar without a user interface (ADR 0018): one Node process with the core from
   via `BayRuntime.localeChanged` to the bays (`ctx.onLocaleChange`).
 - `src/bridge.ts` – `attachBridge`: WebSocket `/connect` for desktops (ADR 0019),
   key in `<data>/identity.json`, paired desktops in `<data>/clients.json`
-  (token hash only), pairing code in the log and in `<data>/pair-code` (0600, for the desktop on the same machine). Every message is checked before processing
+  (token hash only), pairing code in the log and in `<data>/pair-code` (0600, for the desktop on the same machine). After a wrong code every pairing attempt, on any socket, is refused for 1 s (`PAIR_BLOCK_MS`, "Too many pairing attempts"); an upgrade with an `Origin` header (a web page) gets 403. Every message is checked before processing
   for type and fields (`parse`). `ask(request)` asks the paired
   desktop that connected most recently (timeout `askTimeoutMs`, 5 minutes); `answer` counts only
   from the asked socket and only with a choice that fits the question (`valid`).

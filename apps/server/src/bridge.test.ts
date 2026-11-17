@@ -29,6 +29,8 @@ describe('bridge: pairing', () => {
     expect(first.paired).toBe(false);
     await expect(first.invoke('dev.echo', 'echo', [1])).rejects.toThrow('Not paired');
     await expect(first.pair('WRON-GCOD', 'Laptop')).rejects.toThrow('Wrong pairing code');
+    // A wrong code blocks pairing for a second (PAIR_BLOCK_MS).
+    await new Promise((r) => setTimeout(r, 1050));
     const code = s.code();
     const token = await first.pair(code, 'Laptop');
     expect(first.paired).toBe(true);
@@ -64,6 +66,21 @@ describe('bridge: pairing', () => {
     conn.close();
     expect(readFileSync(file, 'utf8')).toBe(s.code());
     expect(readdirSync(s.data).filter((f) => f.includes('.tmp'))).toEqual([]);
+  });
+
+  it('refuses pairing on any socket for a second after a wrong code, without queueing', async () => {
+    const s = await start();
+    const guesser = await connect({ url: s.url });
+    const desktop = await connect({ url: s.url });
+    await expect(guesser.pair('WRON-GCOD', 'Rater')).rejects.toThrow('Wrong pairing code');
+    await expect(desktop.pair(s.code(), 'Laptop')).rejects.toThrow('Too many pairing attempts');
+    // Attempts while blocked do not extend the block.
+    await expect(guesser.pair('WRON-GCOD', 'Rater')).rejects.toThrow('Too many pairing attempts');
+    await new Promise((r) => setTimeout(r, 1050));
+    await desktop.pair(s.code(), 'Laptop');
+    expect(desktop.paired).toBe(true);
+    guesser.close();
+    desktop.close();
   });
 
   it('keeps its key across restarts', async () => {
@@ -165,6 +182,21 @@ describe('bridge: rejected connections', () => {
     await closed;
     const health = await fetch(`http://127.0.0.1:${port}/health`);
     expect(health.status).toBe(200);
+  });
+
+  it('refuses connections from web pages (they send an Origin, the desktop does not)', async () => {
+    const s = await start();
+    const { port } = new URL(s.url);
+    const socket = connectSocket(Number(port), '127.0.0.1');
+    await new Promise((r) => socket.once('connect', r));
+    socket.write(
+      'GET /connect HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: https://example.com\r\n' +
+        'Upgrade: websocket\r\nConnection: Upgrade\r\n' +
+        'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n',
+    );
+    const reply = await new Promise<Buffer>((r) => socket.once('data', r));
+    expect(reply.toString().split('\r\n')[0]).toBe('HTTP/1.1 403 Forbidden');
+    socket.destroy();
   });
 
   it('reports a server it cannot reach', async () => {

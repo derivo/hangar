@@ -56,6 +56,8 @@ describe('ServerConnections', () => {
     await expect(connections.pair(probe.id, 'Heimserver', 'WRON-GCOD')).rejects.toThrow(
       'Wrong pairing code',
     );
+    // A wrong code blocks pairing for a second (PAIR_BLOCK_MS).
+    await new Promise((r) => setTimeout(r, 1050));
     // The probe stays open for a second try.
     const id = await connections.pair(probe.id, 'Heimserver', s.code());
     await expect(connections.pair(probe.id, 'Heimserver', s.code())).rejects.toThrow(
@@ -528,6 +530,8 @@ describe('ServerConnections: the local server (ADR 0036)', () => {
         }),
       ).rejects.toThrow();
       expect(connections.list()).toEqual([]);
+      // A wrong code blocks pairing for a second (PAIR_BLOCK_MS).
+      await new Promise((r) => setTimeout(r, 1050));
       const id = await connections.pairSetUp({ host: 'heimserver' }, 'Heimserver', setup);
       await expect(connections.invoke(id, 'dev.echo', 'echo', [1])).resolves.toBe(1);
       expect(connections.setUpAt(id)).toEqual({
