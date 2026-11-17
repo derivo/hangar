@@ -52,3 +52,38 @@ test('the environment editor rejects each invalid line, then restarts the shell 
     await app.close();
   }
 });
+
+test('a restarted shell has the size of its terminal, not the start size 100 × 30', async () => {
+  const repo = createRepo('size');
+  const { app, shell } = await launch({ bayDirs: [repoBays], env: agentsEnv() });
+  try {
+    await shell.getByRole('button', { name: 'Agents' }).click();
+    const bay = await bayPage(app, 'agents/dist/ui');
+    await mockFolderPicker(app, repo);
+    await bay.getByRole('button', { name: 'Projekt hinzufügen' }).click();
+    await bay.getByRole('button', { name: 'Neue Session in size' }).click();
+    const rows = bay.locator('.xterm-rows');
+    let run = 0;
+    // A new marker per call: the answer of the shell before the restart does not count.
+    const size = async () => {
+      const mark = `SIZE${++run}`;
+      await bay.locator('.xterm-helper-textarea').focus();
+      await bay.keyboard.type(`echo ${mark}=$(stty size)\n`);
+      let found: RegExpExecArray | null = null;
+      await expect(async () => {
+        found = new RegExp(`${mark}=(\\d+ \\d+)`).exec(await rows.innerText());
+        expect(found).not.toBeNull();
+      }).toPass({ timeout: 10_000 });
+      return found![1]!;
+    };
+    const before = await size();
+    expect(before).not.toBe('30 100');
+
+    // From the session menu: the layout stays, so the terminal sends no new size.
+    await bay.locator('.tree-session').click({ button: 'right' });
+    await bay.getByRole('menuitem', { name: 'Shell neu starten' }).click();
+    expect(await size()).toBe(before);
+  } finally {
+    await app.close();
+  }
+});

@@ -56,15 +56,20 @@ const INPUT_MODES_OFF = ['1000', '1002', '1003', '1004', '1005', '1006', '1015',
   .map((mode) => `\x1b[?${mode}l`)
   .join('');
 
+/** Whole screen scrolls again; DECSTBM moves the cursor home, so it is saved around it. */
+const SCROLL_REGION_OFF = '\x1b7\x1b[r\x1b8';
+
 /**
  * Text appended to restored scrollback before the new shell starts. If the old output
  * ended inside a full-screen program (alternate screen), leave it first; modes that make
- * the terminal send input on its own are switched off.
+ * the terminal send input on its own and a scroll region it set are switched off.
  */
 export function restoreSuffix(previous: string): string {
   const enter = previous.lastIndexOf('\x1b[?1049h');
   const leave = previous.lastIndexOf('\x1b[?1049l');
-  return (enter > leave ? '\x1b[?1049l' : '') + INPUT_MODES_OFF + restoreMarker();
+  return (
+    (enter > leave ? '\x1b[?1049l' : '') + INPUT_MODES_OFF + SCROLL_REGION_OFF + restoreMarker()
+  );
 }
 
 /** Scrollback kept per session (characters). Older output is dropped. */
@@ -123,6 +128,8 @@ interface Live {
   start?: number;
   /** AI agent found in the shell (ADR 0045). */
   agent?: AgentKind;
+  /** Last size the terminal sent; a shell started later starts in it. */
+  size?: { cols: number; rows: number };
 }
 
 /** Projects, sessions and their shells. Everything the agent bay does lives here. */
@@ -483,7 +490,10 @@ export class SessionManager {
   }
 
   resize(id: string, cols: number, rows: number): void {
-    this.live.get(id)?.pty?.resize(Math.max(2, cols), Math.max(1, rows));
+    const live = this.live.get(id);
+    if (!live) return;
+    live.size = { cols: Math.max(2, cols), rows: Math.max(1, rows) };
+    live.pty?.resize(live.size.cols, live.size.rows);
   }
 
   buffer(id: string): string {
@@ -619,8 +629,9 @@ export class SessionManager {
       args: this.deps.shell.args,
       cwd: session.worktreePath,
       env,
-      cols: 100,
-      rows: 30,
+      // Until the terminal sends its size; it sends none while its own size stays.
+      cols: live.size?.cols ?? 100,
+      rows: live.size?.rows ?? 30,
     });
     live.pty = pty;
     live.env = env;
