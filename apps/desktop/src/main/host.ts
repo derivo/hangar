@@ -1253,6 +1253,9 @@ export class Host {
         ...(offscreen() && { backgroundThrottling: false }),
       },
     });
+    // The shell preload grants every shell:* channel; no other page may ever run here.
+    this.window.webContents.on('will-navigate', (e) => e.preventDefault());
+    this.window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     if (process.env.ELECTRON_RENDERER_URL) {
       void this.window.loadURL(process.env.ELECTRON_RENDERER_URL);
     } else {

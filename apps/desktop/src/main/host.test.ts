@@ -931,6 +931,16 @@ describe('Host: what a bay view may do', () => {
     expect(electron.shell.openExternal.mock.calls).toEqual([['https://example.com']]);
   });
 
+  it('keeps the shell window on its own page and opens no windows from it', async () => {
+    await started();
+    const contents = FakeWindow.all[0]!.webContents;
+    const navigation = { preventDefault: vi.fn() };
+    contents.emit('will-navigate', navigation);
+    expect(navigation.preventDefault).toHaveBeenCalled();
+    expect(contents.openHandler!({ url: 'https://example.com' })).toEqual({ action: 'deny' });
+    expect(electron.shell.openExternal).not.toHaveBeenCalled();
+  });
+
   it('sends bay events to its view and windows, badges to the app and the shell', async () => {
     const { host, viewOf, shellState } = await started({ sidebar: ['dev.test.a', 'dev.test.c'] });
     const view = viewOf('dev.test.a')!;

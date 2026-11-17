@@ -24,3 +24,20 @@ test('app starts, bay appears in the sidebar and opens', async () => {
     await app.close();
   }
 });
+
+test('the main window stays on its page and opens no windows (security audit 2026-11-17)', async () => {
+  const { app, shell } = await launch();
+  try {
+    const windows = app.windows().length;
+    // What a link or URL dropped on the sidebar would do: its preload grants every shell:* channel.
+    await shell.evaluate(() => {
+      location.href = 'http://127.0.0.1:9/';
+    });
+    expect(await shell.evaluate(() => window.open('http://127.0.0.1:9/'))).toBeNull();
+    await shell.waitForTimeout(500);
+    expect(await shell.evaluate(() => location.href)).toContain('out/renderer/index.html');
+    expect(app.windows()).toHaveLength(windows);
+  } finally {
+    await app.close();
+  }
+});
