@@ -624,10 +624,10 @@ new Hangar build.
 - Daily update check through the scheduler; installation never without
   confirmation.
 
-**Open:** the remote exists since 2026-11-04, but `derivo/hangar` is private;
-Hangar cannot load its Releases or Pages without a token. Decision needed
-first: a separate public repository for index and packages, or making
-`derivo/hangar` public. The built-in public key and a scheduled re-signing of
+**Open:** the remote exists since 2026-11-04 and `derivo/hangar` is public
+(checked 2026-11-18), so Hangar can load its Releases and Pages without a
+token. Still to decide: whether index and packages are published there or in
+a separate repository. The built-in public key and a scheduled re-signing of
 the index (it expires) belong to this phase.
 
 **Acceptance criteria**

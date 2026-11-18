@@ -76,6 +76,17 @@ describe('nextRun', () => {
     );
   });
 
+  it('keeps a stepped day of month like */2 when the weekday is *', () => {
+    // Like cron: a field starting with * makes day and weekday combine with AND.
+    expect(iso(nextRun(parseCron('0 0 */2 * *'), at('2026-11-01T00:00:00Z')))).toBe(
+      '2026-11-03T00:00:00.000Z',
+    );
+    // Odd day and Monday: 2026-11-02 is a Monday but even, 2026-11-09 both.
+    expect(iso(nextRun(parseCron('0 0 */2 * 1'), at('2026-11-01T00:00:00Z')))).toBe(
+      '2026-11-09T00:00:00.000Z',
+    );
+  });
+
   it('returns undefined for a date that never exists', () => {
     expect(nextRun(parseCron('0 0 30 2 *'), at('2026-10-29T10:00:00Z'))).toBeUndefined();
   });

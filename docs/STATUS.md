@@ -66,9 +66,20 @@ manual step is needed. pnpm reports ignored build scripts of
   `release.yml`), but not run. Prerequisites are an
   Apple Developer account and a Windows code signing certificate as secrets
   (list: skill `release`). Without a signature, auto-update does not work on
-  macOS. The repository `derivo/hangar` is private: `electron-updater`
-  (`provider: github`) and any index on its Releases or Pages need a token,
-  so packaged apps find no update without one.
+  macOS. The repository `derivo/hangar` is public (checked 2026-11-18), so
+  `electron-updater` (`provider: github`) needs no token, but no release is
+  published yet: packaged apps find no update until the first one.
+- **Security audit 2026-11-17** (source-only, `main` at 2c19132, no
+  confirmed finding): of six leads that need validation, the main window's
+  navigation guard (#29) and the bridge's Origin check and pairing limit
+  (#30) are fixed. Open: the relay keeps unauthenticated WebSocket
+  connections without deadline or cap (`apps/relay/src/relay.ts`); the
+  server's `/health` checks no `Host` header, so a DNS-rebinding page could
+  read it; a workspace member could freeze the member list at
+  `Number.MAX_SAFE_INTEGER` and so block its own revocation; a revoked member
+  could renew its trust through a member it added when the relay withholds
+  the revocation. The `shell:*` IPC handlers still do not check the sender
+  (defense in depth).
 - **CI**: First run on 2026-11-04 after the push to
   `git@github.com:derivo/hangar.git`. Since `96332a0` Windows, Linux (with the
   AppImage), SSH, both containers and all macOS E2E tests but one are green.
@@ -518,9 +529,9 @@ test:linux-server`) and its setup over SSH (`pnpm test:linux-setup`, ADR
   overflow. Data backup on a new `dataVersion`, restoring on
   rollback and resetting newly sensitive permissions are only backed by
   `packages/host/src/bay-store.test.ts`. No built-in key,
-  no published index (phase 21: the GitHub remote exists since 2026-11-04, but
-  the repository is private; where index and packages are published publicly
-  is undecided). Review:
+  no published index (phase 21: the GitHub remote exists since 2026-11-04; the
+  repository is public now, but where index and packages are published is
+  undecided). Review:
   `docs/reviews/2026-11-02-phase-20-installation.md`.
 - **Bridge desktop ↔ server, part 10a** (ADR 0019): Pairing with code,
   token, fingerprint, protocol version and error paths backed by
