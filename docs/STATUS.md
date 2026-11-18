@@ -116,6 +116,13 @@ manual step is needed. pnpm reports ignored build scripts of
     `kill -9` timed out. A second run on the same commit and a rerun passed. So
     the replay was at most part of the cause; the rest is not known. Since
     2026-11-12 CI keeps the traces of failed attempts (artifact `e2e-results`).
+  - Runs 43970975387 (`5343c87`, 2026-11-16) and 44192441915 (`main`, 2026-11-17):
+    the same poll after `kill -9` failed all three attempts. The screenshots show
+    `echo AFTERKILL=$$` followed directly by the next prompt, the output line gone,
+    and characters missing at wrap points (pty and xterm differ in width). Probable
+    cause: the resize after the reconnect makes the shell redraw its prompt over the
+    output line. Since 2026-11-18 `shellPid` reads the pid from a file the shell
+    writes, not from the screen; not yet confirmed by several CI runs.
   - `local-server.spec.ts:307` (workspaces move into the local server) failed 2 of 5
     local runs (2026-11-12): on quit `Host.stop()` closes the server connections
     before the bay views, and the feeds UI did not catch the "Not connected" of its
