@@ -289,5 +289,5 @@ downloads in the background and installs on the next quit. Channel "Stable" read
 channel is chosen on the settings page (IPC `shell:settings`,
 `shell:updateChannel`) and stored in `settings.json`. Releases are built by
 `.github/workflows/release.yml` from a tag `v*`: first as a draft, public only
-after the upload of all platforms. As long as `derivo/hangar` is private, the
-updater finds nothing without a GitHub token (see STATUS).
+after the upload of all platforms. `derivo/hangar` is public, so the updater
+needs no token; it finds nothing until the first release (see STATUS).

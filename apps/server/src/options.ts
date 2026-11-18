@@ -69,7 +69,9 @@ export async function checkedFolder(
     throw new Error(t.folderNotFound(path));
   });
   const allowed = await Promise.all(roots.map((r) => realpath(r).catch(() => undefined)));
-  const inside = (p: string) => allowed.some((r) => r && (p === r || p.startsWith(r + sep)));
+  // `/` (or `C:\`) already ends with the separator.
+  const inside = (p: string) =>
+    allowed.some((r) => r && (p === r || p.startsWith(r.endsWith(sep) ? r : r + sep)));
   if (!inside(real)) throw new Error(t.folderOutside(path));
   // The agent bay works in the repository root, which may lie above the folder.
   // Without GIT_* variables of the server's environment: they could point git elsewhere.

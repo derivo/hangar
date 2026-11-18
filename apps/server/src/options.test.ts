@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, realpathSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, parse, resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { checkedFolder, parseOptions, withoutGitVars } from './options';
 
@@ -71,6 +71,8 @@ describe('checkedFolder', () => {
       join(root, 'app'),
     );
     await expect(checkedFolder(root, [root])).resolves.toBe(root);
+    // The file system root as allowed root (`--root /`).
+    await expect(checkedFolder(root, [parse(root).root])).resolves.toBe(root);
   });
 
   it('rejects a folder outside the roots, also through a symlink', async () => {

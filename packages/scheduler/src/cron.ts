@@ -77,8 +77,8 @@ const wallKey = (d: Date) =>
 function dayMatches(cron: Cron, d: Date): boolean {
   const dom = cron.day.has(d.getDate());
   const dow = cron.weekday.has(d.getDay());
-  if (cron.anyDay) return dow;
-  if (cron.anyWeekday) return dom;
+  // As in cron: a field starting with * (also */2) makes both fields count (AND), else either.
+  if (cron.anyDay || cron.anyWeekday) return dom && dow;
   return dom || dow;
 }
 
