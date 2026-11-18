@@ -1,7 +1,15 @@
 import { join } from 'node:path';
-import { Bus, FilePermissionStore, type Prompter, type RemoteAccess } from '@hangar/bus';
+import {
+  Bus,
+  FilePermissionStore,
+  type ActivityEvent,
+  type Prompter,
+  type RemoteAccess,
+} from '@hangar/bus';
 import { startMcpServer, TokenRegistry } from '@hangar/mcp';
 import { Scheduler } from '@hangar/scheduler';
+import { ActivityLog } from './activity-log';
+import { FileInboxStore } from './inbox-store';
 import type { HostServices } from './bay-runtime';
 import { writeCliShim } from './cli-shim';
 
@@ -15,6 +23,8 @@ export interface CoreOptions {
   onJobsChanged(): void;
   /** Membership and share lists of the workspaces (ADR 0030); without it no remote call passes. */
   remote?: RemoteAccess;
+  /** After each logged workspace call, e.g. a new inbox entry (ADR 0046). */
+  onActivity?(event: ActivityEvent): void;
 }
 
 /** The parts of `HostServices` that need no window, dialog or tray. */
@@ -35,6 +45,10 @@ export interface Core {
   scheduler: Scheduler;
   mcpUrl: string;
   services: CoreServices;
+  /** Workspace calls in and out (`workspace-log.jsonl`, ADR 0046). */
+  activity: ActivityLog;
+  /** Logs a call and reports it; the relay's outgoing calls come in here. */
+  record(event: ActivityEvent): void;
   /** Stops the scheduler and the MCP server; the caller starts the scheduler. */
   close(): Promise<void>;
 }
@@ -43,10 +57,17 @@ export interface Core {
 export async function startCore(options: CoreOptions): Promise<Core> {
   const { dataDir } = options;
   const tokens = new TokenRegistry();
+  const activity = new ActivityLog(join(dataDir, 'workspace-log.jsonl'));
+  const record = (event: ActivityEvent) => {
+    activity.add(event);
+    options.onActivity?.(event);
+  };
   const bus = new Bus({
     permissions: new FilePermissionStore(join(dataDir, 'permissions.json')),
     prompter: options.prompter,
     ...(options.remote && { remote: options.remote }),
+    inbox: new FileInboxStore(join(dataDir, 'inbox.json')),
+    onActivity: record,
   });
   const server = await startMcpServer({ bus, tokens, version: options.version });
   const cliDir = join(dataDir, 'bin');
@@ -58,6 +79,8 @@ export async function startCore(options: CoreOptions): Promise<Core> {
   return {
     bus,
     tokens,
+    activity,
+    record,
     scheduler,
     mcpUrl: server.url,
     services: {

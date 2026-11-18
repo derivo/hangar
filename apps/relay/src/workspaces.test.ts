@@ -136,6 +136,62 @@ describe('Workspaces (host)', () => {
       expect(w[m]).toHaveBeenCalledWith('team', 'fp');
     await workspaceAction(w, bus, 'share', ['team', 'dev.hangar.notes/note.read', false]);
     expect(w.isShared('team', 'dev.hangar.notes/note.read')).toBe(false);
+    // Trust (ADR 0046) like share: a missing value must not switch it.
+    await workspaceAction(w, bus, 'trust', ['team', 'SHA256:ben', true]);
+    for (const args of [
+      ['team', 'SHA256:ben'],
+      ['team', 'SHA256:ben', 'no'],
+    ])
+      await expect(workspaceAction(w, bus, 'trust', args)).rejects.toThrow(
+        'Invalid arguments for trust',
+      );
+    expect(w.isTrusted('team', 'SHA256:ben')).toBe(true);
+    await workspaceAction(w, bus, 'trust', ['team', 'SHA256:ben', false]);
+    expect(w.isTrusted('team', 'SHA256:ben')).toBe(false);
+  });
+
+  it('shows the inbox and the log and accepts or rejects entries by id (ADR 0046)', async () => {
+    const { w, bus } = hangar(mkdtempSync(join(tmpdir(), 'hangar-ws-')), 'mac');
+    const run = vi.fn(() => 'done');
+    bus.register('dev.hangar.board', { name: 'task.add', sensitive: false, inbox: true }, run);
+    vi.spyOn(w, 'isMember').mockReturnValue(true);
+    vi.spyOn(w, 'isShared').mockReturnValue(true);
+    vi.spyOn(w, 'memberName').mockReturnValue('Ben');
+    const remote = { kind: 'remote' as const, instance: 'SHA256:b', workspace: 'team', bayId: 'x' };
+    const spec = bus.list().find((f) => f.id === 'dev.hangar.board/task.add')!.spec;
+    spec.remote = true;
+    const first = (await bus.call(remote, 'dev.hangar.board/task.add', { title: 'A' })) as {
+      queued: string;
+    };
+    const second = (await bus.call(remote, 'dev.hangar.board/task.add', { title: 'B' })) as {
+      queued: string;
+    };
+    const log = { list: () => [{ outcome: 'queued' }] };
+    expect(await workspaceAction(w, bus, 'view', [], log)).toMatchObject({ inbox: 2 });
+    expect(await workspaceAction(w, bus, 'activity', [], log)).toEqual({
+      inbox: [
+        {
+          id: first.queued,
+          at: expect.any(String),
+          workspace: 'team',
+          instance: 'SHA256:b',
+          name: 'Ben',
+          target: 'dev.hangar.board/task.add',
+          preview: 'A',
+        },
+        expect.objectContaining({ id: second.queued, preview: 'B' }),
+      ],
+      log: [{ outcome: 'queued' }],
+    });
+    expect(await workspaceAction(w, bus, 'acceptInbox', [first.queued], log)).toBe('done');
+    await workspaceAction(w, bus, 'rejectInbox', [second.queued], log);
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(await workspaceAction(w, bus, 'view', [], log)).toMatchObject({ inbox: 0 });
+    await expect(workspaceAction(w, bus, 'acceptInbox', [1], log)).rejects.toThrow(
+      'Invalid arguments for acceptInbox',
+    );
+    // Without a log (older callers) the list is empty.
+    expect(await workspaceAction(w, bus, 'activity', [])).toEqual({ inbox: [], log: [] });
   });
 
   it('connects, founds a workspace, invites, both confirm, and states flow', async () => {
@@ -187,6 +243,17 @@ describe('Workspaces (host)', () => {
     anna.w.setShared('team', 'dev.hangar.notes/note.read', false);
     expect(anna.w.view().workspaces[0]!.shared).toEqual([]);
 
+    // Trust (ADR 0046): per fingerprint, never per name; off by default; not in other workspaces.
+    const benFp = ben.w.view().fingerprint;
+    expect(anna.w.memberName('team', benFp)).toBe('ben');
+    expect(anna.w.memberName('team', 'SHA256:nobody')).toBeUndefined();
+    expect(anna.w.isTrusted('team', benFp)).toBe(false);
+    anna.w.setTrusted('team', benFp, true);
+    expect(anna.w.isTrusted('team', benFp)).toBe(true);
+    expect(anna.w.isTrusted('team', 'ben')).toBe(false);
+    expect(anna.w.isTrusted('other', benFp)).toBe(false);
+    expect(anna.w.view().workspaces[0]!.trusted).toEqual([benFp]);
+
     // The private keys are stored protected, never in the clear.
     const stored = readFileSync(join(root, 'anna', 'relay-identity.json'), 'utf8');
     const { keys } = JSON.parse(stored) as { keys: string };
@@ -194,6 +261,8 @@ describe('Workspaces (host)', () => {
 
     await anna.w.remove('team', ben.w.view().fingerprint);
     await vi.waitFor(() => expect(names(anna.w.view(), 'team')).toEqual(['anna']));
+    // Removing a member drops its trust, so joining again starts behind the gate.
+    expect(anna.w.isTrusted('team', benFp)).toBe(false);
   });
 
   it('a refused instance is revoked; a join waits for the inviter and survives a restart', async () => {
@@ -213,7 +282,7 @@ describe('Workspaces (host)', () => {
     const invite = await anna.w.invite('team');
     expect(await ben.w.join('team', invite.token, 'a'.repeat(64))).toBe('waiting');
     expect(ben.w.view().workspaces).toEqual([
-      { name: 'team', waiting: true, members: [], joined: [], shared: [] },
+      { name: 'team', waiting: true, members: [], joined: [], shared: [], trusted: [] },
     ]);
     ben.w.close();
     const again = hangar(join(root, 'ben'), 'ben');

@@ -5,11 +5,23 @@ import { dirname } from 'node:path';
 export const TASK_STATUSES = ['open', 'doing', 'done'] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
+/** Where text from another instance came from, by the authenticated caller (ADR 0046). */
+export interface Origin {
+  /** Name of the instance in the member list, else its fingerprint. */
+  instance: string;
+  fingerprint: string;
+  workspace: string;
+}
+
 export interface TaskNote {
   at: string;
   text: string;
   /** Name of the session that wrote it. */
   by: string;
+  /** Written by another instance. */
+  origin?: Origin;
+  /** The accepted inbox call that wrote it; a repeat adds nothing (ADR 0046). */
+  executionId?: string;
 }
 
 /** A task of a project of the agent bay (ADR 0037). */
@@ -24,6 +36,10 @@ export interface Task {
   sessionName?: string;
   /** Session name of the agent that added it; `null`: the person. */
   createdBy: string | null;
+  /** Added by another instance. */
+  origin?: Origin;
+  /** The accepted inbox call that added it; a repeat returns this task (ADR 0046). */
+  executionId?: string;
   notes: TaskNote[];
   createdAt: string;
   updatedAt: string;
@@ -33,6 +49,10 @@ export interface Task {
 export interface Actor {
   sessionId: string;
   name: string;
+  /** An agent of another instance. */
+  origin?: Origin;
+  /** Set when an accepted inbox call acts (ADR 0046). */
+  executionId?: string;
 }
 
 /** The tasks in `board.json`; every change is written at once. */
@@ -52,6 +72,8 @@ export class Board {
   }
 
   add(projectId: string, title: string, description: string, by: Actor | null): Task {
+    const repeat = by?.executionId && this.tasks.find((t) => t.executionId === by.executionId);
+    if (repeat) return repeat;
     const at = this.now();
     const task: Task = {
       id: randomUUID(),
@@ -60,6 +82,8 @@ export class Board {
       description,
       status: 'open',
       createdBy: by?.name ?? null,
+      ...(by?.origin && { origin: by.origin }),
+      ...(by?.executionId && { executionId: by.executionId }),
       notes: [],
       createdAt: at,
       updatedAt: at,
@@ -84,13 +108,14 @@ export class Board {
 
   note(task: Task, text: string, by: Actor): Task {
     this.ownable(task, by);
-    return this.update(task, { notes: [...task.notes, { at: this.now(), text, by: by.name }] });
+    if (this.repeated(task, by)) return task;
+    return this.update(task, { notes: [...task.notes, this.noteOf(text, by)] });
   }
 
   done(task: Task, note: string | undefined, by?: Actor): Task {
     if (by) this.ownable(task, by);
-    const notes =
-      note && by ? [...task.notes, { at: this.now(), text: note, by: by.name }] : task.notes;
+    if (by && this.repeated(task, by)) return task;
+    const notes = note && by ? [...task.notes, this.noteOf(note, by)] : task.notes;
     return this.update(task, { status: 'done', notes });
   }
 
@@ -107,6 +132,21 @@ export class Board {
   sessionEnded(sessionId: string): void {
     for (const task of this.tasks)
       if (task.status === 'doing' && task.sessionId === sessionId) this.reopen(task);
+  }
+
+  private noteOf(text: string, by: Actor): TaskNote {
+    return {
+      at: this.now(),
+      text,
+      by: by.name,
+      ...(by.origin && { origin: by.origin }),
+      ...(by.executionId && { executionId: by.executionId }),
+    };
+  }
+
+  /** The accepted inbox call already wrote its note (a run before a crash). */
+  private repeated(task: Task, by: Actor): boolean {
+    return !!by.executionId && task.notes.some((n) => n.executionId === by.executionId);
   }
 
   /** Taken by another session, also once done (ADR 0037). */

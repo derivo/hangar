@@ -64,9 +64,13 @@ export async function startServer(
       cliPath: options.cli ?? join(import.meta.dirname, '../../../packages/cli/dist/hangar.mjs'),
     },
     onJobsChanged: () => bridge.jobsChanged(),
+    // The paired desktop reads inbox and badge again and notifies on a rise (ADR 0046).
+    onActivity: () => bridge.workspacesChanged(),
     remote: {
       isMember: (w, i) => workspaces?.isMember(w, i) === true,
       isShared: (w, t) => workspaces?.isShared(w, t) === true,
+      isTrusted: (w, i) => workspaces?.isTrusted(w, i) === true,
+      memberName: (w, i) => workspaces?.memberName(w, i),
     },
   });
   // The relay of the local server's agent bay (ADR 0036, point 11). No keychain here: the
@@ -79,6 +83,7 @@ export async function startServer(
       bus: core.bus,
       protect: keys,
       onChange: () => bridge.workspacesChanged(),
+      onActivity: (e) => core.record(e),
     });
   } catch (e) {
     log(`workspaces not available: ${(e as Error).message}`);
@@ -132,7 +137,7 @@ export async function startServer(
     desktopClosed: () => messages(locale).desktopClosed,
     ...(workspaces && {
       workspaces: (action: string, args: unknown[]) =>
-        workspaceAction(workspaces, core.bus, action, args),
+        workspaceAction(workspaces, core.bus, action, args, core.activity),
     }),
     jobs: () => core.scheduler.list(),
     job: async (action, id) => {
@@ -250,6 +255,8 @@ export async function startServer(
   offer(readOffered(offeredFile));
   bayStart();
   core.scheduler.start(options.tickMs);
+  // Entries a crash left half accepted run again, now that the bays are loaded (ADR 0046).
+  void core.bus.resumeInbox();
   void workspaces?.start();
 
   return {

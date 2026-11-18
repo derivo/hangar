@@ -131,6 +131,17 @@ describe('Sidebar', () => {
     expect(screen.queryByTestId('badge-dev.hangar.test')).toBeNull();
   });
 
+  it('counts waiting inbox entries on the settings (ADR 0046)', () => {
+    const { rerender } = render(
+      <Sidebar state={{ ...state, settingsBadge: 3 }} api={themeApi()} onSelect={() => {}} />,
+    );
+    expect(screen.getByRole('button', { name: 'Einstellungen, 3 Hinweise' })).toBeVisible();
+    expect(screen.getByTestId('badge-settings')).toHaveTextContent('3');
+    rerender(<Sidebar state={state} api={themeApi()} onSelect={() => {}} />);
+    expect(screen.getByRole('button', { name: 'Einstellungen' })).toBeVisible();
+    expect(screen.queryByTestId('badge-settings')).toBeNull();
+  });
+
   it('caps large badge counts', () => {
     const many = { ...state, bays: [{ ...state.bays[0]!, badge: 120 }] };
     render(<Sidebar state={many} api={themeApi()} onSelect={() => {}} />);

@@ -9,9 +9,17 @@ export type Caller =
   | { kind: 'session'; bayId: string; sessionId: string }
   /**
    * A bay or agent of another Hangar instance (ADR 0011). `instance` is its fingerprint,
-   * `workspace` comes from the authenticated header; `sessionId` is for display only.
+   * `workspace` comes from the authenticated header; `sessionId` and `name` (from the signed
+   * member list) are for display only.
    */
-  | { kind: 'remote'; instance: string; workspace: string; bayId: string; sessionId?: string }
+  | {
+      kind: 'remote';
+      instance: string;
+      workspace: string;
+      bayId: string;
+      sessionId?: string;
+      name?: string;
+    }
   /**
    * A bay or agent of the Hangar server on this machine calling a bay of the app (ADR 0036);
    * the server checked the call before, the app checks it again under its own subject.
@@ -24,11 +32,57 @@ export interface RemoteAccess {
   isMember(workspace: string, instance: string): boolean;
   /** The function `<bay-id>/<name>` is on the share list of the workspace. */
   isShared(workspace: string, target: string): boolean;
+  /** Calls of inbox functions from this member run at once (ADR 0046); missing means never. */
+  isTrusted?(workspace: string, instance: string): boolean;
+  /** Display name of the member, for the activity log. */
+  memberName?(workspace: string, instance: string): string | undefined;
+}
+
+/** A caller of another instance. */
+export type RemoteCaller = Extract<Caller, { kind: 'remote' }>;
+
+/**
+ * A remote call of an inbox function waiting for the person (ADR 0046). `accepting` is
+ * reserved with an execution id, so a run cut short by a crash repeats with the same id.
+ */
+export interface InboxEntry {
+  id: string;
+  /** ISO time it came in. */
+  at: string;
+  caller: RemoteCaller;
+  target: string;
+  args: unknown;
+  preview: string;
+  state: 'pending' | 'accepting';
+  executionId?: string;
+}
+
+/** Keeps the inbox entries; the bus holds the logic. */
+export interface InboxStore {
+  load(): InboxEntry[];
+  save(entries: InboxEntry[]): void;
+}
+
+/** One line of the activity log (ADR 0046): no arguments besides the preview, no results. */
+export interface ActivityEvent {
+  at: string;
+  direction: 'in' | 'out';
+  workspace: string;
+  /** Fingerprint of the other instance. */
+  instance: string;
+  name?: string;
+  target: string;
+  outcome: 'ran' | 'queued' | 'accepted' | 'rejected' | 'denied' | 'failed';
+  /** Inbox functions only: the text, cut and cleaned. */
+  preview?: string;
+  inboxId?: string;
 }
 
 /** Information a function handler receives about the current call. */
 export interface CallInfo {
   caller: Caller;
+  /** Accepted inbox entries only: handlers ignore a repeat of the same id (ADR 0046). */
+  executionId?: string;
 }
 
 /** Implementation of a bay function. `args` is untrusted input and must be validated. */
@@ -46,6 +100,8 @@ export interface FunctionSpec {
   remote?: boolean;
   /** Only bays may call it: agents and other instances never, and it is no MCP tool (ADR 0021). */
   bayOnly?: boolean;
+  /** Remote calls wait in the inbox for the person unless the member is trusted (ADR 0046). */
+  inbox?: boolean;
   /** Human-readable description, shown as MCP tool description. */
   description?: string;
   /** JSON Schema of the arguments object, exposed as MCP `inputSchema`. */

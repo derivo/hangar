@@ -19,8 +19,9 @@
       "name": "task.add",
       "sensitive": false,
       "openToAgents": true,
-      "description": "Adds an open task to your session's project, e.g. to split up work for other agents. Returns the task. From another instance: name a shared project in project.",
-      "remote": true
+      "description": "Adds an open task to your session's project, e.g. to split up work for other agents. Returns the task. From another instance: name a shared project in project. From another instance the call waits in the person's inbox and answers { queued: <id> }, unless they trust your instance (then the real result).",
+      "remote": true,
+      "inbox": true
     },
     {
       "name": "task.claim",
@@ -33,15 +34,17 @@
       "name": "task.note",
       "sensitive": false,
       "openToAgents": true,
-      "description": "Adds a progress note to a task of your project that no other session took. From another instance: name a shared project in project.",
-      "remote": true
+      "description": "Adds a progress note to a task of your project that no other session took. From another instance: name a shared project in project. From another instance the call waits in the person's inbox and answers { queued: <id> }, unless they trust your instance (then the real result).",
+      "remote": true,
+      "inbox": true
     },
     {
       "name": "task.done",
       "sensitive": false,
       "openToAgents": true,
-      "description": "Marks a task done, with an optional closing note. Fails if another session took it. From another instance: name a shared project in project.",
-      "remote": true
+      "description": "Marks a task done, with an optional closing note. Fails if another session took it. From another instance: name a shared project in project. From another instance the call waits in the person's inbox and answers { queued: <id> }, unless they trust your instance (then the real result).",
+      "remote": true,
+      "inbox": true
     }
   ]
 }

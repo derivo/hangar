@@ -981,6 +981,7 @@ export class Host {
         badge: r.badge,
       })),
       order: this.order().map((b) => b.id),
+      ...(this.inboxCount && { settingsBadge: this.inboxCount }),
       errors: this.bayErrors(),
       servers: this.servers
         .list()
@@ -1118,9 +1119,35 @@ export class Host {
     return this.servers.workspaces(server.id, action, args).catch((e: Error) => failed(e.message));
   }
 
-  /** Workspaces, members or the relay connection changed (ADR 0030). */
+  /** Open inbox entries of the own or the local server's workspaces (ADR 0046); set by main. */
+  countInbox?: () => Promise<number>;
+  private inboxCount?: number;
+
+  /** Workspaces, members, the relay connection or the inbox changed (ADR 0030, 0046). */
   workspacesChanged(): void {
     if (this.window?.isDestroyed() === false) this.window.webContents.send('shell:workspaces');
+    void this.countInbox?.().then(
+      (n) => {
+        if (n === this.inboxCount) return;
+        // One path for the own and the local server's inbox; the first count is no news.
+        if (this.inboxCount !== undefined && n > this.inboxCount)
+          this.notifyInbox(t.inboxNotification(n));
+        this.inboxCount = n;
+        this.pushState();
+      },
+      () => {}, // the local server went away: keep the last count
+    );
+  }
+
+  /** New work waits in the inbox; clicking the notification opens the settings (ADR 0046). */
+  private notifyInbox(title: string): void {
+    const click = () => this.show('settings');
+    if (process.env.HANGAR_E2E) {
+      (globalThis.__hangarNotifications ??= []).push({ bayId: 'settings', title, click });
+      return;
+    }
+    if (!Notification.isSupported()) return;
+    this.showNotification({ title }, (notification) => notification.on('click', click));
   }
 
   /** The system answered a notification; an open settings page reads the status again. */

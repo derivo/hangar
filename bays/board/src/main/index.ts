@@ -60,6 +60,13 @@ const bay: BayMain = {
         const actor: Actor = {
           sessionId: `remote:${caller.instance}/${caller.sessionId ?? ''}`,
           name: `${caller.instance.slice(0, 16)} (${caller.workspace})`,
+          // From the authenticated caller, never from an argument (ADR 0046).
+          origin: {
+            instance: caller.name ?? caller.instance,
+            fingerprint: caller.instance,
+            workspace: caller.workspace,
+          },
+          ...(info.executionId && { executionId: info.executionId }),
         };
         return { projectId: found.id, actor };
       }

@@ -371,6 +371,19 @@ test:linux-server`) and its setup over SSH (`pnpm test:linux-setup`, ADR
   (`e2e/local-server.spec.ts`). Unit: `host.test.ts` (order, invalid
   inputs, menus), `Sidebar.test.tsx` (dragging, marking, lists separate).
   Not checked: context menu key by keyboard (native menu, E2E replaces it).
+- **Workspace inbox and activity log** (ADR 0046, 2026-11-16):
+  `e2e/inbox.spec.ts`: two Hangars over a local relay; Ben's agent adds a
+  task to Anna's shared board: queued, badge "Einstellungen, 1 Hinweis",
+  board empty until Anna accepts (by keyboard); a rejected one never arrives;
+  with trust the call runs at once and answers the task; the log shows all of
+  it; axe light and dark 0 findings, 200 % zoom without horizontal scroll.
+  `apps/relay/src/board.integration.test.ts`: queued, accepted with origin,
+  trusted at once. Unit: `packages/bus/src/inbox.test.ts` (queue, accept,
+  reject, leave, cap of 200, reservation, resume), `inbox-store.test.ts`,
+  `activity-log.test.ts`, board and handover dedupe, `Workspaces.test.tsx`,
+  `host.test.ts` (badge, notification). Not checked: notification on Windows
+  and Linux; the server option to trust a member at join (comes with ADR 0047).
+  Review: `docs/reviews/2026-11-16-workspace-inbox.md`.
 - **Board across workspaces** (ADR 0037 addendum, 2026-11-04):
   `apps/relay/src/board.integration.test.ts`: Anna with a real agent bay and
   real board, Ben in the same workspace over a real relay; after

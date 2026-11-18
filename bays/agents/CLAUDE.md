@@ -77,3 +77,4 @@ and early output is dropped as before.
 - Do not intercept key shortcuts: all input goes unchanged to the shell
   (voice input of Claude Code = hold the space bar).
 - Decisions: ADR 0004 (runtime), ADR 0005 (sessions/worktrees/status), ADR 0010 (grid, own windows), ADR 0013 (jobs), ADR 0022 (project folder), ADR 0024 (quotas), ADR 0025 (prompt).
+- `handover.create` is an inbox function (ADR 0046). A remote handover stores `instance` (name, fingerprint, workspace of the caller) and `executionId`; a repeated accepted call creates no second session. `origin` stays `'local' | 'remote'`.

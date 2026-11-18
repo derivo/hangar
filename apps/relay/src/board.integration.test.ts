@@ -16,6 +16,7 @@ const OPERATOR = 'operator-token';
 const AGENTS = 'dev.hangar.agents';
 const BOARD = 'dev.hangar.board';
 const TASKS = ['task.list', 'task.add', 'task.claim', 'task.note', 'task.done'];
+const INBOX = ['task.add', 'task.note', 'task.done'];
 let relay: Relay | undefined;
 const cleanup: (() => unknown)[] = [];
 afterEach(async () => {
@@ -27,6 +28,7 @@ afterEach(async () => {
 async function instance(name: string, dir: string) {
   const identity = createIdentity(name);
   const shared: string[] = [];
+  const trusted = new Set<string>();
   const ref: { client?: RelayClient } = {};
   const bus = new Bus({
     permissions: new MemoryPermissionStore(),
@@ -34,6 +36,7 @@ async function instance(name: string, dir: string) {
     remote: {
       isMember: (w, i) => ref.client!.isMember(w, i),
       isShared: (w, t) => ref.client!.isShared(w, t),
+      isTrusted: (_w, i) => trusted.has(i),
     },
   });
   const client = await RelayClient.connect({
@@ -45,11 +48,12 @@ async function instance(name: string, dir: string) {
   });
   ref.client = client;
   cleanup.push(() => client.close());
-  return { identity, bus, client, shared };
+  return { identity, bus, client, shared, trusted };
 }
 
 /** Anna runs the real agent bay and board with projects shop (shared) and blog; Ben joins. */
-async function team() {
+/** `inbox`: the board's inbox functions as in its manifest (ADR 0046). */
+async function team(inbox = false) {
   const dir = mkdtempSync(join(tmpdir(), 'hangar-board-it-'));
   relay = await startRelay({ file: join(dir, 'relay.json'), operatorToken: OPERATOR });
   const anna = await instance('anna', dir);
@@ -76,7 +80,13 @@ async function team() {
   for (const name of TASKS)
     anna.bus.register(
       BOARD,
-      { name, sensitive: false, openToAgents: true, remote: true },
+      {
+        name,
+        sensitive: false,
+        openToAgents: true,
+        remote: true,
+        ...(inbox && INBOX.includes(name) && { inbox: true }),
+      },
       (x, info) => b.call(name, x, info),
     );
 
@@ -115,6 +125,29 @@ describe('the board for agents of another instance over the relay (ADR 0037, Nac
     await expect(ben.bus.call(session, id('task.list'), { project: 'blog' })).rejects.toThrow(
       'No such shared project',
     );
+  });
+
+  it('queues a task of another instance until the person accepts it; trusted runs at once (ADR 0046)', async () => {
+    const { anna, ben } = await team(true);
+    anna.shared.push(...TASKS.map((n) => `${BOARD}/${n}`));
+    anna.client.announceAll('team');
+    const id = (name: string) => `${remoteBayId(anna.identity.document, BOARD)}/${name}`;
+    await vi.waitFor(() => expect(ben.bus.list().map((f) => f.id)).toContain(id('task.add')));
+
+    const args = { project: 'shop', title: 'Aus dem Relay' };
+    expect(await ben.bus.call(session, id('task.add'), args)).toEqual({
+      queued: expect.any(String),
+    });
+    const [entry] = anna.bus.inboxEntries();
+    expect(entry).toMatchObject({ caller: { name: 'ben' }, preview: 'Aus dem Relay' });
+    const origin = { instance: 'ben', fingerprint: ben.identity.fingerprint, workspace: 'team' };
+    expect(await anna.bus.acceptInbox(entry!.id)).toMatchObject({ title: 'Aus dem Relay', origin });
+
+    anna.trusted.add(ben.identity.fingerprint);
+    expect(
+      await ben.bus.call(session, id('task.add'), { project: 'shop', title: 'Vertraut' }),
+    ).toMatchObject({ title: 'Vertraut', origin });
+    expect(anna.bus.inboxEntries()).toEqual([]);
   });
 
   it('is refused without the share list, even when called by name', async () => {

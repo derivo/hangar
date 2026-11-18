@@ -6,6 +6,7 @@ import {
   readdirSync,
   readFileSync,
   realpathSync,
+  rmSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -223,4 +224,21 @@ export async function startRelay() {
   const url = () => /^relay listening on (\S+)$/m.exec(log)?.[1];
   await expect.poll(url, { timeout: 15_000 }).toBeTruthy();
   return { child, url: url()! };
+}
+
+/** Has the visible session shell write `command`'s output to `file` and returns it. */
+export async function shellOutput(bay: Page, command: string, file: string) {
+  let out = '';
+  await expect(async () => {
+    const terminal = bay.locator('.xterm:visible');
+    await expect(terminal.locator('.xterm-rows')).toContainText('$', { timeout: 2000 });
+    await terminal.locator('.xterm-helper-textarea').focus();
+    // Keys typed while the shell starts may get lost: start a clean line.
+    await bay.keyboard.press('Control+C');
+    await bay.keyboard.type(`${command} > ${file}.tmp && mv ${file}.tmp ${file}\n`);
+    await expect.poll(() => existsSync(file), { timeout: 2000 }).toBe(true);
+    out = readFileSync(file, 'utf8').trim();
+  }).toPass({ timeout: 20_000 });
+  rmSync(file);
+  return out;
 }
