@@ -111,18 +111,25 @@ async function page(html: string) {
   return { url: `http://127.0.0.1:${port}/`, close: () => server.close() };
 }
 
-/** Types `echo <tag>=$$` into the session's shell and returns the PID it prints. */
+/** Has the session's shell write its PID to a file and returns it. */
 async function shellPid(bay: Page, tag: string): Promise<string> {
-  await bay.locator('.xterm-helper-textarea').first().focus();
-  await bay.keyboard.type(`echo ${tag}=$$\n`);
-  const rows = bay.locator('.xterm-rows').first();
-  const pid = new RegExp(`${tag}=(\\d+)`);
-  // Read once per try: xterm may redraw the rows between two reads.
-  let found: string | undefined;
-  await expect
-    .poll(async () => (found = pid.exec((await rows.textContent()) ?? '')?.[1]))
-    .toBeDefined();
-  return found!;
+  // A file, not the screen: a resize right after a reconnect makes the shell redraw its
+  // prompt over the output line (seen on the macOS runners).
+  const dir = mkdtempSync(join(tmpdir(), 'hangar-e2e-pid-'));
+  const file = join(dir, tag);
+  try {
+    await bay.locator('.xterm-helper-textarea').first().focus();
+    await bay.keyboard.type(`echo $$ > ${file}\n`);
+    let found: string | undefined;
+    await expect
+      .poll(
+        () => (found = existsSync(file) ? /^\d+/.exec(readFileSync(file, 'utf8'))?.[0] : undefined),
+      )
+      .toBeDefined();
+    return found!;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 /** The agent bay of the local server, once the app has paired with it. */
