@@ -12,8 +12,8 @@ export interface Grid {
 
 /**
  * Columns and rows for `count` fields: the arrangement whose fields stay furthest above the
- * minimum size. If none keeps every field at the minimum, as many columns as fit side by side
- * and the rows overflow (the workspace scrolls instead of squeezing terminals).
+ * minimum size. If none keeps every field at the minimum (window made smaller after adding
+ * fields), the one whose fields shrink least; the fields always share the window.
  */
 export function layout(count: number, area: Size, min: Size): { columns: number; rows: number } {
   let best = { columns: 1, rows: count, scale: 0 };
@@ -22,9 +22,7 @@ export function layout(count: number, area: Size, min: Size): { columns: number;
     const scale = Math.min(area.width / columns / min.width, area.height / rows / min.height);
     if (scale > best.scale) best = { columns, rows, scale };
   }
-  if (best.scale >= 1) return { columns: best.columns, rows: best.rows };
-  const columns = Math.min(count, Math.max(1, Math.floor(area.width / min.width)));
-  return { columns, rows: Math.ceil(count / columns) };
+  return { columns: best.columns, rows: best.rows };
 }
 
 /** How many fields fit at the minimum size; one always does. */

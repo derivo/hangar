@@ -52,8 +52,8 @@ permanent permission including keyboard walkthrough, "Schedule job" form with
 error message, job list after a run including keyboard walkthrough); agent bay and settings also in
 English. 200 % zoom without overflow of the page, also with pseudo texts
 (`e2e/a11y.spec.ts` and the specs above). Exception: At 200 % zoom the grid
-scrolls within itself because a terminal stays 80 characters wide (two-dimensional
-content, WCAG 1.4.10).
+scrolls within itself once its fields are down to 30 × 4 characters (ADR 0048;
+two-dimensional content, WCAG 1.4.10).
 
 Fresh clone (`git clone` + `pnpm install --frozen-lockfile`): all six
 commands green. Electron 45 downloads its binary on first access, no

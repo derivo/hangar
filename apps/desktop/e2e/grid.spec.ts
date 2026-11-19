@@ -76,10 +76,9 @@ test('terminals share the screen as a grid of at least 60 × 16 characters, rest
     // A field of exactly the minimum size still holds 60 × 16 characters.
     await bay.evaluate(() => {
       const grid = document.querySelector<HTMLElement>('.grid')!;
-      const px = (value: string) => parseFloat(/minmax\(([\d.]+)px/.exec(value)![1]!);
       const one = document.querySelector<HTMLElement>('[aria-label="Feld 1"]')!;
-      one.style.width = `${px(grid.style.gridTemplateColumns)}px`;
-      one.style.height = `${px(grid.style.gridAutoRows)}px`;
+      one.style.width = `${grid.dataset.minWidth}px`;
+      one.style.height = `${grid.dataset.minHeight}px`;
     });
     await expect(async () => {
       await typeIn(bay, 1, 'clear; stty size\n');
@@ -116,7 +115,7 @@ test('terminals share the screen as a grid of at least 60 × 16 characters, rest
   }
 });
 
-test('a small window keeps fields at their minimum and scrolls instead of squeezing them', async () => {
+test('a smaller window shrinks the fields instead of scrolling, down to 30 × 4 characters', async () => {
   const repo = createRepo('gridzoom');
   const { app, shell } = await launch({ bayDirs: [repoBays], env: agentsEnv() });
   try {
@@ -129,24 +128,50 @@ test('a small window keeps fields at their minimum and scrolls instead of squeez
     await mockFolderPicker(app, repo);
     await bay.getByRole('button', { name: 'Projekt hinzufügen' }).click();
     await zoomBay(app, 0.5);
-    await bay.getByRole('button', { name: 'Feld hinzufügen' }).click();
-    await bay.getByRole('button', { name: 'Feld hinzufügen' }).click();
+    for (const n of [1, 2, 3]) {
+      if (n > 1) await bay.getByRole('button', { name: 'Feld hinzufügen' }).click();
+      await bay.getByRole('button', { name: 'Neue Session in gridzoom' }).click();
+      await expect(field(bay, n).getByRole('region', { name: /^Session/ })).toBeVisible();
+    }
+    // Back at 100 %, three fields no longer fit at 60 × 16 (as with a window moved from a
+    // second screen to the laptop): they share the window instead of overflowing it.
+    await zoomBay(app, 1);
+    await expect(async () => {
+      await typeIn(bay, 1, 'clear; stty size\n');
+      const [rows, cols] = (await screenOf(bay, 1).innerText()).trim().split(/\s+/).map(Number);
+      // The terminal follows the shrunk field.
+      expect(rows! < 16 || cols! < 60).toBe(true);
+    }).toPass({ timeout: 10_000 });
+    const measure = () =>
+      bay.evaluate(() => {
+        const grid = document.querySelector<HTMLElement>('.grid')!;
+        const box = grid.getBoundingClientRect();
+        const fields = [...grid.children] as HTMLElement[];
+        return {
+          count: fields.length,
+          inside: fields.every((f) => {
+            const r = f.getBoundingClientRect();
+            return r.bottom <= box.bottom + 0.5 && r.right <= box.right + 0.5;
+          }),
+          // Content larger than its field must not be drawn over the neighbouring field.
+          spills: fields.some(
+            (f) =>
+              (f.scrollHeight > f.clientHeight + 1 || f.scrollWidth > f.clientWidth + 1) &&
+              getComputedStyle(f).overflow === 'visible',
+          ),
+          gridScrolls: grid.scrollWidth > grid.clientWidth || grid.scrollHeight > grid.clientHeight,
+          pageOverflow: document.documentElement.scrollWidth - innerWidth,
+        };
+      });
+    const sizes = await measure();
+    expect(sizes).toMatchObject({ count: 3, inside: true, spills: false, gridScrolls: false });
+
+    // At 200 % even the smallest usable field (30 × 4 characters) does not fit: the grid
+    // scrolls, but no field overlaps another and the page does not scroll sideways.
     await zoomBay(app, 2);
-    const sizes = await bay.evaluate(() => {
-      const grid = document.querySelector<HTMLElement>('.grid')!;
-      const min = parseFloat(/minmax\(([\d.]+)px/.exec(grid.style.gridTemplateColumns)![1]!);
-      const widths = [...grid.children].map((f) => f.getBoundingClientRect().width);
-      return {
-        min,
-        widths,
-        gridScrolls: grid.scrollWidth > grid.clientWidth || grid.scrollHeight > grid.clientHeight,
-        pageOverflow: document.documentElement.scrollWidth - innerWidth,
-      };
-    });
-    for (const width of sizes.widths) expect(width).toBeGreaterThanOrEqual(sizes.min - 0.5);
-    expect(sizes.gridScrolls).toBe(true);
-    // The page itself does not scroll sideways; only the grid of terminals does.
-    expect(sizes.pageOverflow).toBeLessThanOrEqual(0);
+    const zoomed = await measure();
+    expect(zoomed.spills).toBe(false);
+    expect(zoomed.pageOverflow).toBeLessThanOrEqual(0);
     for (const name of ['Feld hinzufügen', 'Projekt hinzufügen']) {
       await expect(bay.getByRole('button', { name })).toBeInViewport();
     }

@@ -1,6 +1,7 @@
 # ADR 0010 – Grid and separate windows for bays
 
-Status: accepted
+Status: accepted; the scrolling of a window made smaller is replaced by
+[ADR 0048](0048-grid-shrinks-instead-of-scrolling.md) (fields shrink).
 
 ## Context
 
