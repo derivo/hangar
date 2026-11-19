@@ -42,6 +42,7 @@ const de = {
   moveDown: 'Nach unten',
   cancel: 'Abbrechen',
   // Servers (ADR 0019)
+  servers: 'Server',
   connectServer: 'Mit Server verbinden',
   serverName: 'Name',
   serverAddress: 'Adresse',
@@ -453,6 +454,7 @@ const en: typeof de = {
   moveUp: 'Move up',
   moveDown: 'Move down',
   cancel: 'Cancel',
+  servers: 'Servers',
   connectServer: 'Connect to server',
   serverName: 'Name',
   serverAddress: 'Address',

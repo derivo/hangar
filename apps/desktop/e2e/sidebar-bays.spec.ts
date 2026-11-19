@@ -41,6 +41,29 @@ test('a new Hangar starts empty; bays are added with the plus and removed by rig
       await shell.emulateMedia({ colorScheme });
       expect(await violations(shell), `picker (${colorScheme})`).toEqual([]);
     }
+    // The dialog itself may hold the focus (a click on its background): no ring around it.
+    const cdp = await shell.context().newCDPSession(shell);
+    await cdp.send('DOM.enable');
+    await cdp.send('CSS.enable');
+    const { root } = await cdp.send('DOM.getDocument');
+    const { nodeId } = await cdp.send('DOM.querySelector', {
+      nodeId: root.nodeId,
+      selector: 'dialog.picker',
+    });
+    await cdp.send('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: ['focus-visible'] });
+    await expect(picker).toHaveCSS('outline-style', 'none');
+    await cdp.detach();
+    // The address and its button share a row; Cancel stands alone at the bottom right.
+    const field = await picker.getByRole('textbox', { name: 'Webseite' }).boundingBox();
+    const add = await picker.getByRole('button', { name: 'Webseite hinzufügen' }).boundingBox();
+    expect(Math.abs(field!.y + field!.height / 2 - (add!.y + add!.height / 2))).toBeLessThan(2);
+    const cancel = await picker.getByRole('button', { name: 'Abbrechen' }).boundingBox();
+    const connect = await picker
+      .getByRole('button', { name: 'Mit Server verbinden' })
+      .boundingBox();
+    expect(cancel!.y).toBeGreaterThan(connect!.y + connect!.height);
+    // Right edge of the content, like the button next to the address.
+    expect(Math.abs(cancel!.x + cancel!.width - (add!.x + add!.width))).toBeLessThan(2);
     await shell.keyboard.press('Escape');
     await expect(picker).toBeHidden();
 
