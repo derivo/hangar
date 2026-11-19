@@ -57,13 +57,13 @@ test('a new Hangar starts empty; bays are added with the plus and removed by rig
     const field = await picker.getByRole('textbox', { name: 'Webseite' }).boundingBox();
     const add = await picker.getByRole('button', { name: 'Webseite hinzufügen' }).boundingBox();
     expect(Math.abs(field!.y + field!.height / 2 - (add!.y + add!.height / 2))).toBeLessThan(2);
-    const box = await picker.boundingBox();
     const cancel = await picker.getByRole('button', { name: 'Abbrechen' }).boundingBox();
     const connect = await picker
       .getByRole('button', { name: 'Mit Server verbinden' })
       .boundingBox();
     expect(cancel!.y).toBeGreaterThan(connect!.y + connect!.height);
-    expect(box!.x + box!.width - (cancel!.x + cancel!.width)).toBeLessThan(40);
+    // Right edge of the content, like the button next to the address.
+    expect(Math.abs(cancel!.x + cancel!.width - (add!.x + add!.width))).toBeLessThan(2);
     await shell.keyboard.press('Escape');
     await expect(picker).toBeHidden();
 
