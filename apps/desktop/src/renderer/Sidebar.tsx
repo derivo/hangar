@@ -476,32 +476,38 @@ function BayPicker({ state, api }: Pick<Props, 'state' | 'api'>) {
                 </button>
               </div>
               <form className="picker-url" onSubmit={addUrl} noValidate>
-                <label className="field">
-                  {t.website}
+                <h3>
+                  <label htmlFor="picker-url-input">{t.website}</label>
+                </h3>
+                <div className="field picker-row">
                   <input
+                    id="picker-url-input"
                     type="url"
                     value={url}
                     spellCheck={false}
                     aria-describedby="picker-url-hint"
                     onChange={(e) => setUrl(e.target.value)}
                   />
-                </label>
-                <p id="picker-url-hint" className="muted">
+                  <button type="submit" className="button">
+                    {t.addWebsite}
+                  </button>
+                </div>
+                <p id="picker-url-hint" className="muted picker-hint">
                   {t.websiteHint}
                 </p>
-                <button type="submit" className="button">
-                  {t.addWebsite}
-                </button>
               </form>
               {error && (
                 <p className="error" role="alert">
                   {error}
                 </p>
               )}
+              <h3>{t.servers}</h3>
               <div className="picker-actions">
                 <button type="button" className="button" onClick={() => setPairing(true)}>
                   {t.connectServer}
                 </button>
+              </div>
+              <div className="picker-footer">
                 <button type="button" className="button" onClick={close}>
                   {t.cancel}
                 </button>

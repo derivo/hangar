@@ -150,6 +150,11 @@ li:has(> .sidebar-item[aria-current='page'])::before,
   color: var(--hangar-color-text);
 }
 
+/* The dialog itself holds the focus after a click on its background; its controls show the ring. */
+.picker:focus-visible {
+  outline: none;
+}
+
 .picker::backdrop {
   background: rgb(0 0 0 / 0.5);
 }
@@ -555,11 +560,34 @@ li:has(> .sidebar-item[aria-current='page'])::before,
 }
 
 .picker-url {
-  margin: var(--hangar-space-3) 0 var(--hangar-space-4);
+  margin: 0;
+}
+
+/* The address and its button in one row. */
+.picker-row {
+  display: flex;
+}
+
+.picker-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.picker-hint {
+  margin: var(--hangar-space-1) 0 0;
+  font-size: var(--hangar-font-size-sm);
+}
+
+/* Cancel alone at the bottom right, below a line. */
+.picker-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--hangar-space-4);
+  padding-top: var(--hangar-space-4);
+  border-top: 1px solid var(--hangar-color-border);
 }
 
 /* Pairing a server inside the picker (ADR 0019). */
-.picker-url .field,
 .pairing .field,
 .workspace-form .field {
   display: flex;

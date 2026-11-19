@@ -100,6 +100,7 @@ All notable changes to this project. Format based on
 
 ### Changed
 
+- "Add to sidebar" dialog: no focus ring around the dialog itself; the website address and its button share a row with the hint right below; "Connect to server" has its own section; Cancel stands alone at the bottom right.
 - App icon (ADR 0026): the existing Hangar silhouette now uses dock-glow orange (`#ff8a2a`) on a neutral near-black tile (`#111214`), with fine lines and no blueprint grid. The 1024 viewBox, macOS tile shape and padding are unchanged; the black tray template is unchanged.
 - `pnpm create:bay` adds the new bay to the bundled bays in `apps/desktop/electron-builder.yml`; it no longer has to be entered by hand.
 - README: one-line pitch, screenshot (light and dark, rendered by `apps/desktop/e2e/readme-screenshots.spec.ts` with `HANGAR_SCREENSHOTS=1`), "Why", features with board, password bay and local server, status, "How it works" and "For AI agents". Sessions are described as shells in the project folder (ADR 0022), no longer in their own worktree.
