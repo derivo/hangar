@@ -226,6 +226,7 @@ export function Sidebar({ state, api, onSelect }: Props) {
   const dragBay = useReorder(api.moveBay);
   const dragShortcut = useReorder(api.moveShortcut);
   const local = state.localServer;
+  const settingsBadge = state.settingsBadge ?? 0;
   const localLabel = (name: string) =>
     local?.status === 'connected'
       ? name
@@ -350,10 +351,16 @@ export function Sidebar({ state, api, onSelect }: Props) {
         type="button"
         className="sidebar-item"
         title={t.settings}
-        aria-label={t.settings}
+        aria-label={settingsBadge > 0 ? t.badge(t.settings, settingsBadge) : t.settings}
         aria-current={state.selected === 'settings' ? 'page' : undefined}
         onClick={() => onSelect('settings')}
       >
+        {/* Waiting inbox entries (ADR 0046); inside the button, which is positioned. */}
+        {settingsBadge > 0 && (
+          <span className="badge" data-testid="badge-settings" aria-hidden="true">
+            {badgeText(settingsBadge)}
+          </span>
+        )}
         <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
           <path
             fill="currentColor"

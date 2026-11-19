@@ -1,11 +1,10 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   expect,
   test,
   type ElectronApplication,
-  type Page,
   agentsEnv,
   answerDialog,
   bayPage,
@@ -13,29 +12,13 @@ import {
   launch,
   mockFolderPicker,
   repoBays,
+  shellOutput,
   violations,
 } from './helpers';
 
 /** The questions the permission dialog asked, recorded by `answerDialog`. */
 const dialogs = (app: ElectronApplication) =>
   app.evaluate(() => (globalThis as { __hangarDialogs?: string[] }).__hangarDialogs ?? []);
-
-/** Has the visible session shell write `command`'s output to `file` and returns it. */
-async function shellOutput(bay: Page, command: string, file: string) {
-  let out = '';
-  await expect(async () => {
-    const terminal = bay.locator('.xterm:visible');
-    await expect(terminal.locator('.xterm-rows')).toContainText('$', { timeout: 2000 });
-    await terminal.locator('.xterm-helper-textarea').focus();
-    // Keys typed while the shell starts may get lost: start a clean line.
-    await bay.keyboard.press('Control+C');
-    await bay.keyboard.type(`${command} > ${file}.tmp && mv ${file}.tmp ${file}\n`);
-    await expect.poll(() => existsSync(file), { timeout: 2000 }).toBe(true);
-    out = readFileSync(file, 'utf8').trim();
-  }).toPass({ timeout: 20_000 });
-  rmSync(file);
-  return out;
-}
 
 /** MCP calls of the board as the agent holding `token`. */
 function board(token: string, mcpUrl: string) {

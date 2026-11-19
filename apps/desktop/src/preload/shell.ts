@@ -69,6 +69,11 @@ const api: ShellApi = {
   removeMember: (name, instance) => ipcRenderer.invoke('shell:workspace.remove', name, instance),
   setWorkspaceShare: (name, target, on) =>
     ipcRenderer.invoke('shell:workspace.share', name, target, on),
+  setWorkspaceTrust: (name, instance, on) =>
+    ipcRenderer.invoke('shell:workspace.trust', name, instance, on),
+  getWorkspaceActivity: () => ipcRenderer.invoke('shell:workspace.activity'),
+  acceptInbox: (id) => ipcRenderer.invoke('shell:workspace.acceptInbox', id),
+  rejectInbox: (id) => ipcRenderer.invoke('shell:workspace.rejectInbox', id),
   onWorkspaces(listener) {
     const handler = () => listener();
     ipcRenderer.on('shell:workspaces', handler);

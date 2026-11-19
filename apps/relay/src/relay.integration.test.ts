@@ -88,6 +88,8 @@ describe('two Hangar buses over a local relay (phase 15)', () => {
           instance: ben.identity.fingerprint,
           workspace: 'team',
           bayId: 'dev.hangar.agents',
+          // From the signed member list, for display (ADR 0046).
+          name: 'ben',
         },
       },
     );

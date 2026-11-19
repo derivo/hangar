@@ -635,12 +635,12 @@ the index (it expires) belong to this phase.
 1. The release workflow publishes a signed index; Hangar reports an update and
    installs it after confirmation.
 
-## Workspaces: inbox and activity log (ADR 0046, proposed)
+## Workspaces: inbox and activity log (ADR 0046, done 2026-11-16)
 
 **Goal:** Work from other instances (tasks, handovers) waits in an inbox until
 the person accepts it or trusts the sender; every remote call shows in a local
-activity log. Steps and acceptance in the ADR. Before the first real test with
-two people over a public relay.
+activity log. Built; open: a `hangar-server` option to trust a member at join
+(with ADR 0047). Next: the first real test with two people over a public relay.
 
 ## Workers on virtual machines (ADR 0047, proposed)
 

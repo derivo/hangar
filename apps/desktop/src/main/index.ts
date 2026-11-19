@@ -194,9 +194,13 @@ async function start(): Promise<void> {
     prompter: dialogPrompter,
     cli: { execPath: process.execPath, cliPath },
     onJobsChanged: () => host?.jobsChanged(),
+    // Refreshes the page and the badge; a rise of the count raises the notification.
+    onActivity: () => host?.workspacesChanged(),
     remote: {
       isMember: (w, i) => workspaces?.isMember(w, i) ?? false,
       isShared: (w, t) => workspaces?.isShared(w, t) ?? false,
+      isTrusted: (w, i) => workspaces?.isTrusted(w, i) ?? false,
+      memberName: (w, i) => workspaces?.memberName(w, i),
     },
   });
   // With the local server, its agent bay holds the workspaces (ADR 0036, point 11).
@@ -210,6 +214,7 @@ async function start(): Promise<void> {
           bus: core.bus,
           protect,
           onChange: () => host?.workspacesChanged(),
+          onActivity: (e) => core?.record(e),
         });
   } catch (e) {
     // E.g. `pass:` keys without the right HANGAR_KEY_PASSPHRASE: run without workspaces and
@@ -295,17 +300,22 @@ async function start(): Promise<void> {
     );
   }
   core.scheduler.start();
+  // Entries a crash left half accepted run again, now that the bays are loaded (ADR 0046).
+  void core.bus.resumeInbox();
   void ws?.start();
 
   // Workspaces (ADR 0030): thin wrappers, the checks are in `Workspaces` and on the relay; with
   // the local server they run there (ADR 0036, point 11).
   const workspace = (action: string, args: unknown[]) =>
     ws
-      ? workspaceAction(ws, core!.bus, action, args)
+      ? workspaceAction(ws, core!.bus, action, args, core!.activity)
       : host!.localWorkspaces(
           action,
           args.map((a) => (typeof a === 'boolean' ? a : String(a))),
         );
+  // Badge on the settings: open inbox entries, also those of the local server (ADR 0046).
+  host.countInbox = async () => ((await workspace('view', [])) as { inbox?: number }).inbox ?? 0;
+  host.workspacesChanged();
   const str = (v: unknown) => String(v);
   ipcMain.handle('shell:workspaces', () => workspace('view', []));
   ipcMain.handle('shell:workspace.connect', (_e, ...args: unknown[]) => workspace('connect', args));
@@ -316,6 +326,15 @@ async function start(): Promise<void> {
   ipcMain.handle('shell:workspace.reject', (_e, ...args: unknown[]) => workspace('reject', args));
   ipcMain.handle('shell:workspace.remove', (_e, ...args: unknown[]) => workspace('remove', args));
   ipcMain.handle('shell:workspace.share', (_e, ...args: unknown[]) => workspace('share', args));
+  ipcMain.handle('shell:workspace.trust', (_e, ...args: unknown[]) => workspace('trust', args));
+  ipcMain.handle('shell:workspace.activity', () => workspace('activity', []));
+  // Accepting returns the call's result; the page needs none of it.
+  ipcMain.handle('shell:workspace.acceptInbox', async (_e, ...args: unknown[]) => {
+    await workspace('acceptInbox', args);
+  });
+  ipcMain.handle('shell:workspace.rejectInbox', (_e, ...args: unknown[]) =>
+    workspace('rejectInbox', args),
+  );
 
   ipcMain.handle('shell:bay.catalog', () =>
     indexUrl && indexKey ? store.catalog(readSettings(settingsFile).updateChannel) : null,

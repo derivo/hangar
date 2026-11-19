@@ -153,6 +153,25 @@ describe('handovers (ADR 0031)', () => {
     expect(newest().handover!.from).toBe(`${cara.slice(0, 16)} (club)`);
   });
 
+  it('marks a remote handover with its instance and runs an accepted call once (ADR 0046)', async () => {
+    manager.setProjectShared(project.id, true);
+    const accepted: CallInfo = {
+      caller: { kind: 'remote', instance: anna, workspace: 'team', bayId: 'b', name: 'Anna M' },
+      executionId: 'e1',
+    };
+    const before = manager.view().sessions.length;
+    for (let i = 0; i < 2; i++)
+      expect(await call('handover.create', { project: 'shop', task: 'x' }, accepted)).toEqual({
+        ok: true,
+      });
+    expect(manager.view().sessions).toHaveLength(before + 1);
+    expect(newest().handover).toMatchObject({
+      origin: 'remote',
+      instance: { name: 'Anna M', fingerprint: anna, workspace: 'team' },
+      executionId: 'e1',
+    });
+  });
+
   it('refuses a project name that two projects carry, unless it is the own or the one shared', async () => {
     const twin = await manager.addProject(createTempRepo('shop'));
     expect(twin.name).toBe(project.name);

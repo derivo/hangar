@@ -169,11 +169,25 @@ export function provideFunctions(
         // Only into a project the person shared; nothing of the other side is fetched.
         const project = named(true);
         if (!project) throw new Error('No such shared project');
+        const { executionId } = info;
+        if (executionId && sessions.some((s) => s.handover?.executionId === executionId))
+          return { ok: true };
         const instance =
           ctx.workspaces?.states().find((s) => s.instance === caller.instance)?.name ??
           caller.instance.slice(0, 16);
         const from = `${instance} (${caller.workspace})`;
-        await manager.handover(project.id, { origin: 'remote', from, ...handover, at });
+        await manager.handover(project.id, {
+          origin: 'remote',
+          from,
+          ...handover,
+          at,
+          instance: {
+            name: caller.name ?? instance,
+            fingerprint: caller.instance,
+            workspace: caller.workspace,
+          },
+          ...(executionId && { executionId }),
+        });
         return { ok: true };
       }
       throw new Error('Only callable from an agent session or another instance');

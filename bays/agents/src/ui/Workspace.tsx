@@ -9,6 +9,9 @@ import type { TerminalRegistry } from './terminals';
 /** Smallest terminal a field may get, in characters. */
 export const MIN_COLUMNS = 60;
 export const MIN_ROWS = 16;
+// A window made smaller shrinks existing fields down to this terminal size, then scrolls.
+const SHRUNK_COLUMNS = 30;
+const SHRUNK_ROWS = 4;
 // Header, statusbar, padding and borders around the terminal of a field, in CSS pixels
 // (e2e/grid.spec.ts checks that a field of the minimum size holds 60 × 16 characters).
 // 60 × 16 lets two fields share a 16" laptop screen side by side (ADR 0010).
@@ -35,12 +38,13 @@ interface Props {
   onBringBack(id: string): void;
 }
 
-/** The terminals side by side: fields as large as possible, never below 60 × 16 characters. */
+/** The terminals side by side: fields as large as possible; no field is added below 60 × 16 characters. */
 export function Workspace({ state, grid, api, terminals, run, ...props }: Props) {
   const gridRef = useRef<HTMLDivElement>(null);
   const probeRef = useRef<HTMLSpanElement>(null);
   const [area, setArea] = useState<Size>({ width: 0, height: 0 });
   const [min, setMin] = useState<Size>({ width: 1, height: 1 });
+  const [floor, setFloor] = useState<Size>({ width: 1, height: 1 });
   const [gap, setGap] = useState(0);
   const fullId = useId();
 
@@ -56,6 +60,10 @@ export function Workspace({ state, grid, api, terminals, run, ...props }: Props)
         width: MIN_COLUMNS * cell.width + CHROME.width,
         height: MIN_ROWS * cell.height + CHROME.height,
       });
+      setFloor({
+        width: SHRUNK_COLUMNS * cell.width + CHROME.width,
+        height: SHRUNK_ROWS * cell.height + CHROME.height,
+      });
       setGap(parseFloat(getComputedStyle(el).columnGap) || 0);
       setArea({ width: el.clientWidth, height: el.clientHeight });
     };
@@ -70,7 +78,7 @@ export function Workspace({ state, grid, api, terminals, run, ...props }: Props)
   // Each field brings one gap; the area has one gap fewer than fields.
   const slotArea = { width: area.width + gap, height: area.height + gap };
   const slot = { width: min.width + gap, height: min.height + gap };
-  const { columns } = layout(count, slotArea, slot);
+  const { columns, rows } = layout(count, slotArea, slot);
   const full = count >= capacity(slotArea, slot);
   const several = count > 1;
 
@@ -96,9 +104,12 @@ export function Workspace({ state, grid, api, terminals, run, ...props }: Props)
       <div
         ref={gridRef}
         className="grid"
+        data-min-width={min.width}
+        data-min-height={min.height}
         style={{
-          gridTemplateColumns: `repeat(${columns}, minmax(${min.width}px, 1fr))`,
-          gridAutoRows: `minmax(${min.height}px, 1fr)`,
+          // The minimum only limits "Add field"; fields that no longer fit shrink to `floor`.
+          gridTemplateColumns: `repeat(${columns}, minmax(${floor.width}px, 1fr))`,
+          gridTemplateRows: `repeat(${rows}, minmax(${floor.height}px, 1fr))`,
         }}
       >
         {grid.fields.map((id, index) => {

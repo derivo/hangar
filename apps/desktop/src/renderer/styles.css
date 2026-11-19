@@ -645,6 +645,13 @@ li:has(> .sidebar-item[aria-current='page'])::before,
   margin-bottom: var(--hangar-space-3);
 }
 
+/* Inbox entries (ADR 0046): the text gets a line of its own. */
+.inbox p {
+  flex-basis: 100%;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .workspace .facts {
   margin-top: var(--hangar-space-3);
 }

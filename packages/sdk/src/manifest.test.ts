@@ -65,6 +65,18 @@ describe('parseManifest', () => {
     });
   });
 
+  it('accepts inbox functions only together with remote (ADR 0046)', () => {
+    const add = { name: 'task.add', sensitive: false, remote: true, inbox: true };
+    expect(parseManifest({ ...valid, functions: [add] })).toEqual({
+      ok: true,
+      manifest: { ...valid, functions: [add] },
+    });
+    expect(parseManifest({ ...valid, functions: [{ ...add, remote: undefined }] })).toEqual({
+      ok: false,
+      error: 'functions: Function "task.add" is an inbox function and must be remote',
+    });
+  });
+
   it('accepts functions only for bays, not open to agents or remote (ADR 0021)', () => {
     const inner = { name: 'secret.resolve', sensitive: true, bayOnly: true };
     expect(parseManifest({ ...valid, functions: [inner] })).toEqual({

@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { t } from '../messages';
-import type { ShellApi, WorkspaceInvite, WorkspacesSettingsView } from '../shared';
+import type {
+  ShellApi,
+  WorkspaceActivity,
+  WorkspaceInvite,
+  WorkspacesSettingsView,
+} from '../shared';
 
 type Api = Pick<
   ShellApi,
@@ -13,6 +18,10 @@ type Api = Pick<
   | 'rejectMember'
   | 'removeMember'
   | 'setWorkspaceShare'
+  | 'setWorkspaceTrust'
+  | 'getWorkspaceActivity'
+  | 'acceptInbox'
+  | 'rejectInbox'
   | 'onWorkspaces'
 >;
 
@@ -24,6 +33,8 @@ function shownError(message: string): string {
   message = message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
   if (message === 'Invalid relay address') return t.relayInvalid;
   if (message === 'Invalid workspace name') return t.workspaceNameInvalid;
+  if (message.startsWith('No open inbox entry')) return t.inboxGone;
+  if (message.startsWith('Access denied')) return t.inboxDenied;
   return t.relayErrors[message] ?? message;
 }
 
@@ -90,6 +101,7 @@ export function Workspaces({ api }: { api: Api }) {
       {view.workspaces.map((w) => (
         <Workspace key={w.name} api={api} workspace={w} view={view} />
       ))}
+      <Activity api={api} />
       <CreateForm api={api} />
       <JoinForm api={api} />
     </>
@@ -156,7 +168,22 @@ function Workspace({
                   {m.name}
                   {m.fingerprint === view.fingerprint && ` ${t.you}`}
                 </span>
-                <code>{m.fingerprint}</code>
+                <code id={`${id}-${m.fingerprint}`}>{m.fingerprint}</code>
+                {m.fingerprint !== view.fingerprint && (
+                  <label className="check-field">
+                    <input
+                      type="checkbox"
+                      checked={w.trusted.includes(m.fingerprint)}
+                      aria-describedby={`${id}-${m.fingerprint} ${id}-trust`}
+                      onChange={(e) =>
+                        run(undefined, () =>
+                          api.setWorkspaceTrust(w.name, m.fingerprint, e.target.checked),
+                        )
+                      }
+                    />
+                    {t.trustMember(m.name)}
+                  </label>
+                )}
                 {m.fingerprint !== view.fingerprint && (
                   <button
                     type="button"
@@ -169,6 +196,9 @@ function Workspace({
               </li>
             ))}
           </ul>
+          <p id={`${id}-trust`} className="muted">
+            {t.trustHint}
+          </p>
           {w.joined.map((m) => (
             <div key={m.fingerprint} className="join-request">
               <p>{t.wantsToJoin(m.name)}</p>
@@ -261,6 +291,161 @@ function Workspace({
         </>
       )}
       <Alert error={error} />
+    </section>
+  );
+}
+
+/** Inbox and log of workspace calls (ADR 0046). */
+function Activity({ api }: { api: Api }) {
+  const [activity, setActivity] = useState<WorkspaceActivity>();
+  const [unreadable, setUnreadable] = useState<string>();
+  const [workspace, setWorkspace] = useState('');
+  const [instance, setInstance] = useState('');
+  const [error, run] = useAction();
+  const loads = useRef(0);
+  const load = useCallback(() => {
+    const n = ++loads.current;
+    void api.getWorkspaceActivity().then(
+      (a) => {
+        if (n !== loads.current) return;
+        setActivity(a);
+        setUnreadable(undefined);
+      },
+      (e: Error) => {
+        if (n !== loads.current) return;
+        // No stale buttons for entries that may be gone (local server restarted, Codex).
+        setActivity(undefined);
+        setUnreadable(shownError(e.message));
+      },
+    );
+  }, [api]);
+  useEffect(() => {
+    load();
+    return api.onWorkspaces(load);
+  }, [api, load]);
+  if (unreadable)
+    return (
+      <section className="workspace" aria-labelledby="activity-title">
+        <h3 id="activity-title">{t.activity}</h3>
+        <p role="alert" className="error">
+          {t.activityUnreadable(unreadable)}
+        </p>
+      </section>
+    );
+  if (!activity) return null;
+  const decide = (action: () => Promise<void>) => run(undefined, () => action().finally(load));
+  const from = (name: string | undefined, fp: string, ws: string) =>
+    `${name ?? fp.slice(0, 16)} (${ws})`;
+  const log = activity.log.filter(
+    (e) => (!workspace || e.workspace === workspace) && (!instance || e.instance === instance),
+  );
+  const workspaces = [...new Set(activity.log.map((e) => e.workspace))];
+  const instances = [...new Map(activity.log.map((e) => [e.instance, e.name])).entries()];
+  return (
+    <section className="workspace" aria-labelledby="activity-title">
+      <h3 id="activity-title">{t.activity}</h3>
+      <p className="muted">{t.activityHint}</p>
+      <h4>{t.waiting}</h4>
+      {activity.inbox.length >= 200 && <p role="status">{t.inboxFull}</p>}
+      {activity.inbox.length === 0 ? (
+        <p className="muted">{t.nothingWaiting}</p>
+      ) : (
+        <ul className="members inbox" aria-label={t.waiting}>
+          {activity.inbox.map((e) => {
+            // Text and sender: two entries may carry the same text (Codex).
+            const what = `${e.preview || e.target} – ${from(e.name, e.instance, e.workspace)}`;
+            return (
+              <li key={e.id}>
+                <span>{from(e.name, e.instance, e.workspace)}</span>
+                <code>{e.target}</code>
+                <time dateTime={e.at}>{new Date(e.at).toLocaleString()}</time>
+                <p>{e.preview}</p>
+                <div className="picker-actions">
+                  <button
+                    type="button"
+                    className="button"
+                    aria-label={t.acceptInbox(what)}
+                    onClick={(ev) => ev.detail <= 1 && decide(() => api.acceptInbox(e.id))}
+                  >
+                    {t.accept}
+                  </button>
+                  <button
+                    type="button"
+                    className="button"
+                    aria-label={t.rejectInbox(what)}
+                    onClick={(ev) => ev.detail <= 1 && decide(() => api.rejectInbox(e.id))}
+                  >
+                    {t.reject}
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <Alert error={error} />
+      <h4>{t.log}</h4>
+      {activity.log.length === 0 ? (
+        <p className="muted">{t.noActivity}</p>
+      ) : (
+        <>
+          <div className="picker-actions">
+            <label className="field">
+              {t.workspace}
+              <select value={workspace} onChange={(e) => setWorkspace(e.target.value)}>
+                <option value="">{t.all}</option>
+                {workspaces.map((w) => (
+                  <option key={w} value={w}>
+                    {w}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              {t.instance}
+              <select value={instance} onChange={(e) => setInstance(e.target.value)}>
+                <option value="">{t.all}</option>
+                {instances.map(([fp, name]) => (
+                  <option key={fp} value={fp}>
+                    {name ?? fp.slice(0, 16)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {/* Wider than the page at 200 %: scrollable by keyboard too (axe). */}
+          <div className="table-scroll" role="region" aria-label={t.log} tabIndex={0}>
+            <table className="permission-table" aria-label={t.log}>
+              <thead>
+                <tr>
+                  <th scope="col">{t.time}</th>
+                  <th scope="col">{t.direction}</th>
+                  <th scope="col">{t.instance}</th>
+                  <th scope="col">{t.outcome}</th>
+                  <th scope="col">{t.functionName}</th>
+                  <th scope="col">{t.text}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {log.map((e, i) => (
+                  <tr key={`${e.at}-${i}`}>
+                    <td>
+                      <time dateTime={e.at}>{new Date(e.at).toLocaleString()}</time>
+                    </td>
+                    <td>{t.directions[e.direction]}</td>
+                    <td>{from(e.name, e.instance, e.workspace)}</td>
+                    <td>{t.outcomes[e.outcome]}</td>
+                    <td>
+                      <code>{e.target}</code>
+                    </td>
+                    <td>{e.preview}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </section>
   );
 }

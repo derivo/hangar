@@ -55,3 +55,5 @@ the same code.
   only stored rules (ADR 0018).
 - Desktop-specific stays in `apps/desktop`: `view-state.ts`, `updates.ts`
   (`updaterOptions`), prompter dialog, browser tabs.
+- Inbox and activity log (ADR 0046): `startCore` keeps `inbox.json` (`FileInboxStore`, written with `writeDurable`) and `workspace-log.jsonl` (`ActivityLog`, 2,000 entries or 30 days, mode 600). `workspaceAction` serves `activity`, `acceptInbox`, `rejectInbox` and `trust` for the app and over the bridge for the local server; `view` carries the count of open entries (`inbox`).
+- Trust (`Workspaces.setTrusted`) is stored per workspace and fingerprint in `workspaces.json`; removing a member drops it.

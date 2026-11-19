@@ -1,5 +1,5 @@
 // Types shared between the main process and the shell renderer.
-import type { Grant, GrantMode } from '@hangar/bus';
+import type { ActivityEvent, Grant, GrantMode } from '@hangar/bus';
 import type { JobView } from '@hangar/scheduler';
 import type {
   AppSettings,
@@ -100,6 +100,8 @@ export interface ShellState {
   selected: Selection;
   /** Found bays that are not in the sidebar (ADR 0017). */
   available: { id: string; name: string; icon: string }[];
+  /** Open inbox entries, shown on the settings (ADR 0046). */
+  settingsBadge?: number;
 }
 
 /** Functions on the bus and the permissions granted for them (settings page). */
@@ -147,7 +149,26 @@ export interface BaySettingsView {
 /** Workspaces in the settings (ADR 0030), with the functions bays offer to other instances. */
 export type WorkspacesSettingsView = WorkspacesView & {
   functions: { id: string; description?: string }[];
+  /** Open inbox entries (ADR 0046); missing on an older local server. */
+  inbox?: number;
 };
+
+/** A remote call waiting for the person (ADR 0046). */
+export interface InboxItem {
+  id: string;
+  at: string;
+  workspace: string;
+  instance: string;
+  name?: string;
+  target: string;
+  preview: string;
+}
+
+/** Settings → Workspaces → Activity: the inbox and the log, newest first (ADR 0046). */
+export interface WorkspaceActivity {
+  inbox: InboxItem[];
+  log: ActivityEvent[];
+}
 
 /** What the inviter hands over: all three go to the instance that joins. */
 export interface WorkspaceInvite {
@@ -245,6 +266,12 @@ export interface ShellApi {
   removeMember(name: string, instance: string): Promise<void>;
   /** Puts a function `<bay-id>/<name>` on the share list of a workspace, or takes it off. */
   setWorkspaceShare(name: string, target: string, on: boolean): Promise<void>;
+  /** Inbox calls of this member run at once (ADR 0046). */
+  setWorkspaceTrust(name: string, instance: string, on: boolean): Promise<void>;
+  getWorkspaceActivity(): Promise<WorkspaceActivity>;
+  /** Runs a waiting call after checking it again; rejects if it is gone or no longer allowed. */
+  acceptInbox(id: string): Promise<void>;
+  rejectInbox(id: string): Promise<void>;
   /** Called whenever relay, workspaces or members changed. */
   onWorkspaces(listener: () => void): () => void;
   /** Bays of the index and installed ones; `null` without an index (ADR 0034). */

@@ -217,6 +217,51 @@ describe('dev.hangar.board – agents of other instances (ADR 0037, Nachtrag)', 
     });
   });
 
+  it('marks text from another instance with its origin, from the caller only (ADR 0046)', async () => {
+    const { call, remote, agent } = await started();
+    const from = { ...remote('r1'), caller: { ...remote('r1').caller, name: 'Ben' } };
+    const task = (await call(
+      'task.add',
+      { project: 'shop', title: 'A', origin: { instance: 'Fake' } },
+      from,
+    )) as Task;
+    const origin = {
+      instance: 'Ben',
+      fingerprint: 'SHA256:anna0123456789abcdef',
+      workspace: 'team',
+    };
+    expect(task.origin).toEqual(origin);
+    await call('task.claim', { project: 'shop', id: task.id }, from);
+    await call('task.note', { project: 'shop', id: task.id, text: 'n' }, from);
+    const done = (await call(
+      'task.done',
+      { project: 'shop', id: task.id, note: 'd' },
+      from,
+    )) as Task;
+    expect(done.notes.map((n) => n.origin)).toEqual([origin, origin]);
+    // Own agents write without origin; a name-less caller is named by its fingerprint.
+    const own = (await call('task.add', { title: 'B' }, agent('s1'))) as Task;
+    expect(own.origin).toBeUndefined();
+    const plain = (await call('task.add', { project: 'shop', title: 'C' }, remote())) as Task;
+    expect(plain.origin?.instance).toBe('SHA256:anna0123456789abcdef');
+  });
+
+  it('runs an accepted inbox call once per execution id (ADR 0046)', async () => {
+    const { call, remote } = await started();
+    const accepted = (id: string) => ({ ...remote('r1'), executionId: id });
+    const first = (await call('task.add', { project: 'shop', title: 'A' }, accepted('e1'))) as Task;
+    const again = (await call('task.add', { project: 'shop', title: 'A' }, accepted('e1'))) as Task;
+    expect(again).toEqual(first);
+    expect(await call('task.list', { project: 'shop' }, remote())).toHaveLength(1);
+    await call('task.claim', { project: 'shop', id: first.id }, remote('r1'));
+    for (let i = 0; i < 2; i++) {
+      await call('task.note', { project: 'shop', id: first.id, text: 'n' }, accepted('e2'));
+      await call('task.done', { project: 'shop', id: first.id, note: 'd' }, accepted('e3'));
+    }
+    const [task] = (await call('task.list', { project: 'shop' }, remote())) as Task[];
+    expect(task!.notes.map((n) => n.text)).toEqual(['n', 'd']);
+  });
+
   it('refuses a project name that two shared projects carry', async () => {
     const { call, remote, ctx } = await started();
     ctx.call.mockResolvedValueOnce([

@@ -231,7 +231,13 @@ running shell, never files.
 | `branch`  | string? | branch name; locally the starting point of the new worktree     |
 | `remote`  | string? | Git address (`https://`, `ssh://`, `git@`), for display only    |
 
-Response locally `{ "sessionId": "…" }`, remotely `{ "ok": true }`. Errors:
+Inbox function (ADR 0046): from another instance the call waits in the inbox of
+the receiving person and answers `{ "queued": "<id>" }`; only for a member the
+person trusts it runs at once. The new session's handover then carries
+`instance` (`name`, `fingerprint`, `workspace` of the authenticated caller).
+
+Response locally `{ "sessionId": "…" }`, remotely `{ "ok": true }` (or
+`{ "queued": "<id>" }`). Errors:
 `No such project`, `No such shared project`, `Project name is ambiguous`
 (two projects of this name), `Too many open handovers` (five open ones from
 other instances).
@@ -239,8 +245,9 @@ other instances).
 ### `dev.hangar.agents/handover.get`
 
 The handover the own session was started with (`origin`, `from`,
-`task`, `branch?`, `remote?`, `context?`, `at`), otherwise `null`. Only from a
-session.
+`task`, `branch?`, `remote?`, `context?`, `at`, and from another instance
+`instance`), otherwise `null`. Only from a session. Text from another instance is
+untrusted input: `hangar handover` says so above it and names the sender.
 
 ### `dev.hangar.agents/quota.report`
 
