@@ -37,10 +37,11 @@ describe('grid layout', () => {
     expect(capacity({ width: 300, height: 200 }, MIN)).toBe(1);
   });
 
-  it('keeps the minimum and scrolls when fields no longer fit', () => {
-    // Window made smaller after adding fields: as many columns as fit, rows overflow.
-    expect(layout(4, LAPTOP, MIN)).toEqual({ columns: 1, rows: 4 });
-    expect(layout(3, { width: 100, height: 100 }, MIN)).toEqual({ columns: 1, rows: 3 });
+  it('shrinks the fields to share the window when they no longer fit', () => {
+    // Window made smaller after adding fields (e.g. moved to the laptop screen): the
+    // arrangement that keeps the fields largest, no rows below the window.
+    expect(layout(4, LAPTOP, MIN)).toEqual({ columns: 2, rows: 2 });
+    expect(layout(3, { width: 100, height: 100 }, MIN)).toEqual({ columns: 2, rows: 2 });
   });
 });
 
