@@ -532,6 +532,45 @@ describe('RelayClient', () => {
     await expect(RelayClient.connect(options)).rejects.toThrow('Invalid message from the relay');
   });
 
+  it('a join request sent right after ready reaches the listener registered after connect', async () => {
+    const fake = new WebSocketServer({ host: '127.0.0.1', port: 0 });
+    closers.push(() => fake.close());
+    const doc = createIdentity('w').document;
+    fake.on('connection', (ws) =>
+      ws.on('message', (d) => {
+        const m = JSON.parse(String(d)) as { type: string };
+        if (m.type === 'hello')
+          ws.send(JSON.stringify({ type: 'challenge', version: 1, nonce: 'AAAA' }));
+        if (m.type === 'prove') {
+          // Like the relay that asks again for a pending join right after ready.
+          ws.send(JSON.stringify({ type: 'ready', workspaces: [] }));
+          ws.send(JSON.stringify({ type: 'joined', workspace: 'team', identity: doc }));
+        }
+      }),
+    );
+    await new Promise((r) => fake.once('listening', r));
+    const { port } = fake.address() as AddressInfo;
+    const client = await RelayClient.connect({
+      url: `ws://127.0.0.1:${port}`,
+      identity: createIdentity('x'),
+      bus: new Bus({ prompter: { ask: async () => 'deny' as const } }),
+      dataDir: tmpdir(),
+      shared: () => [],
+    });
+    closers.push(() => client.close());
+    // Whether `joined` shares a chunk with `ready` is up to TCP: wait until it surely came, so
+    // it always arrives before the listener, as it does in the same chunk.
+    await new Promise((r) => setTimeout(r, 100));
+    const joined = vi.fn();
+    client.onJoined(joined);
+    expect(joined).toHaveBeenCalledWith('team', doc, undefined);
+    // Handed over once: a second listener does not get it again.
+    const later = vi.fn();
+    client.onJoined(later);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(later).not.toHaveBeenCalled();
+  });
+
   it('fails to connect to nothing, and to a server that speaks something else', async () => {
     await expect(
       RelayClient.connect({
