@@ -134,6 +134,8 @@ export class RelayClient implements RemoteAccess {
     (workspace: string, identity: IdentityDocument, inviter?: string) => void
   >();
   private readonly changeListeners = new Set<(state: StoredWorkspace) => void>();
+  /** Joins that came before the first `onJoined` (right after ready), handed over to it. */
+  private earlyJoins: [workspace: string, identity: IdentityDocument, inviter?: string][] = [];
   private nextId = 1;
   private publishing: Promise<void> = Promise.resolve();
   private readonly now: () => number;
@@ -234,6 +236,7 @@ export class RelayClient implements RemoteAccess {
     listener: (workspace: string, identity: IdentityDocument, inviter?: string) => void,
   ): void {
     this.joinedListeners.add(listener);
+    for (const j of this.earlyJoins.splice(0)) listener(...j);
   }
 
   /** A trusted workspace changed; store it for the next start (`connect`). */
@@ -502,6 +505,9 @@ export class RelayClient implements RemoteAccess {
         if (!verifyIdentity(m.identity)) return;
         const inviter = typeof m.inviter === 'string' ? m.inviter : undefined;
         for (const l of this.joinedListeners) l(m.workspace, m.identity, inviter);
+        // shortcut: at most 100 kept, a relay could send any number before the listener.
+        if (!this.joinedListeners.size && this.earlyJoins.length < 100)
+          this.earlyJoins.push([m.workspace, m.identity, inviter]);
         return;
       }
       case 'undeliverable':
