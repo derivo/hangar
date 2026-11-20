@@ -305,31 +305,170 @@ li:has(> .sidebar-item[aria-current='page'])::before,
   margin: 0;
 }
 
+/* Settings: a navigation beside the sections, each topic in a card; one column when narrow. */
 .settings {
   margin: var(--hangar-space-3);
-  padding: var(--hangar-space-6);
-  max-width: 760px;
-  background: var(--hangar-color-surface);
-  border: 1px solid var(--hangar-color-border);
-  border-radius: var(--hangar-radius);
+  padding: var(--hangar-space-3);
+  max-width: 76rem;
+  display: grid;
+  grid-template-columns: 12rem minmax(0, 1fr);
+  grid-template-areas:
+    'title title'
+    'nav body';
+  gap: var(--hangar-space-4) var(--hangar-space-6);
+  align-items: start;
 }
 
 .settings h1,
-.settings h2,
-.settings h3 {
+.settings h2 {
   font-family: var(--hangar-font-display);
   font-weight: 400;
   letter-spacing: 0.03em;
 }
 
 .settings h1 {
-  margin-top: 0;
+  grid-area: title;
+  margin: 0;
   font-size: 20px;
 }
 
 .settings h2 {
-  margin-top: var(--hangar-space-6);
+  margin: 0 0 var(--hangar-space-2);
   font-size: var(--hangar-font-size-lg);
+  scroll-margin-top: var(--hangar-space-4);
+}
+
+.settings h3 {
+  margin: 0 0 var(--hangar-space-2);
+  font: 600 var(--hangar-font-size-md) / 1.5 var(--hangar-font-mono);
+}
+
+.settings h4 {
+  margin: var(--hangar-space-4) 0 var(--hangar-space-2);
+  font: 600 var(--hangar-font-size-sm) / 1.5 var(--hangar-font-mono);
+}
+
+.settings-nav {
+  grid-area: nav;
+  position: sticky;
+  top: var(--hangar-space-3);
+}
+
+.settings-nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--hangar-space-1);
+}
+
+.settings-nav a {
+  display: block;
+  min-height: 32px;
+  padding: var(--hangar-space-2) var(--hangar-space-3);
+  border-radius: var(--hangar-radius);
+  color: var(--hangar-color-text);
+  text-decoration: none;
+}
+
+.settings-nav a:hover,
+.settings-nav a:focus-visible {
+  background: var(--hangar-color-surface-raised);
+  text-decoration: underline;
+}
+
+.settings-body {
+  grid-area: body;
+  min-width: 0;
+}
+
+.settings-body > * + * {
+  margin-top: var(--hangar-space-6);
+}
+
+.settings-card,
+.settings .workspace,
+.settings .workspace-form,
+.settings .permission-group,
+.settings .permission-rule,
+#settings-jobs section {
+  max-width: none;
+  /* A fieldset is otherwise at least as wide as its widest select. */
+  min-width: 0;
+  margin-top: var(--hangar-space-4);
+  padding: var(--hangar-space-4) var(--hangar-space-6);
+  background: var(--hangar-color-surface);
+  border: 1px solid var(--hangar-color-border);
+  border-radius: var(--hangar-radius);
+}
+
+.settings-card > :first-child {
+  margin-top: 0;
+}
+
+.settings-card > :last-child {
+  margin-bottom: 0;
+}
+
+/* Language and updates side by side where they fit. */
+.settings-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--hangar-space-4);
+  margin-top: var(--hangar-space-4);
+}
+
+.settings-row > .settings-card,
+.settings-row > .workspace-form {
+  margin-top: 0;
+}
+
+/* Label and control share a row only while both fit. */
+.settings .field {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.settings .field select,
+.settings .field input {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.function-description summary {
+  min-height: 32px;
+  font-size: var(--hangar-font-size-sm);
+  color: var(--hangar-color-text-muted);
+  cursor: pointer;
+}
+
+@media (max-width: 64rem) {
+  .settings {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'title'
+      'nav'
+      'body';
+  }
+
+  .settings-nav {
+    position: static;
+  }
+
+  .settings-nav ul {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .settings-card,
+  .settings .workspace,
+  .settings .workspace-form,
+  .settings .permission-group,
+  .settings .permission-rule,
+  #settings-jobs section {
+    padding: var(--hangar-space-4);
+  }
 }
 
 .permission-group {

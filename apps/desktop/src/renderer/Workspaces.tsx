@@ -102,8 +102,10 @@ export function Workspaces({ api }: { api: Api }) {
         <Workspace key={w.name} api={api} workspace={w} view={view} />
       ))}
       <Activity api={api} />
-      <CreateForm api={api} />
-      <JoinForm api={api} />
+      <div className="settings-row">
+        <CreateForm api={api} />
+        <JoinForm api={api} />
+      </div>
     </>
   );
 }
@@ -282,9 +284,14 @@ function Workspace({
                 {f.id}
               </label>
               {f.description && (
-                <p id={`${id}-${f.id}`} className="muted">
-                  {f.description}
-                </p>
+                <details className="function-description">
+                  <summary aria-label={t.functionDescriptionFor(f.id)}>
+                    {t.functionDescription}
+                  </summary>
+                  <p id={`${id}-${f.id}`} className="muted">
+                    {f.description}
+                  </p>
+                </details>
               )}
             </div>
           ))}
