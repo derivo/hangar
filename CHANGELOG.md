@@ -136,6 +136,7 @@ All notable changes to this project. Format based on
 
 - Jobs: a cron day of month with a step, like `0 0 */2 * *`, runs only on those days; it ran every day. As in cron, a day or weekday field starting with `*` makes both fields count.
 - Server: `--root /` allows the folders below it; every folder was refused as outside the allowed roots.
+- Workspaces: an instance that connects to the relay again gets the shared functions of the other members again; they had announced them to its old connection only. The first announce of a connection now asks the others to answer (`ask`), at most once per 2 seconds per member; older instances ignore the field.
 - Workspaces: a join request the relay sends right after the connection is ready reaches the members; it came before the listener and was lost until the next reconnect.
 - Security: the main window no longer follows a navigation (for example a link or URL dropped on the sidebar) and opens no windows. Its preload grants every `shell:*` channel – servers, permissions, jobs, workspaces – so any page loaded there could have used them.
 - Security, server: web pages can no longer open the server's WebSocket `/connect` (a request with an `Origin` header gets 403; the desktop sends none), and after a wrong pairing code every pairing attempt, from any connection, is refused for one second ("Too many pairing attempts. Wait a second and try again."). Until now a page in any browser on the machine, or anyone reaching the port, could try codes without limit.

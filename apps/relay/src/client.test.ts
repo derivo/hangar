@@ -404,6 +404,47 @@ describe('RelayClient', () => {
     expect(await reply('result')).toEqual({ t: 'result', id: 'c2', ok: true, value: 'ok' });
   });
 
+  it('an instance that connects again gets the functions of the others again', async () => {
+    const { dir, b, ben, id } = await pair();
+    const w = b.client.workspace('team')!;
+    b.client.close();
+    const bus = new Bus({ prompter: { ask: async () => 'deny' } });
+    const again = await RelayClient.connect(
+      {
+        url: relay!.url,
+        identity: ben,
+        bus,
+        dataDir: join(dir, ben.document.name),
+        shared: () => [],
+      },
+      [{ list: w.list, vouched: w.vouchedTimes }],
+    );
+    closers.push(() => again.close());
+    // Anna announced to Ben on the old connection already; the new one has to ask again.
+    await arrives(() => expect(bus.list().map((f) => f.id)).toContain(id));
+  });
+
+  it('answers asking announces of one member at most once per interval', async () => {
+    const dir = await start();
+    const anna = createIdentity('anna');
+    const carl = createIdentity('carl');
+    const hand = await handDriven(anna);
+    const c = await instance(carl, dir);
+    await c.client.join('team', hand.token, anna.fingerprint);
+    const v2 = hand.team.next(anna, { members: [anna.document, carl.document] });
+    hand.send({ type: 'list', id: 3, list: v2 });
+    await arrives(() => expect(c.client.workspace('team')?.list.version).toBe(2));
+    hand.to(carl, { t: 'announce', functions: [], list: v2, ask: true });
+    await arrives(() => expect(hand.inbox.some((m) => m.type === 'deliver')).toBe(true));
+    await new Promise((r) => setTimeout(r, 100));
+    hand.inbox.splice(0);
+    // A member asking again and again gets no catalog per message.
+    for (let i = 0; i < 5; i++)
+      hand.to(carl, { t: 'announce', functions: [], list: v2, ask: true });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(hand.inbox.filter((m) => m.type === 'deliver')).toEqual([]);
+  });
+
   it('starts again with the stored workspaces and their vouched times', async () => {
     const { dir, b, anna, ben } = await pair();
     let stored: StoredWorkspace | undefined;
@@ -730,10 +771,10 @@ describe('RelayClient', () => {
     );
     const version = a.client.workspace('team')!.list.version;
     const results = await Promise.allSettled([a.client.renew('team'), b.client.renew('team')]);
-    expect(results.map((r) => r.status)).toEqual(['fulfilled', 'rejected']);
-    expect(String((results[1] as PromiseRejectedResult).reason)).toContain(
-      'Not newer than the stored list',
-    );
+    // Which one the relay takes first is up to the two sockets; exactly one gets through.
+    expect(results.map((r) => r.status).sort()).toEqual(['fulfilled', 'rejected']);
+    const lost = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect(String(lost.reason)).toContain('Not newer than the stored list');
     await arrives(() => expect(b.client.workspace('team')!.list.version).toBe(version + 1));
     expect(b.client.workspace('team')!.list).toEqual(a.client.workspace('team')!.list);
   });
