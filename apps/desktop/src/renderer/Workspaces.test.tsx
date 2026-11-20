@@ -379,6 +379,20 @@ describe('Workspaces (ADR 0030)', () => {
       expect(api.setWorkspaceShare).toHaveBeenCalledWith('team', 'dev.hangar.notes/list', true);
     });
 
+    it('keeps the description of a function closed below it, the checkbox still describes it', async () => {
+      setup();
+      const region = await screen.findByRole('region', { name: 'team' });
+      const read = within(region).getByRole('checkbox', { name: 'dev.hangar.notes/read' });
+      expect(read).toHaveAccessibleDescription('Notizen lesen');
+      const more = within(region).getByText('Beschreibung', { selector: 'summary' });
+      expect(more).toHaveAccessibleName('Beschreibung für dev.hangar.notes/read');
+      const details = more.closest('details')!;
+      expect(details.open).toBe(false);
+      await userEvent.click(more);
+      expect(details.open).toBe(true);
+      expect(read).toBeChecked();
+    });
+
     it('says when no bay offers functions, and when the inviter has not added this Hangar', async () => {
       setup(
         view({

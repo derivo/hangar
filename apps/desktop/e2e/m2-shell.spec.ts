@@ -28,6 +28,8 @@ test('app starts, bay appears in the sidebar and opens', async () => {
 test('the main window stays on its page and opens no windows (security audit 2026-11-17)', async () => {
   const { app, shell } = await launch();
   try {
+    // The bay view may finish loading after the shell; count once it is there.
+    await bayPage(app, 'test-bay/index.html');
     const windows = app.windows().length;
     // What a link or URL dropped on the sidebar would do: its preload grants every shell:* channel.
     await shell.evaluate(() => {

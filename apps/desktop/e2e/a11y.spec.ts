@@ -277,3 +277,45 @@ test('the agent bay reflows at 200 % zoom without hiding content', async () => {
     await app.close();
   }
 });
+
+test('the settings: keyboard through the section navigation, cards reflow at 200 % zoom', async () => {
+  const { app, shell } = await launch({ bayDirs: [repoBays], env: agentsEnv() });
+  try {
+    await app.evaluate(({ BrowserWindow }) => {
+      for (const w of BrowserWindow.getAllWindows()) w.setSize(740, 800);
+    });
+    await shell.getByRole('button', { name: 'Einstellungen' }).click();
+    const nav = shell.getByRole('navigation', { name: 'Einstellungsbereiche' });
+    await nav.getByRole('link', { name: 'Allgemein' }).focus();
+    await shell.keyboard.press('Tab');
+    await expect(nav.getByRole('link', { name: 'Bays' })).toBeFocused();
+    await shell.keyboard.press('Enter');
+    await expect(shell.getByRole('heading', { name: 'Bays', level: 2 })).toBeFocused();
+    await shell.keyboard.press('Tab');
+    await expect(
+      shell.getByRole('checkbox', { name: 'Markieren kopiert in die Zwischenablage' }),
+    ).toBeFocused();
+
+    // No card is narrower than its controls, at 740 px and at 200 %.
+    const overflowing = () =>
+      shell.evaluate(() =>
+        [
+          document.querySelector('.content')!,
+          ...document.querySelectorAll('.settings-card, .workspace-form'),
+        ]
+          .filter((e) => e.scrollWidth > e.clientWidth)
+          .map((e) => e.className),
+      );
+    expect(await overflowing()).toEqual([]);
+    await app.evaluate(({ webContents }) => {
+      for (const wc of webContents.getAllWebContents()) wc.setZoomFactor(2);
+    });
+    await expect.poll(overflowing).toEqual([]);
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await shell.emulateMedia({ colorScheme });
+      expect(await violations(shell), `settings at 200 % (${colorScheme})`).toEqual([]);
+    }
+  } finally {
+    await app.close();
+  }
+});

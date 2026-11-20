@@ -83,7 +83,7 @@ export function Notifications({ api }: Props) {
 
   return (
     <>
-      <h2>{t.notifications}</h2>
+      <h3>{t.notifications}</h3>
       <p className="muted">{t.notificationsHint}</p>
       {status && !status.supported && <p>{t.notificationsUnsupported}</p>}
       {lastError && <p>{t.notificationsFailed(lastError)}</p>}

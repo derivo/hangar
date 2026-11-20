@@ -42,7 +42,7 @@ export function BayCatalog({ api }: Props) {
 
   return (
     <>
-      <h2 id="bay-catalog-title">{t.installBays}</h2>
+      <h3 id="bay-catalog-title">{t.installBays}</h3>
       <p className="muted">{t.installBaysHint}</p>
       {error && (
         <p className="error" role="alert">

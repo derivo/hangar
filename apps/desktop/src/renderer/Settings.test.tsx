@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { Settings } from './Settings';
@@ -79,6 +79,31 @@ describe('Settings', () => {
     testNotification: vi.fn(async () => ({ result: 'shown' as const })),
     openNotificationSettings: vi.fn(async () => {}),
     onNotifications: vi.fn(() => () => {}),
+  });
+
+  it('lists its sections in a navigation that moves the focus to the chosen one', async () => {
+    render(<Settings api={settingsApi()} />);
+    const nav = screen.getByRole('navigation', { name: 'Einstellungsbereiche' });
+    expect(
+      within(nav)
+        .getAllByRole('link')
+        .map((l) => l.textContent),
+    ).toEqual(['Allgemein', 'Bays', 'Workspaces', 'Berechtigungen', 'Jobs']);
+    const heading = await screen.findByRole('heading', { name: 'Workspaces', level: 2 });
+    await userEvent.click(within(nav).getByRole('link', { name: 'Workspaces' }));
+    expect(heading).toHaveFocus();
+    await userEvent.click(within(nav).getByRole('link', { name: 'Allgemein' }));
+    expect(screen.getByRole('heading', { name: 'Allgemein', level: 2 })).toHaveFocus();
+  });
+
+  it('puts the general settings under one heading, each topic below it', async () => {
+    render(<Settings api={settingsApi()} />);
+    expect(screen.getByRole('heading', { name: 'Allgemein', level: 2 })).toBeVisible();
+    for (const name of ['Sprache', 'Updates', 'Mitteilungen'])
+      expect(await screen.findByRole('heading', { name, level: 3 })).toBeVisible();
+    expect(
+      await screen.findByRole('heading', { name: 'Bays installieren', level: 3 }),
+    ).toBeVisible();
   });
 
   it('has a section for system notifications (ADR 0044)', async () => {
