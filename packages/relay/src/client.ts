@@ -50,13 +50,22 @@ export interface StoredWorkspace {
 /** Limits of ADR 0011. */
 export const CALL_TIMEOUT_MS = 60_000;
 export const MAX_OPEN_CALLS = 10;
+/** An asking announce of one member is answered at most this often (the answer holds all states). */
+export const ASK_INTERVAL_MS = 2_000;
 
 type Body =
   /**
    * `list`: the sender's member list, so a list the relay withholds still arrives as long as
    * the members can talk at all (ADR 0011, review of phase 14).
+   * `ask`: the first announce of a connection; the receiver answers with its own, also when
+   * it announced to the sender before (the sender restarted and forgot it).
    */
-  | { t: 'announce'; functions: { bayId: string; spec: FunctionSpec }[]; list: MemberList }
+  | {
+      t: 'announce';
+      functions: { bayId: string; spec: FunctionSpec }[];
+      list: MemberList;
+      ask?: boolean;
+    }
   | { t: 'call'; id: string; bayId: string; target: string; args: unknown }
   | { t: 'result'; id: string; ok: true; value: unknown }
   | { t: 'result'; id: string; ok: false; error: string }
@@ -130,6 +139,8 @@ export class RelayClient implements RemoteAccess {
   private readonly pending = new Map<string, string>();
   /** Peers that got our announce since this connection started. */
   private readonly announced = new Set<string>();
+  /** Last answer to an asking announce per `workspace\npeer`, and the one due after it. */
+  private readonly asked = new Map<string, { at: number; timer?: ReturnType<typeof setTimeout> }>();
   private readonly joinedListeners = new Set<
     (workspace: string, identity: IdentityDocument, inviter?: string) => void
   >();
@@ -468,8 +479,12 @@ export class RelayClient implements RemoteAccess {
     }
   }
 
-  private announce(workspace: string, peer: string): void {
-    this.announced.add(`${workspace}\n${peer}`);
+  /** False when nothing went out (the peer is no member of the list known here). */
+  private announce(workspace: string, peer: string, ask = true): boolean {
+    const key = `${workspace}\n${peer}`;
+    // Only the first of this connection asks back; an answer never asks, so no ping-pong.
+    ask &&= !this.announced.has(key);
+    this.announced.add(key);
     const shared = new Set(this.options.shared(workspace));
     const functions = this.options.bus
       .list()
@@ -477,13 +492,14 @@ export class RelayClient implements RemoteAccess {
       .map(({ bayId, spec }) => ({ bayId, spec }));
     try {
       const list = this.trusted.get(workspace)!.workspace.list;
-      this.seal(workspace, peer, { t: 'announce', functions, list });
+      this.seal(workspace, peer, { t: 'announce', functions, list, ...(ask && { ask }) });
     } catch {
       // The peer's list expired or it left; nothing to tell.
-      return;
+      return false;
     }
     for (const [bayId, state] of this.ownStates)
       this.trySeal(workspace, peer, { t: 'state', bayId, state });
+    return true;
   }
 
   private handle(m: FromRelay): void {
@@ -520,6 +536,21 @@ export class RelayClient implements RemoteAccess {
     }
   }
 
+  /** A member asking again within the interval gets one answer at its end, not one per ask. */
+  private answerAsk(workspace: string, peer: string): void {
+    const key = `${workspace}\n${peer}`;
+    const last = this.asked.get(key);
+    if (last?.timer) return;
+    // An answer that could not go out (the asker is not in the list here yet) counts for nothing.
+    const answer = () => {
+      if (this.announce(workspace, peer, false)) this.asked.set(key, { at: this.now() });
+      else this.asked.delete(key);
+    };
+    const wait = last ? last.at + ASK_INTERVAL_MS - this.now() : 0;
+    if (wait <= 0) return answer();
+    this.asked.set(key, { at: last!.at, timer: setTimeout(answer, wait) });
+  }
+
   private deliver(envelope: Envelope): void {
     const workspace = envelope?.header?.workspace;
     const w = this.trusted.get(workspace);
@@ -531,7 +562,8 @@ export class RelayClient implements RemoteAccess {
       return; // forged, replayed or from a non-member: dropped, nothing runs
     }
     const peer = envelope.header.from;
-    if (!this.announced.has(`${workspace}\n${peer}`)) this.announce(workspace, peer);
+    if (body.t === 'announce' && body.ask === true) this.answerAsk(workspace, peer);
+    else if (!this.announced.has(`${workspace}\n${peer}`)) this.announce(workspace, peer, false);
     if (body.t === 'announce') {
       if (body.list?.workspace === workspace) this.offerList(body.list);
       // The new list may have removed the sender.
@@ -740,6 +772,7 @@ export class RelayClient implements RemoteAccess {
   }
 
   private closed(): void {
+    for (const { timer } of this.asked.values()) clearTimeout(timer);
     for (const id of [...this.calls.keys()]) this.finish(id, new Error('Relay connection closed'));
     for (const r of this.requests.values()) r.reject(new Error('Relay connection closed'));
     this.requests.clear();
