@@ -154,6 +154,7 @@ export async function startBridge(
   jobs: () => unknown = () => [],
   offer?: (functions: OfferedFunction[]) => void,
   workspaces?: (action: string, args: unknown[]) => Promise<unknown>,
+  more: Partial<Parameters<typeof attachBridge>[1]> = {},
 ) {
   const log: string[] = [];
   const http = createServer();
@@ -168,6 +169,7 @@ export async function startBridge(
     jobs: jobs as () => [],
     job: async () => {},
     askTimeoutMs,
+    ...more,
   });
   await new Promise<void>((r) => http.listen(0, '127.0.0.1', r));
   const { port } = http.address() as AddressInfo;

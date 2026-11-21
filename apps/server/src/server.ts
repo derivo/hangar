@@ -227,6 +227,14 @@ export async function startServer(
 
   const { bays, errors } = discoverBays(options.bays, version);
   failed.push(...errors);
+  // Known before the bays start, so a restored shell can call the desktop (the bridge waits for
+  // it); a bay of the server keeps its functions, the full list follows once they started.
+  const serverBays = new Set(
+    bays
+      .filter((b) => !b.manifest.hostModules?.some((m) => m !== 'workspaces'))
+      .map((b) => b.manifest.id),
+  );
+  offer(readOffered(offeredFile).filter((f) => !serverBays.has(f.bayId)));
   for (const bay of bays) {
     const { id, name } = bay.manifest;
     // `workspaces` is optional: without relay the bay simply has no `ctx.workspaces`.

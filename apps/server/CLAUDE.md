@@ -37,7 +37,9 @@ Hangar without a user interface (ADR 0018): one Node process with the core from
   are taken individually (without `remote`), at most 500. `call(target,
 args, caller)` goes to the desktop that offered most recently, and fails
   without one or if it leaves before answering (`desktopClosed`, "Hangar is
-  not open"); `sessionEnded` reports to it the end of an agent session, remembered
+  not open"); a call made before `ready` (a restored shell resolving its
+  secrets) waits for the first offer instead, at most `callWaitMs` (60 s),
+  and fails at once on `close()`; `sessionEnded` reports to it the end of an agent session, remembered
   without it (at most 500) until the next `offer`. `sessions(count)`:
   number of running shells (tray of the app), to all desktops and after
   `auth`/`pair`; `server.ts` sums `ctx.setRunning` of the bays
@@ -46,8 +48,10 @@ args, caller)` goes to the desktop that offered most recently, and fails
   `authorizes: true` (only the app asks, ADR 0036 addendum; bays of the
   server keep their functions; a new offer replaces the old one) and
   remembers it in `<data>/desktop-functions.json` (0600): the tools are in the list
-  from the start, even with the app closed.
-- `test-setup.ts`: `startBridge(askTimeoutMs?, bays?)` – only the bridge on an
+  from the start, even with the app closed. That file is registered before the
+  bays start (without the bays that run on the server; a bay needing a host
+  module other than `workspaces` does not), again after they started.
+- `test-setup.ts`: `startBridge(askTimeoutMs?, bays?, jobs?, offer?, workspaces?, more?)` – only the bridge on an
   HTTP server, for tests of `ask`, `notify` and `badge`. The echo bay of
   `startEchoServer` reports `started` and badge 1 on start.
 - `fixtures/job-bay` – test bay that answers its jobs with `done <n>`.
