@@ -487,6 +487,42 @@ describe('bridge: bays of the desktop for the local server (ADR 0036)', () => {
     }
   });
 
+  it('lets a call made while the bays start wait for the first offer, at most callWaitMs', async () => {
+    // Restored shells resolve their secrets before any desktop can connect (ADR 0036).
+    let started = () => {};
+    const ready = new Promise<void>((r) => (started = r));
+    const b = await startBridge(undefined, [], undefined, undefined, undefined, { ready });
+    const late = await startBridge(undefined, [], undefined, undefined, undefined, {
+      ready: new Promise(() => {}),
+      callWaitMs: 50,
+    });
+    const closing = await startBridge(undefined, [], undefined, undefined, undefined, {
+      ready: new Promise(() => {}),
+    });
+    try {
+      const call = b.bridge.call(target, { url: 'x' }, agent);
+      await expect(late.bridge.call(target, {}, agent)).rejects.toThrow('Hangar is not open');
+      // Closing the server ends a waiting call at once, not after the 60 s.
+      const waiting = closing.bridge.call(target, {}, agent);
+      closing.close();
+      await expect(waiting).rejects.toThrow('The server is shutting down');
+      started();
+      const conn = await connect({ url: b.url });
+      await conn.pair(b.code(), 'Laptop');
+      conn.onCall(async () => ({ id: 't1' }));
+      await conn.offer([tab]);
+      await expect(call).resolves.toEqual({ id: 't1' });
+      conn.close();
+      // Once started, a call without the desktop fails at once again.
+      await vi.waitFor(() =>
+        expect(b.bridge.call(target, {}, agent)).rejects.toThrow('Hangar is not open'),
+      );
+    } finally {
+      b.close();
+      late.close();
+    }
+  });
+
   it('fails a call while no desktop offered, and when it goes away during the call', async () => {
     const { b, conn } = await offering();
     try {

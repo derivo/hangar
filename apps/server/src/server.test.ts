@@ -612,6 +612,49 @@ describe('bays of the desktop for agents of the local server (ADR 0036)', () => 
     }
   });
 
+  it('lets a bay that calls the desktop while starting wait for its offer (restored shells)', async () => {
+    const data = mkdtempSync(join(tmpdir(), 'hangar-local-'));
+    const target = 'dev.hangar.secrets/secret.resolve';
+    const secret = {
+      bayId: 'dev.hangar.secrets',
+      spec: { name: 'secret.resolve', sensitive: true, bayOnly: true },
+    };
+    // Offered by the desktop before the restart.
+    writeFileSync(join(data, 'desktop-functions.json'), JSON.stringify([secret]));
+    const bays = bayRoot(
+      'dev.agents',
+      `export default {
+        activate(ctx) {
+          // Like restore() in the agent bay: before any desktop can connect.
+          const early = ctx.call('${target}', { names: ['TOKEN'] }).catch((e) => e.message);
+          ctx.ui.handle('early', () => early);
+        },
+      };`,
+      { uses: [target] },
+    );
+    // In the shared bays folder, but not run here: it needs the host module of the app.
+    const secrets = bayRoot('dev.hangar.secrets', 'export default { activate() {} };', {
+      hostModules: ['secrets'],
+      functions: [secret.spec],
+    });
+    server = await startServer({
+      data,
+      host: '127.0.0.1',
+      port: 0,
+      roots: [],
+      bays: [bays, secrets],
+    });
+    const conn = await connect({ url: server.url.replace('http', 'ws') + '/connect' });
+    try {
+      await conn.pair(readFileSync(join(data, 'pair-code'), 'utf8'), 'Laptop');
+      conn.onCall(async () => ({ TOKEN: 'geheim' }));
+      await conn.offer([secret]);
+      expect(await conn.invoke('dev.agents', 'early', [])).toEqual({ TOKEN: 'geheim' });
+    } finally {
+      conn.close();
+    }
+  });
+
   it('ignores a damaged file of offered functions', async () => {
     const data = mkdtempSync(join(tmpdir(), 'hangar-local-'));
     writeFileSync(join(data, 'desktop-functions.json'), '{');
