@@ -203,3 +203,16 @@ and remote callers, dialog, stored rules, `openToAgents` and session
 permissions are with the app (subject `local-server:<bay-id>`). The rules thus
 stand only where the settings show them. E2E: `e2e/local-server.spec.ts`
 expects exactly one dialog for the password retrieval from the server.
+
+## Addendum 2026-11-21: restored shells wait for the app
+
+The agent bay restores its sessions while the server's bays start. A session with
+a password reference called `dev.hangar.secrets/secret.resolve` then, but the bus
+knew the app's functions only after the bays had started, and no app can connect
+before that (`/connect` answers 503). The shell stayed stopped. Decision of the
+maintainer: the bus waits rather than the agent bay restarting such sessions, so
+every bay that calls the app while starting is covered. The server registers the
+functions from `desktop-functions.json` before the bays start, and a call made
+before the bridge is ready waits for the first offer, at most 60 seconds. Once
+the server has started, a call without the app fails at once as before, so agents
+never wait for a closed app.

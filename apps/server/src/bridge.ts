@@ -41,6 +41,8 @@ interface BridgeOptions {
   askTimeoutMs?: number;
   /** Until it settles, desktops are turned away: before it they would see no bays (ADR 0036). */
   ready?: Promise<unknown>;
+  /** How long a call made before `ready` waits for the first offer (default 60 s). */
+  callWaitMs?: number;
   /** A paired desktop named its language with `auth` or `pair` (ADR 0019). */
   locale?(locale: UiLocale): void;
   /** A paired desktop offered the functions of its own bays (ADR 0036). */
@@ -71,7 +73,8 @@ export interface Bridge {
   workspacesChanged(): void;
   /**
    * Calls an offered function on the desktop that offered last (ADR 0036); fails while it is
-   * closed or when it goes away before answering.
+   * closed or when it goes away before answering. A call made before `ready` (a restored shell
+   * resolving its secrets) waits for the first offer instead, at most `callWaitMs`.
    */
   call(target: string, args: unknown, caller: LocalCaller): Promise<unknown>;
   /** Tells the desktop that offered that an agent session ended. */
@@ -279,6 +282,8 @@ export function attachBridge(http: Server, options: BridgeOptions): Bridge {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 16 * 1024 * 1024 });
   let ready = !options.ready;
   void options.ready?.finally(() => (ready = true));
+  /** Calls made before `ready`, until the first offer (ADR 0036, addendum 2026-11-21). */
+  const waiting = new Set<{ go(): void; fail(e: Error): void }>();
   http.on('upgrade', (req, socket, head) => {
     if (req.url !== '/connect') return void socket.destroy();
     // Browsers always send an Origin, the desktop's Node WebSocket never: no web page gets in.
@@ -396,6 +401,7 @@ export function attachBridge(http: Server, options: BridgeOptions): Bridge {
           if (!paired.has(ws)) throw new Error('Not paired');
           offerer = ws;
           options.offer?.(m.functions.map((f) => offered(f)!));
+          for (const w of waiting) w.go();
           for (const e of endedAway.splice(0)) ws.send(JSON.stringify(e));
         });
       }
@@ -474,13 +480,29 @@ export function attachBridge(http: Server, options: BridgeOptions): Bridge {
       toDesktops({ type: 'workspaces' });
     },
     call(target, args, caller) {
-      const ws = offerer;
-      if (!ws || ws.readyState !== ws.OPEN) return Promise.reject(desktopClosed());
-      const id = ++nextCall;
-      return new Promise((resolve, reject) => {
-        calls.set(id, { ws, resolve, reject });
-        ws.send(JSON.stringify({ type: 'call', id, target, args, caller } satisfies ServerMessage));
-      });
+      const send = () => {
+        const ws = offerer;
+        if (!ws || ws.readyState !== ws.OPEN) return Promise.reject(desktopClosed());
+        const id = ++nextCall;
+        return new Promise((resolve, reject) => {
+          calls.set(id, { ws, resolve, reject });
+          ws.send(
+            JSON.stringify({ type: 'call', id, target, args, caller } satisfies ServerMessage),
+          );
+        });
+      };
+      if (ready) return send();
+      // No desktop can connect before `ready`: wait for it rather than fail every restored shell.
+      return new Promise<void>((resolve, reject) => {
+        const end = () => (clearTimeout(timer), waiting.delete(w));
+        const w = {
+          go: () => (end(), resolve()),
+          fail: (e: Error) => (end(), reject(e)),
+        };
+        const timer = setTimeout(() => w.fail(desktopClosed()), options.callWaitMs ?? 60_000);
+        timer.unref();
+        waiting.add(w);
+      }).then(send);
     },
     sessions(count) {
       sessions = count;
@@ -495,6 +517,7 @@ export function attachBridge(http: Server, options: BridgeOptions): Bridge {
     },
     close() {
       for (const q of questions.values()) q.fail('the server is shutting down');
+      for (const w of waiting) w.fail(new Error('The server is shutting down'));
       for (const ws of wss.clients) ws.terminate();
       wss.close();
     },

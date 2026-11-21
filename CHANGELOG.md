@@ -135,6 +135,7 @@ All notable changes to this project. Format based on
 
 ### Fixed
 
+- Local server: a restored session with a password reference (`@secret:`) in its environment starts its shell again. It asked the app for the password before any app could connect and stayed stopped with an error; now the server knows the functions the app offered before its bays start, and such a call waits for the app's first offer, at most 60 seconds. Later calls without the app still fail at once.
 - Jobs: a cron day of month with a step, like `0 0 */2 * *`, runs only on those days; it ran every day. As in cron, a day or weekday field starting with `*` makes both fields count.
 - Server: `--root /` allows the folders below it; every folder was refused as outside the allowed roots.
 - Workspaces: an instance that connects to the relay again gets the shared functions of the other members again; they had announced them to its old connection only. The first announce of a connection now asks the others to answer (`ask`), at most once per 2 seconds per member; older instances ignore the field.
