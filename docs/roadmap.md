@@ -678,8 +678,9 @@ Windows.
 
 ### Step 0 – Spike: what the engine and the agents really do
 
-**Done 2026-11-23 on macOS**, results in ADR 0049 ("Spike results"). Open:
-point 7 on a Windows machine (`mitmdump.exe`, both agents through the proxy).
+**Done 2026-11-23** on macOS and on a GitHub Actions Windows runner, results
+in ADR 0049 ("Spike results"). Open: both agents through the proxy on a
+Windows machine with a login (the runner has none).
 
 Throwaway scripts in the scratchpad, no product code. Results go into ADR 0049
 and this section; the ADR changes where a result contradicts it.
