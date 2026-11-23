@@ -15,7 +15,10 @@ bay context (main) and `window.hangar` (UI).
   `ctx.onLocaleChange(listener)` a language change (only on a server).
 - ADR 0049: `ctx.onBaysStarted(listener)` runs once after every bay of the process has
   finished `activate` (also when one failed); a listener added later runs at once. For
-  calls to bays that start after this one: bays start in name order.
+  calls to bays that start after this one: bays start in name order. Listeners run
+  synchronously (the server opens to desktops one macrotask later, so calls started there
+  wait for the first offer); `deactivate` waits for a returned promise and starts no
+  listener afterwards.
 - ADR 0011: function in the manifest with `remote: true` (not together with `sensitive`) can be called by
   other instances if a workspace shares it; bay ids with `remote.`
   are reserved.

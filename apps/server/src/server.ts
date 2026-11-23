@@ -262,6 +262,9 @@ export async function startServer(
   for (const e of failed) log(`bay ${e.id ?? e.dir} not loaded: ${e.error}`);
   offer(readOffered(offeredFile));
   for (const r of runtimes.values()) r.baysStarted();
+  // Calls the listeners started (restored shells) reach the bridge while it still waits for
+  // the first offer instead of failing with "Hangar is not open".
+  await new Promise((resolve) => setImmediate(resolve));
   bayStart();
   core.scheduler.start(options.tickMs);
   // Entries a crash left half accepted run again, now that the bays are loaded (ADR 0046).

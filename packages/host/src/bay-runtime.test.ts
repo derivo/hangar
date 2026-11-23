@@ -301,6 +301,36 @@ describe('BayRuntime', () => {
     error.mockRestore();
   });
 
+  it('waits on deactivate for running onBaysStarted listeners and starts no new ones', async () => {
+    const { runtime, services } = setup(`
+      module.exports = {
+        activate(c) {
+          globalThis.__ctx = c;
+          c.onBaysStarted(async () => {
+            await globalThis.__hold;
+            c.registerAgentSession('late');
+          });
+        },
+      };
+    `);
+    const g = globalThis as Record<string, unknown>;
+    let release = () => {};
+    g.__hold = new Promise<void>((resolve) => (release = resolve));
+    await runtime.activate();
+    runtime.baysStarted();
+    let done = false;
+    const stopping = runtime.deactivate().then(() => (done = true));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(done).toBe(false);
+    release();
+    await stopping;
+    // The token the listener got before the end is gone with the bay.
+    expect(services.unregisterAgentSession).toHaveBeenCalledWith('dev.hangar.test', 'late');
+    const later = vi.fn();
+    (g.__ctx as BayContext).onBaysStarted(later);
+    expect(later).not.toHaveBeenCalled();
+  });
+
   it('tells the bay when the language changes, once per change (server, ADR 0019)', async () => {
     const { runtime } = setup(`
       module.exports = {

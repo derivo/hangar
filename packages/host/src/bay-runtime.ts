@@ -53,7 +53,10 @@ export class BayRuntime {
   private readonly sessionEndListeners: ((s: { bayId: string; sessionId: string }) => void)[] = [];
   private readonly localeListeners: ((locale: UiLocale) => void)[] = [];
   private readonly startedListeners: (() => void | Promise<void>)[] = [];
+  /** Listeners of `onBaysStarted` still running; `deactivate` waits for them. */
+  private readonly startedRunning = new Set<Promise<void>>();
   private started = false;
+  private stopped = false;
   private readonly settingListeners: ((change: { key: string; value: SettingValue }) => void)[] =
     [];
   private locale: UiLocale;
@@ -82,8 +85,11 @@ export class BayRuntime {
   }
 
   async deactivate(): Promise<void> {
+    this.stopped = true;
     this.services.scheduler.unhandle(this.id);
     try {
+      // A listener still running must not outlive the bay (tokens, shells).
+      await Promise.allSettled(this.startedRunning);
       await this.main?.deactivate?.();
     } finally {
       // Also when the bay fails here: no token outlives it.
@@ -122,10 +128,22 @@ export class BayRuntime {
     for (const listener of this.startedListeners.splice(0)) this.runStarted(listener);
   }
 
+  /** Synchronous, so calls a listener starts are on their way before the host goes on. */
   private runStarted(listener: () => void | Promise<void>): void {
-    void Promise.resolve()
-      .then(listener)
-      .catch((e: unknown) => console.error(`Bay ${this.id}: onBaysStarted failed`, e));
+    if (this.stopped) return;
+    const failed = (e: unknown) => console.error(`Bay ${this.id}: onBaysStarted failed`, e);
+    let result: void | Promise<void>;
+    try {
+      result = listener();
+    } catch (e) {
+      return failed(e);
+    }
+    // A plain return value (also from a listener typed `void`) is no work to wait for.
+    if (typeof (result as Promise<void> | undefined)?.then !== 'function') return;
+    const running: Promise<void> = Promise.resolve(result)
+      .catch(failed)
+      .finally(() => this.startedRunning.delete(running));
+    this.startedRunning.add(running);
   }
 
   /** The server follows the language of the desktop that connected last (ADR 0019). */
