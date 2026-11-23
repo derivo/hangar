@@ -109,6 +109,8 @@ export function fakeContext(dataDir = mkdtempSync(join(tmpdir(), 'hangar-browser
     unregisterAgentSession: vi.fn(),
     onAgentSessionEnded: (listener: (s: { bayId: string; sessionId: string }) => void) =>
       void ended.push(listener),
+    // Every bay counts as started at once.
+    onBaysStarted: vi.fn((listener: () => void | Promise<void>) => void listener()),
     onLocaleChange: vi.fn(),
     settings: { get: vi.fn(() => false), onChange: vi.fn() },
     pickFolder: vi.fn(),

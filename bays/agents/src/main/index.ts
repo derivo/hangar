@@ -57,7 +57,8 @@ export function createAgentsBay(
         readCodex: () => readCodexQuota(codexHome),
       });
       provideFunctions(ctx, manager, jobs, quotas);
-      manager.restore();
+      // After every bay started: a restored shell may need another bay at its start (ADR 0049).
+      ctx.onBaysStarted(() => manager.restore());
       const view = manager.view();
       ctx.workspaces?.publish(sharedState(view.projects, view.sessions));
       ctx.workspaces?.onState((states) => ctx.ui.send('remote', remoteProjects(states)));

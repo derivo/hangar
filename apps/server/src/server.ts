@@ -261,6 +261,7 @@ export async function startServer(
   }
   for (const e of failed) log(`bay ${e.id ?? e.dir} not loaded: ${e.error}`);
   offer(readOffered(offeredFile));
+  for (const r of runtimes.values()) r.baysStarted();
   bayStart();
   core.scheduler.start(options.tickMs);
   // Entries a crash left half accepted run again, now that the bays are loaded (ADR 0046).

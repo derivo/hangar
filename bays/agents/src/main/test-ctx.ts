@@ -33,6 +33,8 @@ export function fakeContext(locale: UiLocale = 'de') {
     })),
     unregisterAgentSession: vi.fn(),
     onAgentSessionEnded: vi.fn(),
+    // Every bay counts as started at once.
+    onBaysStarted: vi.fn((listener: () => void | Promise<void>) => void listener()),
     onLocaleChange: vi.fn((_listener: (locale: UiLocale) => void) => {}),
     settings: {
       get: vi.fn((key: string) => settingValues[key] ?? false),

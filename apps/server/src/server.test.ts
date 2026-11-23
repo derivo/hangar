@@ -381,6 +381,48 @@ describe('host services on the server', () => {
   });
 });
 
+describe('ctx.onBaysStarted (ADR 0049)', () => {
+  /** Bay `id` offers `ping` and calls `<other>/ping` in `activate` and in `onBaysStarted`. */
+  const pinger = (id: string, other: string) =>
+    bayRoot(
+      id,
+      `export default {
+        async activate(ctx) {
+          ctx.provide('ping', () => '${id}');
+          const r = (globalThis.__started ??= {});
+          r['${id}'] = { inActivate: await ctx.call('${other}/ping', {}).catch((e) => e.message) };
+          ctx.onBaysStarted(async () => {
+            r['${id}'].inListener = await ctx.call('${other}/ping', {});
+          });
+        },
+      };`,
+      { uses: [`${other}/ping`], functions: [{ name: 'ping' }] },
+    );
+
+  it('runs after every bay finished activate, so bays that name each other can call', async () => {
+    const g = globalThis as { __started?: Record<string, Record<string, string>> };
+    delete g.__started;
+    const started = (id: string) => g.__started?.[id] ?? {};
+    const broken = bayRoot(
+      'dev.m.broken',
+      `export default { activate() { throw new Error('kaputt'); } };`,
+    );
+    server = await startServer({
+      data: mkdtempSync(join(tmpdir(), 'hangar-server-')),
+      host: '127.0.0.1',
+      port: 0,
+      roots: [],
+      bays: [pinger('dev.a', 'dev.z'), broken, pinger('dev.z', 'dev.a')],
+      log: () => {},
+    });
+    await vi.waitFor(() => expect(started('dev.a').inListener).toBe('dev.z'));
+    // In `activate`, "A" starts before "Z" (name order): its call finds nothing.
+    expect(started('dev.a').inActivate).toMatch(/Unknown function/);
+    expect(started('dev.z').inActivate).toBe('dev.a');
+    expect(started('dev.z').inListener).toBe('dev.a');
+  });
+});
+
 describe('permission questions on the server (phase 11b)', () => {
   it('denies without a desktop and stores nothing; a desktop that denies stores the denial', async () => {
     const file = join(dataWithDueJob(), 'permissions.json');

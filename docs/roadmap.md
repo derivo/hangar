@@ -716,6 +716,8 @@ result; the ADR names what changed.
 
 ### Step 1 – Host: `onBaysStarted`
 
+**Done 2026-11-23** (server test `ctx.onBaysStarted (ADR 0049)`, runtime unit test).
+
 - `packages/sdk` and `packages/host` (runtime) plus `apps/server` and the
   desktop host: `ctx.onBaysStarted(listener)`, called once after every bay of
   the process has finished `activate` (also after a failed one); a listener

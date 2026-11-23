@@ -52,6 +52,8 @@ export class BayRuntime {
   private labeler?: (sessionId: string) => string | undefined;
   private readonly sessionEndListeners: ((s: { bayId: string; sessionId: string }) => void)[] = [];
   private readonly localeListeners: ((locale: UiLocale) => void)[] = [];
+  private readonly startedListeners: (() => void | Promise<void>)[] = [];
+  private started = false;
   private readonly settingListeners: ((change: { key: string; value: SettingValue }) => void)[] =
     [];
   private locale: UiLocale;
@@ -111,6 +113,19 @@ export class BayRuntime {
         console.error(`Bay ${this.id}: onAgentSessionEnded failed`, e);
       }
     }
+  }
+
+  /** Every bay of the process finished `activate` (ADR 0049); later calls do nothing. */
+  baysStarted(): void {
+    if (this.started) return;
+    this.started = true;
+    for (const listener of this.startedListeners.splice(0)) this.runStarted(listener);
+  }
+
+  private runStarted(listener: () => void | Promise<void>): void {
+    void Promise.resolve()
+      .then(listener)
+      .catch((e: unknown) => console.error(`Bay ${this.id}: onBaysStarted failed`, e));
   }
 
   /** The server follows the language of the desktop that connected last (ADR 0019). */
@@ -200,6 +215,8 @@ export class BayRuntime {
         services.unregisterAgentSession(id, sessionId);
       },
       onAgentSessionEnded: (listener) => void this.sessionEndListeners.push(listener),
+      onBaysStarted: (listener) =>
+        this.started ? this.runStarted(listener) : void this.startedListeners.push(listener),
       pickFolder: (options) => services.pickFolder(options),
       ...(this.hasHostModule('browser') && { browser: services.browser(id) }),
       ...(this.hasHostModule('workspaces') &&
