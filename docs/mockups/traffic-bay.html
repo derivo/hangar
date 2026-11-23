@@ -73,7 +73,7 @@
         margin: 0;
         height: 100vh;
         display: grid;
-        grid-template-columns: var(--sidebar) 1fr;
+        grid-template-columns: var(--sidebar) minmax(0, 1fr);
         background: var(--hangar-color-bg);
         color: var(--hangar-color-text);
         font: 13px/1.45 var(--hangar-font-mono);
@@ -179,6 +179,7 @@
         min-height: 0;
       }
       nav.sessions {
+        position: relative;
         border-right: 1px solid var(--hangar-color-border);
         padding: 10px 8px;
         overflow: auto;
@@ -319,7 +320,9 @@
         color: var(--hangar-color-text);
         font-weight: 500;
       }
+      /* Positioned, so the screen-reader-only text inside stays clipped by the scroller. */
       .table-wrap {
+        position: relative;
         overflow: auto;
         min-height: 0;
       }
@@ -343,7 +346,15 @@
         border-bottom: 1px solid var(--hangar-color-border);
         white-space: nowrap;
       }
-      td > button {
+      td > .cell,
+      td > .row-open {
+        display: block;
+        padding: 5px 8px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 46ch;
+      }
+      td > .row-open {
         all: unset;
         display: block;
         padding: 5px 8px;
@@ -352,9 +363,20 @@
         text-overflow: ellipsis;
         max-width: 46ch;
       }
-      td > button:focus-visible {
+      td > .row-open:focus-visible {
         outline: 2px solid var(--hangar-color-focus);
         outline-offset: -2px;
+      }
+      tr {
+        cursor: pointer;
+      }
+      .sr {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
       }
       /* Selection without a tint: status colours keep 4.5:1. */
       tr[aria-selected='true'] td {
@@ -481,7 +503,7 @@
       }
       @media (max-width: 900px) {
         .layout {
-          grid-template-columns: 1fr;
+          grid-template-columns: minmax(0, 1fr);
         }
         nav.sessions {
           border-right: none;
@@ -554,11 +576,13 @@
                 aria-current="true"
                 style="--tab: var(--hangar-color-tab-teal)"
               >
-                <span class="light working"></span><span>Proxy-Bay planen</span>
+                <span class="light working"></span
+                ><span>Proxy-Bay planen<span class="sr"> (arbeitet)</span></span>
                 <small>Claude Code · 148 Anfragen · 2,9 MB</small>
               </button>
               <button class="session" type="button" style="--tab: var(--hangar-color-tab-violet)">
-                <span class="light"></span><span>Review 0.9.0</span>
+                <span class="light"></span
+                ><span>Review 0.9.0<span class="sr"> (fertig)</span></span>
                 <small>Codex · 61 Anfragen · 0,8 MB</small>
               </button>
             </div>
@@ -585,7 +609,8 @@
                 type="button"
                 style="--tab: var(--hangar-color-tab-green)"
               >
-                <span class="light idle"></span><span>3f2a9c1e</span>
+                <span class="light idle"></span
+                ><span>3f2a9c1e<span class="sr"> (beendet)</span></span>
                 <small>beendet · 5 Anfragen · 12 kB</small>
               </button>
             </div>
@@ -657,6 +682,7 @@
                 aria-selected="true"
                 aria-controls="panel"
                 data-tab="overview"
+                id="tab-overview"
               >
                 Übersicht
               </button>
@@ -666,6 +692,7 @@
                 aria-selected="false"
                 aria-controls="panel"
                 data-tab="request"
+                id="tab-request"
                 tabindex="-1"
               >
                 Anfrage
@@ -676,6 +703,7 @@
                 aria-selected="false"
                 aria-controls="panel"
                 data-tab="response"
+                id="tab-response"
                 tabindex="-1"
               >
                 Antwort
@@ -686,6 +714,7 @@
                 aria-selected="false"
                 aria-controls="panel"
                 data-tab="stream"
+                id="tab-stream"
                 tabindex="-1"
               >
                 Stream
@@ -696,12 +725,13 @@
                 aria-selected="false"
                 aria-controls="panel"
                 data-tab="headers"
+                id="tab-headers"
                 tabindex="-1"
               >
                 Header
               </button>
             </div>
-            <div role="tabpanel" id="panel" tabindex="0"></div>
+            <div role="tabpanel" id="panel" tabindex="0" aria-labelledby="tab-overview"></div>
           </section>
         </section>
       </div>
@@ -823,48 +853,51 @@
       let selected = 3;
       let tab = 'overview';
 
-      function cell(text, cls) {
+      // Rows are built once; selecting only changes attributes, so focus stays put.
+      function cell(html, cls) {
         const td = document.createElement('td');
         if (cls) td.className = cls;
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.tabIndex = -1;
-        b.innerHTML = text;
-        td.append(b);
+        td.innerHTML = `<span class="cell">${html}</span>`;
         return td;
       }
-      function render() {
-        rows.replaceChildren();
+      function build() {
         flows.forEach((f, i) => {
           const tr = document.createElement('tr');
-          tr.setAttribute('aria-selected', String(i === selected));
           const status = f.err
-            ? `<span class="status-err">${f.st} ✕</span>`
+            ? `<span class="status-err">${f.st} ✕ <span class="sr">Fehler</span></span>`
             : f.live
-              ? `<span class="live">${f.st} ●</span>`
+              ? `<span class="live">${f.st} ● <span class="sr">läuft</span></span>`
               : String(f.st);
+          const open = document.createElement('td');
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'row-open';
+          b.textContent = f.u;
+          b.setAttribute('aria-label', `${f.m} ${f.u}, Status ${f.st}, ${f.c}`);
+          open.append(b);
           tr.append(
             cell(f.t),
             cell(`<span class="tab-stripe" style="--tab:${f.tab}"></span>${f.s}`),
             cell(f.m),
-            cell(f.u),
+            open,
             cell(status),
             cell(`<span class="cls ${f.c === 'Modell-API' ? 'api' : ''}">${f.c}</span>`),
             cell(f.size, 'num'),
             cell(f.d, 'num'),
           );
-          const first = tr.querySelector('button');
-          first.tabIndex = i === selected ? 0 : -1;
-          first.setAttribute('aria-label', `${f.m} ${f.u}, Status ${f.st}, ${f.c}`);
-          tr.addEventListener('click', () => select(i, false));
+          tr.addEventListener('click', () => select(i, true));
           rows.append(tr);
         });
-        detail();
+        select(selected, false);
       }
       function select(i, focus) {
         selected = Math.max(0, Math.min(flows.length - 1, i));
-        render();
-        if (focus) rows.children[selected].querySelector('button').focus();
+        [...rows.children].forEach((tr, j) => {
+          tr.setAttribute('aria-selected', String(j === selected));
+          tr.querySelector('.row-open').tabIndex = j === selected ? 0 : -1;
+        });
+        detail();
+        if (focus) rows.children[selected].querySelector('.row-open').focus();
       }
       rows.addEventListener('keydown', (e) => {
         if (e.key === 'ArrowDown') {
@@ -939,9 +972,15 @@ event: content_block_delta 11:19:13.74  …
           b.tabIndex = i === j ? 0 : -1;
         });
         tab = tabs[i].dataset.tab;
+        document.getElementById('panel').setAttribute('aria-labelledby', tabs[i].id);
         detail();
         if (focus) tabs[i].focus();
       }
+      // Runs before the toggle below, so it reads the old state.
+      document.getElementById('pause').addEventListener('click', (e) => {
+        const pressed = e.currentTarget.getAttribute('aria-pressed') !== 'true';
+        e.currentTarget.textContent = pressed ? 'Fortsetzen' : 'Pausieren';
+      });
       document
         .querySelectorAll('.chip, #pause, #follow')
         .forEach((b) =>
@@ -962,7 +1001,7 @@ event: content_block_delta 11:19:13.74  …
         const html = document.documentElement;
         html.dataset.theme = html.dataset.theme === 'dark' ? 'light' : 'dark';
       });
-      render();
+      build();
     </script>
   </body>
 </html>

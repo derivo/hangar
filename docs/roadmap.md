@@ -651,180 +651,273 @@ limits. Requires ADR 0046. Steps and acceptance in the ADR.
 
 ## Traffic bay
 
-Proposed in [ADR 0049](adr/0049-traffic-bay.md); UI mockup
-[mockups/traffic-bay.html](mockups/traffic-bay.html). Wish 2026-11-23: see
-everything an agent session sends and receives.
+Proposed in [ADR 0049](adr/0049-traffic-bay.md), revised after the Codex review
+([reviews/2026-11-23-traffic-bay-plan.md](reviews/2026-11-23-traffic-bay-plan.md));
+UI mockup [mockups/traffic-bay.html](mockups/traffic-bay.html). Wish
+2026-11-23: see everything an agent session sends and receives, sorted by
+project.
 
 **Goal:** A new bay `dev.hangar.traffic` runs mitmproxy as a local
 intercepting proxy, the agent bay routes watched sessions through it, and the
-person sees each request and response per session – model API, telemetry, MCP,
-packages – redacted, in memory, live.
+person sees each request and response grouped by project and session – model
+API, telemetry, MCP, packages – redacted, in memory, live. macOS, Linux and
+Windows.
+
+**Decided (2026-11-23)**
+
+- Watching is switched only in the agent bay (project default, per session);
+  the traffic bay shows the state.
+- No link from the agent bay to a filtered traffic bay in this plan.
+- Pause stops recording, traffic goes on.
+- Windows is part of the plan.
+- `session.info` gains `color`, `status`, `agent`, `watchActive`.
 
 **Open questions (default in brackets)**
 
 - Name in the UI ["Traffic" / "Datenverkehr"].
-- mitmproxy as a required external tool or an own engine in Node [mitmproxy;
-  own engine only if the dependency proves to be a problem].
-- Watching on for new sessions [off; per project switchable].
+- mitmproxy as a required external tool or an own engine in Node [mitmproxy].
 - Keep flows across a restart [no, memory only; export as HAR].
-- Functions for agents (`traffic.list` of the own session) [none in this plan].
-- Switch "Watch traffic" also in the traffic bay [no; only in the agent bay,
-  the traffic bay shows the state].
+- Functions for agents (`traffic.list` of the own session) [none].
 
 ### Step 0 – Spike: what the engine and the agents really do
 
-Throwaway scripts under `scratchpad`, no product code. Results go into ADR 0049
-(status "accepted" or changed) and into this section.
+Throwaway scripts in the scratchpad, no product code. Results go into ADR 0049
+and this section; the ADR changes where a result contradicts it.
 
-1. One `mitmdump` with two `--mode regular@<port>` listeners; add and remove a
-   third at run time (`options.update(mode=…)` from the addon). Record whether
-   existing connections survive.
+1. One `mitmdump --set listen_host=127.0.0.1` with two
+   `regular@127.0.0.1:<port>` listeners; add and remove a third at run time
+   from the addon (`ctx.options.update(mode=…)`), confirm the bind before
+   answering, and record whether open connections of other listeners survive.
+   Check the bound addresses with `lsof -iTCP -sTCP:LISTEN`.
 2. Proxy credentials in `HTTPS_PROXY` (`http://hangar:<pw>@127.0.0.1:<port>`):
-   do `claude -p` and `codex exec` send them? (Decides the credentials part of
-   the ADR.)
+   do `claude -p` and `codex exec` send them? Addon check per listener (407
+   otherwise).
 3. Codex: start once with only `SSL_CERT_FILE`, once with only
    `CODEX_CA_CERTIFICATE`; note which one is needed.
 4. Bypass: run both agents with a proxy and compare their open TCP connections
-   (`lsof -i -a -p <pid>` in a loop, also child processes) with the flows;
-   every connection that does not go to the proxy port is a finding.
-5. Streaming: the time to the first token of `claude -p` with and without the
-   proxy, with `flow.response.stream` set for `text/event-stream`.
-6. WebSocket: does Codex's `codex/responses` arrive in `websocket_message`?
+   (`lsof -i -a -p <pid>` in a loop, children included) with the flows; every
+   connection not to the proxy port is a finding. Repeat with inherited
+   lower-case `https_proxy` and `no_proxy=*` to prove the override.
+5. Streaming: time to the first token of `claude -p` with and without the
+   proxy, with `flow.response.stream` set in `responseheaders`.
+6. WebSocket: does Codex's `codex/responses` arrive in `websocket_message`,
+   and does clearing `flow.websocket.messages` keep memory flat over 10 min?
+7. Windows: `mitmdump.exe` from `uv tool install mitmproxy`, the bundle from
+   `tls.getCACertificates('system')` – is that available in the Node of the
+   Electron version Hangar ships? Both agents once through the proxy.
 
 **Acceptance criteria:** a table in the ADR with one line per point, command and
 result; the ADR names what changed.
 
-### Step 1 – Bay skeleton and engine
+### Step 1 – Host: activation order by `uses`
 
-- `bays/traffic` per skill `new-bay`: manifest (`id dev.hangar.traffic`,
-  functions `proxy.env` and `proxy.status`, both `bayOnly`; `uses`
-  `dev.hangar.agents/session.info` and `dev.hangar.agents/project.list`; settings
-  `mitmdumpPath`, `maxFlows`, `maxMegabytes`, host rules), `CLAUDE.md`, icon.
-- `src/main/engine.ts`: find `mitmdump` (setting, then `PATH`), read its
-  version, start it with the addon and `confdir=<dataDir>/ca`, restart with
-  backoff 1 s, 5 s, 30 s, stop on `deactivate`. Interface `Engine` (start,
-  stop, `addPort`, `removePort`, events) so tests use a fake engine.
-- `src/main/ca.ts`: create the CA on first start (folder 0700, key 0600), the
-  combined bundle (system roots from `/etc/ssl/cert.pem` on macOS,
-  `/etc/ssl/certs/ca-certificates.crt` on Linux, plus the CA), "Renew CA".
-- `addon/hangar_traffic.py`: JSON lines to stdout, header redaction, body
-  limit, session port in every event, streaming and WebSocket hooks.
-- `src/main/events.ts`: parse JSON lines, reject unknown or broken lines with a
-  counted warning (never crash the bay).
+- `packages/host` (bay loader and runtime) and `apps/server`: activate bays
+  that run in the same process in the order of their `uses`; cycles fall back
+  to alphabetical with a logged warning.
 
 **Acceptance criteria**
 
-1. Unit tests for `events.ts`, `ca.ts`, engine restart (fake process); 90 %
-   coverage in `bays/traffic/src/main`.
-2. Integration test with a real `mitmdump` against a local HTTPS test server
-   (own test CA): one request appears as `flow.request` and `flow.response`
-   with the session port and a redacted `Authorization`. Skipped with a
-   visible reason if `mitmdump` is missing; CI installs it (`uv tool install
-mitmproxy`) so the test runs there.
-3. Python addon: `python -m py_compile` in `pnpm lint`.
+1. Red first: a server test with a fixture bay "A" that calls a function of a
+   fixture bay "Z" in `activate` fails with `Unknown function` today and
+   passes after the change.
+2. Cycle test: two bays naming each other start, the warning is logged.
 
-### Step 2 – Sessions through the proxy
+### Step 2 – Bay skeleton and engine
 
-- Traffic bay: `proxy.env({ sessionId })` allocates a free port on
-  `127.0.0.1` (`isPortFree` like `ports.ts`), registers it with the engine and
-  returns the variables of ADR 0049; `onAgentSessionEnded` frees the port.
+- `bays/traffic` per skill `new-bay`: manifest (`id dev.hangar.traffic`,
+  functions `proxy.env` and `proxy.status`, both `bayOnly`; `uses`
+  `dev.hangar.agents/session.info` and `dev.hangar.agents/project.list`;
+  text settings `mitmdumpPath`, `maxFlows` (default `5000`), `maxMegabytes`
+  (`200`), `upstreamCaFile`, `rules` (one rule per line, defaults below)),
+  `CLAUDE.md`, icon.
+- Shipping: `electron-builder.yml` entry with `dist/**` and `asarUnpack` for
+  `bays/traffic/dist/addon/**`; `IN_SERVER` in `apps/desktop/src/main/index.ts`
+  and the data move of ADR 0036; `docker/linux-server/Dockerfile` and
+  `scripts/linux-server-package.mjs`.
+- `src/main/engine.ts`: find `mitmdump` (setting, then `PATH`; `.exe` on
+  Windows), read its version, start it with `listen_host=127.0.0.1`, no
+  default listener, the addon and `confdir=<dataDir>/ca`; restart with backoff
+  1 s, 5 s, 30 s and the same listeners; stop on `deactivate`. Interface
+  `Engine` (`start`, `stop`, `listen`, `unlisten`, `setRules`, `setCapture`,
+  `ignore`, events) so tests use a fake engine.
+- `src/main/protocol.ts`: JSON lines both ways, request ids, `reply` with
+  `ok`/`error`, 5 s timeout, bounded queues (1 000 lines, overflow counted);
+  broken or unknown lines are counted warnings, never a crash.
+- `src/main/ca.ts`: CA on first start (folder 0700, `mitmproxy-ca.pem` 0600,
+  sessions get only `mitmproxy-ca-cert.pem`); `bundle(env)` writes
+  `<dataDir>/bundles/<session>.pem` from the system roots (macOS
+  `/etc/ssl/cert.pem`; Linux `/etc/ssl/certs/ca-certificates.crt` or
+  `/etc/pki/tls/certs/ca-bundle.crt`; Windows `tls.getCACertificates('system')`),
+  the extra certificates named in the merged environment and the CA; no source
+  → error with the reason. `renew()` in the order of ADR 0049.
+- `addon/hangar_traffic.py` (built to `dist/addon/`): commands from stdin,
+  events to stdout, per-listener credentials check, redaction of the copy
+  only, body limit, streaming set in `responseheaders` and `requestheaders`,
+  WebSocket forward and clear, `tunnel` rows from connection hooks for
+  ignored hosts, `capture` on/off.
+
+**Acceptance criteria**
+
+1. Unit tests for `protocol.ts` (timeouts, overflow, broken lines), `ca.ts`
+   (modes 0700/0600, bundle with inherited certificates, missing source),
+   engine restart with listeners (fake process); 90 % coverage in
+   `bays/traffic/src/main`.
+2. Integration test with a real `mitmdump` against a test HTTPS server on a
+   host name outside `NO_PROXY` (`traffic-test.invalid` mapped to `127.0.0.1`
+   in the test's resolver, or the proxy's upstream address override), with an
+   own test CA given to mitmproxy as `upstreamCaFile`:
+   - the request appears as `flow.request`/`flow.response` with the session
+     port, `Authorization` redacted in the event,
+   - the test server received the original `Authorization`,
+   - `lsof` (macOS/Linux) or `Get-NetTCPConnection` (Windows) shows only
+     `127.0.0.1` listeners,
+   - a wrong proxy password gets 407.
+     Skipped with a visible reason if `mitmdump` is missing; CI installs it
+     (`uv tool install mitmproxy`) on all three runners.
+3. Packaged smoke test: the addon is a real file under `app.asar.unpacked`
+   and `mitmdump` loads it from there.
+4. `python -m py_compile` of the addon in `pnpm lint`.
+
+### Step 3 – Sessions through the proxy
+
+- Traffic bay `proxy.env({ sessionId })`: idempotent per session (same port
+  and variables on repeated calls, also after a shell restart); binds the port
+  via `listen` and answers only after its `reply`; returns the variables of
+  ADR 0049 in upper and lower case and the path of the session bundle (built
+  from the environment the agent bay passes along: `proxy.env({ sessionId,
+inherited: { NODE_EXTRA_CA_CERTS?, SSL_CERT_FILE?, … } })`).
+  `onAgentSessionEnded` unbinds; a freed port is not reused for 60 s.
   `proxy.status` returns `{ engine: 'running' | 'missing' | 'failed',
 version?, reason? }`.
 - Agent bay: `SessionRecord.watchTraffic` and `Project.watchTraffic` (default
-  for new sessions), stored in `state.json`. In `startShell` the call to
-  `proxy.env` joins the secrets path: the shell starts only after both
-  answers; a failure writes `Shell not started: <reason>` and reports
-  `session.exit` -1. `uses` gets `dev.hangar.traffic/proxy.env`.
-- Agent bay: `session.info` additionally returns `color` (tab color or
-  `null`); additive, the board ignores it. Test in `functions.test.ts`.
-- Traffic bay: `src/main/sessions.ts` maps session id to `{ projectId,
-project, name, color, ended }` via `session.info` and `project.list`; asked
-  at `proxy.env` and on UI `state`, at most every 5 s per session; `Unknown
-session` marks it ended and keeps the last values.
+  for new sessions) in `state.json`. In `startShell` – also on `restore()` –
+  a watched session calls `proxy.env` next to `secret.resolve`; the shell
+  starts only after both answers, only the answer of the last start counts.
+  `environment()` applies the proxy variables last, so they override process
+  and session values of the same names in both cases. Failure: `Shell not
+started: <reason>`, `session.exit` -1. `uses` gets
+  `dev.hangar.traffic/proxy.env` and `dev.hangar.traffic/proxy.status`.
+- Agent bay: `session.info` additionally returns `color` (or `null`),
+  `status`, `agent` (or `null`) and `watchActive` (the running shell got proxy
+  variables); additive, the board ignores them.
 - Agent bay UI: checkbox "Watch traffic" in the project overview (default for
   new sessions) and in the context menu of a session ("Watch traffic – from the
-  next start"); in row 3 of the field header a link "Traffic: 42 · 1.2 MB" that
-  opens the traffic bay filtered to this session.
+  next start"); a session whose wish differs from `watchActive` says "applies
+  at the next start". If `proxy.status` reports no traffic bay or no engine,
+  the checkbox is disabled with the reason (`aria-disabled`, description).
+- Traffic bay `src/main/sessions.ts`: session id → `{ projectId, project,
+name, color, status, agent, watchActive, ended }` via `session.info` and
+  `project.list`; asked at `proxy.env` and on UI `state`, at most every 5 s per
+  session; `Unknown session` marks it ended and keeps the last values.
 
 **Acceptance criteria**
 
 1. Unit tests in the agent bay with a fake `call`: watched session gets the
-   variables, unwatched does not, failure blocks the start, only the answer of
-   the last start counts (as with `secret.resolve`).
-2. Without the traffic bay installed, "Watch traffic" is disabled with the
-   reason as description (`aria-disabled`), not hidden.
-3. E2E: a watched session runs `curl https://<local test server>` and the flow
-   appears in the traffic bay with the session's name under its project.
-4. Unit test for the mapping: renamed session shows the new name after the
-   next refresh; ended session keeps project and name.
+   variables, unwatched does not and calls nothing, failure blocks the start,
+   only the answer of the last start counts, inherited `https_proxy` and
+   `no_proxy=*` are overridden, `session.info` returns the new fields.
+2. Unit tests in the traffic bay: repeated `proxy.env` returns the same port;
+   ended session unbinds; a port is not reused within 60 s; a renamed session
+   shows the new name after the next refresh; an ended one keeps project and
+   name.
+3. Cold start (server test): a stored watched session restores with its shell
+   running through the proxy, not `Shell not started`.
+4. E2E: a watched session runs `curl https://traffic-test.invalid/` (resolved
+   as in step 2) and the flow appears under its project and session; a
+   request to Hangar's MCP URL does not appear (stays direct).
 
-### Step 3 – Flow store
+### Step 4 – Flow store
 
 - `src/main/store.ts`: ring buffer by count and bytes, flows keyed by id,
-  stream chunks and WebSocket messages appended to their flow, classification
-  by host rules (ADR 0049 defaults), per session and per project counters
-  (requests, bytes up and down, errors, per class).
-- UI channels: `state` (engine, projects with their sessions and counters),
-  `flows({ project?, session?,
-classes?, text?, errorsOnly?, before?, limit })`, `flow.get(id)`,
-  `clear({ project?, session? })`, `pause(boolean)`, `export({ ids? })`,
-  `passThrough(host)`, `renewCa`. Events: `state`, `flow` (new or changed,
-  batched every 250 ms).
+  stream chunks and WebSocket messages appended up to the body limit,
+  classification by `rules` (first match wins), counters per project and
+  session (requests, bytes up and down, errors, per class), pause markers.
+- Default rules:
 
-**Acceptance criteria:** unit tests for eviction by count and by bytes,
-classification, filters, batching; 90 % coverage.
+  ```text
+  model-api   api.anthropic.com/v1/messages
+  model-api   chatgpt.com/backend-api/codex/responses
+  model-api   api.openai.com/v1
+  telemetry   api.anthropic.com/api/event_logging
+  telemetry   api.anthropic.com/api/claude_code/metrics
+  telemetry   chatgpt.com/backend-api/codex/analytics-events
+  telemetry   *.datadoghq.com
+  telemetry   *.sentry.io
+  mcp         mcp-proxy.anthropic.com
+  mcp         api.githubcopilot.com/mcp
+  packages    registry.npmjs.org
+  packages    pypi.org
+  packages    files.pythonhosted.org
+  ```
 
-### Step 4 – UI
+  Anything else is "other".
+
+- UI channels: `state` (engine, projects in `project.list` order with their
+  sessions and counters), `flows({ project?, session?, classes?, text?,
+errorsOnly?, before?, limit })`, `flow.get(id)`, `clear({ project?,
+session? })`, `pause(boolean)`, `export({ ids? })`, `passThrough(host)`,
+  `renewCa`. Events: `state`, `flow` (new or changed, batched every 250 ms).
+
+**Acceptance criteria:** unit tests for eviction by count and by bytes, rule
+parsing (invalid line named, default applies), first-match classification,
+filters, batching, pause (during the pause a request passes, nothing is stored
+or counted, the marker row appears on resume).
+
+### Step 5 – UI
 
 As in the mockup ([mockups/traffic-bay.html](mockups/traffic-bay.html)):
 
-- Header: engine state with version and port count, or the install hint with
-  the two commands; "Pause", "Clear", "Export HAR".
-- Left column: "All sessions", then one group per project (name, requests,
-  bytes; collapsible, state in `localStorage`) with its watched sessions below
-  (tab color stripe, status light, requests, bytes); ended sessions marked
-  "ended" until cleared. Clicking a project filters to all its sessions,
-  clicking a session to that session. Sorted like the project tree of the
-  agent bay (`project.list` order).
-- Middle: filter field (host, path, method), class chips with counts ("Model
-  API", "Telemetry", "MCP", "Packages", "Other", "Errors"), "Follow" toggle;
-  table with time, session, method, host + path, status, class, size, duration.
-  Rows are buttons in a native `<table>`; ↑/↓ move, Enter opens.
+- Header: engine state with version and port count, or the install hint
+  (`uv tool install mitmproxy`, `brew install mitmproxy`); "Pause"/"Resume",
+  "Clear", "Export HAR".
+- Left column: "All sessions", then one group per project in the agent bay's
+  order (name, requests, bytes; collapsible, state in `localStorage`) with its
+  watched sessions (tab color stripe, status light with the status as text for
+  screen readers, agent, requests, bytes); ended sessions marked "ended".
+  A project filters to all its sessions, a session to itself.
+- Middle: filter field (host, path, method), class chips with counts,
+  "Follow" toggle; table with time, session, method, host + path, status,
+  class, size, duration. One focusable element per row; selecting keeps focus
+  on it (no re-render of the row list), ↑/↓ move, Enter opens the detail.
 - Detail below or right (by width): tabs "Overview", "Request", "Response",
-  "Stream" (SSE events or WebSocket messages, live), "Headers"; JSON
-  pretty-printed and collapsible; redacted values marked "redacted"; "Copy as
-  curl" (redacted), "Pass through this host" on TLS errors.
-- Texts de/en in `messages.ts`; empty states: no engine, no watched session, no
-  flows yet ("Only traffic that uses the proxy is shown").
+  "Stream", "Headers" (WAI-ARIA tabs, panel labelled by the active tab); JSON
+  pretty-printed; redacted values marked; notice "Bodies may contain secrets"
+  next to "Copy as curl (headers redacted)"; "Pass through this host" on TLS
+  errors.
+- Texts de/en in `messages.ts`; empty states: no engine, no watched session,
+  no flows yet ("Only traffic that uses the proxy is shown").
 
 **Acceptance criteria**
 
-1. E2E with the fake engine: filters, selection by keyboard, detail tabs,
-   follow on/off, pause, clear, live stream rows.
+1. E2E with the fake engine: project and session filter, collapse, keyboard
+   selection keeps focus, detail tabs, follow, pause/resume marker, clear, live
+   stream rows.
 2. axe-core light and dark: 0 violations; keyboard walkthrough and 200 % zoom
    documented; `A11y-Check:` trailer.
-3. Table with 5 000 rows stays usable (virtualized rows; measured: scrolling
-   without dropped frames in the E2E trace, or the limit is lowered).
+3. 5 000 rows stay usable (virtualized rows; scrolling without dropped frames
+   in the E2E trace, or the default limit is lowered).
 
-### Step 5 – Export, pass-through, server
+### Step 6 – Export, pass-through, CA renewal
 
 - HAR 1.2 export of the filtered rows or the selection, redacted as stored,
-  with a warning that bodies may still contain secrets.
-- Pass-through list in the settings (`ignore_hosts`), shown as tunnel rows.
-- Server: the bay loads in `apps/server` and the local server; the UI talks
-  over the bridge like the agent bay; ADR 0041 machines: install hint names
-  the server.
+  with the warning about bodies.
+- "Pass through this host": escaped and anchored entry for `ignore_hosts`,
+  list in the settings, `tunnel` rows; applies from the next connection.
+- "Renew CA" in the order of ADR 0049; running watched shells are named
+  ("restart to trust the new CA").
 
 **Acceptance criteria:** HAR opens in a browser's network panel (manual check,
-noted in STATUS); server test with the fake engine over the bridge.
+noted in STATUS); pass-through of `pinned.invalid` does not match
+`xpinned.invalid`; after renewal a restarted shell works, `proxy.env` answers
+nothing during the swap.
 
-### Step 6 – Documentation and review
+### Step 7 – Documentation and review
 
-`bays/traffic/CLAUDE.md`, `docs/bay-development.md` (bay list),
-`bays/agents/CLAUDE.md` (watch traffic), README packages, STATUS, CHANGELOG
-"Unreleased", ADR 0049 to "accepted". Codex review of the whole diff with
-`--sandbox read-only`, record in `docs/reviews/`; second pass because TLS
-interception and secrets are involved.
+`bays/traffic/CLAUDE.md`, `docs/bay-development.md` (bay list, activation
+order), `bays/agents/CLAUDE.md` (watch traffic, `session.info`), README
+packages, STATUS, CHANGELOG "Unreleased", ADR 0049 to "accepted". Codex review
+of the whole diff with `--sandbox read-only`, record in `docs/reviews/`;
+second pass because TLS interception and secrets are involved.
 
 ## Outside this roadmap
 

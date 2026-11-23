@@ -1,18 +1,22 @@
 # ADR 0049 – Traffic bay: watch what agent sessions send and receive
 
-Status: proposed 2026-11-23. Builds on [ADR 0004](0004-bay-runtime.md) (bay
-runtime), [ADR 0021](0021-password-bay.md) (a bay hands values to the agent bay
-at shell start), [ADR 0032](0032-manifest-permissions.md) (`uses`) and
-[ADR 0036](0036-shells-survive-restart.md) (agent bay in the local server).
-UI mockup: [mockups/traffic-bay.html](../mockups/traffic-bay.html). Plan:
+Status: proposed 2026-11-23, revised after the Codex review
+([reviews/2026-11-23-traffic-bay-plan.md](../reviews/2026-11-23-traffic-bay-plan.md)).
+Builds on [ADR 0004](0004-bay-runtime.md) (bay runtime),
+[ADR 0021](0021-password-bay.md) (a bay hands values to the agent bay at shell
+start), [ADR 0032](0032-manifest-permissions.md) (`uses`),
+[ADR 0036](0036-shells-survive-restart.md) (agent bay in the local server) and
+[ADR 0037](0037-board-bay.md) (`session.info`, `project.list`). UI mockup:
+[mockups/traffic-bay.html](../mockups/traffic-bay.html). Plan:
 [roadmap.md – Traffic bay](../roadmap.md#traffic-bay).
 
 ## Context
 
 The person wants to see everything an agent session sends and receives over the
-network: model API calls, telemetry, MCP servers, package registries. Today a
-session shell inherits the environment and talks to the internet directly;
-Hangar sees only the calls that reach its own bus.
+network: model API calls, telemetry, MCP servers, package registries, sorted by
+the projects of the agent bay. Today a session shell inherits the environment
+and talks to the internet directly; Hangar sees only the calls that reach its
+own bus.
 
 A manual test on 2026-11-23 with mitmproxy 12.3.1 on `127.0.0.1` showed that
 both agents can be watched without changing them:
@@ -30,78 +34,144 @@ The captured file held access tokens in plain text.
 
 ## Decision
 
+### Bay and engine
+
 - **New bay `dev.hangar.traffic`** ("Traffic" / "Datenverkehr"). Its main part
-  runs a local intercepting proxy, its UI lists the flows per session. It has
-  no `hostModules`, so it loads in the desktop app and in a server alike; with
-  the local server (ADR 0036) it runs in the server next to the shells.
+  runs a local intercepting proxy, its UI lists the flows per project and
+  session. It has no `hostModules`. Like the agent bay it belongs to the local
+  server (ADR 0036): it joins `IN_SERVER` in `apps/desktop/src/main/index.ts`,
+  so the desktop does not start a second engine, store and CA, and it joins
+  the data move to and back from the server. ADR 0041 machines ship it too
+  (`docker/linux-server/Dockerfile`, `scripts/linux-server-package.mjs`).
 - **Engine: mitmproxy, not an own TLS interceptor.** The bay starts `mitmdump`
-  as a child process with an addon shipped in the bay
-  (`bays/traffic/addon/hangar_traffic.py`). The addon writes one JSON line per
-  event to stdout (`flow.request`, `flow.response`, `flow.error`,
-  `stream.chunk`, `ws.message`, `tls.failed`); the main part parses and stores
-  them. mitmproxy is not bundled: the bay looks for `mitmdump` on `PATH` or in
-  the setting `mitmdumpPath`. Without it the bay shows how to install it
-  (`uv tool install mitmproxy`, `brew install mitmproxy`) and the agent bay
-  starts shells without a proxy.
-- **Opt-in per session.** A session is watched only if "Watch traffic" is on
-  for it (default for new sessions from the project, default off). It takes
-  effect at the next shell start, like environment variables.
-- **Hand-over at shell start like passwords (ADR 0021).** The agent bay calls
-  `dev.hangar.traffic/proxy.env` (`bayOnly`, in its `uses`) with the session id
-  before `spawnShell` and mixes the answer into the environment:
-  `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` (each `http://127.0.0.1:<port>`),
-  `NO_PROXY=localhost,127.0.0.1,::1` (Hangar's own MCP server stays direct),
-  `NODE_EXTRA_CA_CERTS=<ca.pem>`, and a combined bundle (system roots plus the
-  CA) in `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE` and
-  `CODEX_CA_CERTIFICATE`. If the call fails, the shell does not start and the
-  terminal names the reason (same path as a failing `secret.resolve`); a
-  watched session never silently runs unwatched.
-- **One port per watched session.** The bay gives each watched session its own
-  listen port on `127.0.0.1` and maps flows to the session by that port
-  (`client_conn.proxy_mode` in the addon). A single `mitmdump` serves all
-  ports; ports are added and removed at run time. Each port also requires
-  proxy credentials (`http://hangar:<random>@127.0.0.1:<port>`) if step 0
-  shows that both agents send them; otherwise ports stay without credentials
-  and the threat model below names that. `onAgentSessionEnded` frees the port.
+  as a child process with an addon shipped in the bay. The build copies it to
+  `dist/addon/hangar_traffic.py`; `electron-builder.yml` unpacks it from
+  `app.asar` (`asarUnpack`), because an external Python cannot read inside the
+  archive. mitmproxy is not bundled: the bay looks for `mitmdump` on `PATH` or
+  in the setting `mitmdumpPath`.
+- **Control protocol in both directions.** Events from the addon arrive as
+  JSON lines on stdout (`flow.request`, `flow.response`, `flow.error`,
+  `stream.chunk`, `ws.message`, `tunnel`, `tls.failed`, `reply`). Commands go
+  as JSON lines on stdin with a request id (`listen`, `unlisten`, `rules`,
+  `capture`, `ignore`); the addon answers each with `reply` (`ok` or `error`,
+  for `listen` after the listener is bound or failed). The bay waits at most
+  5 s per command. Both queues are bounded (1 000 lines); the addon drops
+  events beyond that and reports the count.
+- **Listeners only on loopback.** `mitmdump` starts with `--set
+listen_host=127.0.0.1` and without a default listener; each session gets
+  `regular@127.0.0.1:<port>`. The integration test checks the bound addresses.
+- **Start order.** The server activates bays in alphabetical order, and the
+  agent bay restores shells in `activate` right after offering its functions
+  (`bays/agents/src/main/index.ts`), before a traffic bay would exist. The
+  host therefore activates bays in the order of their `uses`: a bay whose
+  `uses` names a bay that runs in the same process is activated after it
+  (cycles: alphabetical as today, with a warning). A missing bay stays an
+  error of the call.
+
+### Sessions
+
+- **Opt-in per session**, default for new sessions from the project, default
+  off. Only the agent bay switches it; the traffic bay shows the state.
+- **Hand-over at shell start like passwords (ADR 0021).** If `watchTraffic` is
+  on, the agent bay calls `dev.hangar.traffic/proxy.env({ sessionId, inherited })` (`inherited`: the CA variables of the merged environment)
+  (`bayOnly`, in its `uses`) before `spawnShell`, also for restored sessions.
+  The shell starts only with an answer. A missing traffic bay, a missing
+  `mitmdump`, a failed engine or a timeout write `Shell not started: <reason>`
+  and report `session.exit` -1. A watched session never runs unwatched;
+  unwatched sessions are not affected by any of this.
+- **One port per session, stable.** `proxy.env` is idempotent: the first call
+  binds a port (bind confirmed by `reply`, not by `isPortFree`, which only
+  probes), later calls of the same session return the same port and
+  variables. Restarting the shell keeps the port, so jobs started with the old
+  environment keep working. `onAgentSessionEnded` unbinds it; open
+  connections are closed and their flows stay with the old session. A port
+  freed this way is not reused for 60 s.
+- **Environment.** The agent bay applies the answer after merging process and
+  session environment, so it wins over both. Variables, in upper and lower
+  case: `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` (each
+  `http://127.0.0.1:<port>`), `NO_PROXY=localhost,127.0.0.1,::1` (Hangar's own
+  MCP server stays direct). CA variables: `NODE_EXTRA_CA_CERTS`,
+  `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE`,
+  `CODEX_CA_CERTIFICATE`, `GIT_SSL_CAINFO`, each pointing to a bundle of the
+  session (see "Trust"). Inherited values of these names are not lost: they
+  go into that bundle.
+- **Proxy credentials.** mitmproxy's `proxyauth` has one validator for all
+  listeners, so it cannot tie a password to a port. The addon checks the
+  `Proxy-Authorization` of each request against the password of the listener
+  it arrived on (`client_conn.proxy_mode`) and answers 407 otherwise. Whether
+  both agents send credentials from `HTTPS_PROXY` is checked in step 0; if one
+  does not, ports run without credentials and the threat model names that.
+
+### Trust
+
 - **CA per installation, never in a system trust store.** The bay creates the
-  CA in `<dataDir>/ca/` (folder 0700, key 0600) on first use. Only session
-  environments trust it; Hangar never adds it to the keychain or
-  `/etc/ssl`. "Renew CA" in the UI replaces it; watched shells need a restart.
-- **Upstream TLS stays verified.** The bay never sets `ssl_insecure`. A client
-  that rejects the CA (certificate pinning) appears as a `tls.failed` row with
-  "Pass through this host"; passed hosts are tunneled without content
-  (`ignore_hosts`) and marked as such.
-- **Streaming stays live.** Responses with `text/event-stream` and bodies above
-  1 MB are streamed through (`flow.response.stream` as a function that also
-  forwards the chunks to the bay), so an agent does not wait for a buffered
-  answer. WebSocket messages come through `websocket_message`.
-- **Storage: memory only, redacted.** Flows are kept in a ring buffer in
-  memory (default 5 000 flows or 200 MB, setting `maxFlows`/`maxMegabytes`),
-  never written to disk except by an explicit export. The values of
-  `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie`, `x-api-key`
-  and headers matching `/token|secret|key/i` are replaced by `•••• (n chars)`
-  in the addon, before they reach Hangar. Bodies are kept up to 1 MB per
-  direction (`truncated` marks the rest).
-- **Classification by host**, editable in the settings: "Model API"
-  (`api.anthropic.com/v1/messages`, `chatgpt.com/backend-api/codex/responses`,
-  `api.openai.com`), "Telemetry" (`event_logging`, `metrics`,
-  `analytics-events`, `datadoghq.com`, `sentry.io`), "MCP" (paths ending in
-  `/mcp` or `/mcp/`, `mcp-proxy.anthropic.com`), "Packages"
-  (`registry.npmjs.org`, `pypi.org`), otherwise "Other".
-- **Flows sorted by project.** Every flow carries the session id from its
-  port; the bay maps it to project, name and tab color through
-  `dev.hangar.agents/session.info` (extended by `color`) and
-  `dev.hangar.agents/project.list` (both `bayOnly`, in `uses`, as the board
-  does, ADR 0037). It asks at `proxy.env` and again when the UI asks for its
-  state, at most every 5 s per session; an ended session keeps the last known
-  values. The UI groups sessions under their project; a project filters to all
-  of its sessions.
-- **Switching on stays in the agent bay.** The traffic bay shows the state but
-  does not change `watchTraffic`; it needs no function of the agent bay that
-  writes.
-- **No functions for agents in this step.** The bay offers only `bayOnly`
-  functions (`proxy.env`, `proxy.status`); the flows are for the person. A
-  later `traffic.list` for an agent's own session needs its own decision.
+  CA in `<dataDir>/ca/` (folder 0700). mitmproxy's `mitmproxy-ca.pem` holds
+  certificate and key (0600); sessions only get `mitmproxy-ca-cert.pem`.
+- **Bundle per session** in `<dataDir>/bundles/<session>.pem`: the system roots
+  plus inherited extra certificates (`NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`
+  etc. of the merged environment) plus the CA. System roots: macOS
+  `/etc/ssl/cert.pem`, Linux `/etc/ssl/certs/ca-certificates.crt` or
+  `/etc/pki/tls/certs/ca-bundle.crt`, Windows the certificate store `ROOT`
+  exported via `tls.getCACertificates('system')` (Node 22.15+). Without any
+  source the start fails with the reason.
+- **Upstream trust is separate.** mitmproxy verifies servers against the
+  system roots plus the setting `upstreamCaFile` (for company CAs); never
+  `ssl_insecure`.
+- **Renewing the CA** is ordered: block new `proxy.env` answers, write the new
+  CA and bundles atomically, restart the engine with its listeners, then
+  answer again. Running shells keep the old bundle and fail TLS until they are
+  restarted; the UI says so.
+
+### Capture
+
+- **Streaming stays live.** In `responseheaders` the addon sets
+  `flow.response.stream` to a function for `text/event-stream`, bodies above
+  1 MB and bodies of unknown length; requests above 1 MB likewise with
+  `flow.request.stream`. The function forwards chunks to the bay up to the
+  body limit and passes all data on. WebSocket messages are forwarded from
+  `websocket_message` and then removed from `flow.websocket.messages`, so
+  mitmproxy does not keep a second history.
+- **Storage: memory only, redacted copies.** Flows live in a ring buffer
+  (default 5 000 flows or 200 MB). Only the serialized copy for Hangar is
+  redacted; the request upstream keeps its headers. Redacted: values of
+  `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie`,
+  `x-api-key`, of headers matching `/token|secret|key|auth/i`, of query
+  parameters matching the same pattern, and user info in URLs; shown as
+  `•••• (n chars)`. Bodies are kept up to 1 MB per direction (`truncated`);
+  they may contain secrets, which the UI states at the detail view, at "Copy
+  as curl" and at the export.
+- **Pause stops recording, not traffic.** While paused, requests of watched
+  sessions pass as usual but are neither stored nor counted; the addon stops
+  sending events (`capture false`). Resuming inserts a row "Paused from … to
+  …".
+- **Classification** by rules `class host[/path-prefix]`, one per line,
+  first match wins, host exact or `*.domain`; defaults in the plan. Settings
+  of the SDK are text or check box only (`packages/sdk/src/manifest.ts`), so
+  numbers and rules are text settings validated by the bay; an invalid line
+  is named in the UI and the default applies.
+- **Pass-through hosts** (pinning): a `tls.failed` row offers "Pass through
+  this host". The bay escapes the host and anchors it (`^host:443$`) for
+  `ignore_hosts`, which takes regular expressions; it applies from the next
+  connection. The addon reports passed connections as `tunnel` rows from its
+  connection hooks (host, bytes, duration, no content).
+
+### Sorting by project
+
+- Every flow carries its session id (from its listener). The bay maps it to
+  project, name, tab color, status, agent and whether watching is active
+  through `dev.hangar.agents/session.info`, extended by `color`, `status`,
+  `agent` and `watchActive` (the shell runs with the proxy variables), and
+  `dev.hangar.agents/project.list` (order of the projects). Both are
+  `bayOnly` and in its `uses`. It asks at `proxy.env` and when the UI asks for
+  its state, at most every 5 s per session; an ended session keeps the last
+  values. The UI groups sessions under their project.
+
+### Out of scope
+
+- **No functions for agents.** Only `bayOnly` `proxy.env` and `proxy.status`.
+- **No link from the agent bay** to a filtered traffic bay: bays cannot open
+  another bay with arguments (`packages/sdk/src/types.ts`); counters and
+  filters are in the traffic bay.
 - **Export as HAR** (UI only), redacted as stored, to a file the person picks.
 
 ## Threat model (short)
@@ -110,32 +180,37 @@ The captured file held access tokens in plain text.
   the CA. Only watched session shells trust it; the key lies in the bay's data
   folder, readable by the user account – agents run as that account without a
   sandbox (bay ideas 2) and could read it anyway.
-- Any local process can connect to a session's port; without proxy
-  credentials it would show up as that session's traffic and get the same
-  interception. Listening only on `127.0.0.1` limits this to the own machine.
-- Captured bodies can contain secrets the header redaction misses (tokens in
-  JSON bodies, prompts with passwords). They stay in memory; the export warns.
+- Without proxy credentials any local process can use a session's port; its
+  traffic would show as that session's and be intercepted the same way.
+  Listening only on `127.0.0.1` limits this to the own machine.
+- Tools that ignore proxy variables bypass the bay; step 0 measures the
+  agents, the UI says "Only traffic that uses the proxy is shown".
+- Captured bodies can contain secrets the redaction misses. They stay in
+  memory; detail view, copy and export warn.
 
 ## Consequences
 
 - A watched session depends on a running `mitmdump`. If it crashes, the bay
-  restarts it (backoff 1 s, 5 s, 30 s) and reports the outage in the UI;
-  meanwhile requests of watched sessions fail instead of going out unwatched.
-- Python dependency for those who use the bay. A native engine in Node can
-  replace mitmproxy later behind the same JSON-lines interface.
-- Tools that ignore proxy variables bypass the bay. The UI says so ("Only
-  traffic that uses the proxy is shown"); step 0 measures the agents.
-- On a remote Linux server (ADR 0041) `mitmdump` must be installed there.
+  restarts it (backoff 1 s, 5 s, 30 s) with the same ports and reports the
+  outage; meanwhile requests of watched sessions fail instead of going out
+  unwatched.
+- Python dependency for those who use the bay; on Windows `mitmdump.exe`.
+  A native engine in Node can replace mitmproxy later behind the same
+  protocol.
+- Host change: activation order by `uses` (affects all bays, own test).
+- Agent bay change: `session.info` gains four fields, `watchTraffic` on
+  projects and sessions.
 
 ## Rejected
 
 - **Own interceptor in Node** (for example `http-mitm-proxy` with
   `node-forge`): TLS interception, HTTP/2 and WebSockets are security-relevant
-  and mature in mitmproxy; own code first only if the Python dependency proves
-  to be a problem.
+  and mature in mitmproxy.
 - **Proxy in front of the whole app or the system** (system proxy, PAC): would
   capture the person's own traffic and needs the CA in the system trust store.
 - **Packet capture** (`pcap`, Network Extension): sees only encrypted TLS and
   needs elevated rights.
 - **Reading agent logs** instead of a proxy: incomplete, different per agent,
   no telemetry.
+- **A function of the agent bay to switch watching from the traffic bay**:
+  one place to switch is enough.
