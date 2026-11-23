@@ -27,10 +27,31 @@ both agents can be watched without changing them:
   decrypted, exit code 0.
 - `codex exec` with `HTTPS_PROXY`, `SSL_CERT_FILE` and `CODEX_CA_CERTIFICATE`:
   `chatgpt.com/backend-api/codex/responses`, `analytics-events`, plugins, MCP –
-  decrypted, exit code 0. Which of the two CA variables Codex needs is open.
-- Not checked: whether any connection bypasses the proxy.
+  decrypted, exit code 0.
+
+The spike of step 0 answered the open points; see "Spike results" below.
 
 The captured file held access tokens in plain text.
+
+## Spike results (step 0, 2026-11-23)
+
+macOS, mitmproxy 12.3.1, `claude` 2.1.330, `codex` with its default plugins and
+MCP servers. Throwaway scripts with a spike addon that already used the
+protocol, credential check and WebSocket limit of this ADR.
+
+| #   | Question                              | Command                                                                                                                                                       | Result                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| --- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Listeners at run time, bind confirmed | `ctx.options.update(mode=…)`, then wait until `proxyserver.servers` holds the instance and `is_running` or `last_exception` is set, `lsof -iTCP -sTCP:LISTEN` | Third listener added and removed; reply after bind with the bound address; `lsof` showed only `127.0.0.1:<port>`; after removal the port refused; a keep-alive connection on another listener kept working                                                                                                                                                                                                                                                                                         |
+| 2   | Proxy credentials per listener        | raw requests; `claude -p`, `codex exec`, `git ls-remote`, `curl` with `http://hangar:<pw>@127.0.0.1:<port>`                                                   | No or other listener's credentials: 407 (plain HTTP and CONNECT). CONNECT with credentials, then two requests in the tunnel: 200. Upstream never saw `Proxy-Authorization`. `claude`, `codex` and `curl` send credentials at once; `git` first without, then after the 407 (`anyauth`); with `GIT_HTTP_PROXY_AUTHMETHOD=basic` at once                                                                                                                                                             |
+| 3   | Codex CA variable                     | `codex exec` once with only `SSL_CERT_FILE`, once with only `CODEX_CA_CERTIFICATE`, once with none                                                            | Either variable alone works (exit 0, about 30 flows). Without one Codex hangs (killed after 60 s) and opens a direct connection from the `codex` process (`172.64.155.209:443`)                                                                                                                                                                                                                                                                                                                    |
+| 4   | Bypass                                | `lsof -i -a -p <pids>` every 100 ms over the process tree, inherited `https_proxy=http://127.0.0.1:9` and `no_proxy=*` overridden                             | `claude`: no connection outside the proxy except `127.0.0.1:7332` (in `NO_PROXY`); its MCP children went through it. `codex`: the MCP server it starts (`npx @playwright/mcp`, `node`) connected directly to `104.16.x.34:443` (npm registry) in every run; the cause was not checked. The override held: no run used port 9                                                                                                                                                                       |
+| 5   | Streaming, time to first token        | `claude -p … --output-format stream-json --include-partial-messages`, two runs each, first `text_delta`                                                       | Through the proxy 7.76 s and 5.17 s, direct 7.44 s and 6.33 s: no delay measurable at this sample size                                                                                                                                                                                                                                                                                                                                                                                             |
+| 6   | WebSocket                             | `codex exec`; own client sending 20 × 1 MB fragments without the final one, four times; 10 min of 1 KB messages                                               | `codex/responses` arrives in `websocket_message` (21 messages). The limit must wrap `WebsocketLayer.relay_messages`, not `_handle_event` (reassigned per instance in `start`). Abort after 16.06 MB each time, close code 1009 seen by client and server, `ws.tooLarge` row. RSS 108, 113, 114, 120 MB after the four aborts (buffer freed, about 4 MB left each time, cause not checked). Soak with clearing: 263 100 messages of 1 KB in 10 min, RSS 80.0 MB at minute 0 and 81.5 MB at minute 9 |
+| 7   | Windows                               | `ELECTRON_RUN_AS_NODE=1 Electron -e …` (Electron 45.1.0)                                                                                                      | Node 24.22.1 has `tls.getCACertificates('system')`. Not run on Windows: `mitmdump.exe` and both agents through the proxy are open                                                                                                                                                                                                                                                                                                                                                                  |
+
+Changed in this ADR: the WebSocket wrapper targets `relay_messages`; the
+listener reply waits for the server instance; `GIT_HTTP_PROXY_AUTHMETHOD=basic`
+joins the variables; the threat model names the Codex MCP bypass.
 
 ## Decision
 
@@ -54,7 +75,9 @@ The captured file held access tokens in plain text.
   `stream.chunk`, `ws.message`, `tunnel`, `tls.failed`, `reply`). Commands go
   as JSON lines on stdin with a request id (`listen`, `unlisten`, `rules`,
   `capture`, `ignore`); the addon answers each with `reply` (`ok` or `error`,
-  for `listen` after the listener is bound or failed). The bay waits at most
+  for `listen` after the listener is bound or failed: after
+  `ctx.options.update(mode=…)` the addon waits until the server instance of the
+  mode is running or has `last_exception`). The bay waits at most
   5 s per command. Both queues are bounded by lines (1 000) and bytes
   (8 MB); the addon drops events beyond that and reports the count. stdout
   carries only these lines: `mitmdump` runs with `flow_detail=0` and
@@ -96,7 +119,8 @@ listen_host=127.0.0.1` and without a default listener; each session gets
   MCP server stays direct). CA variables: `NODE_EXTRA_CA_CERTS`,
   `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE`,
   `CODEX_CA_CERTIFICATE`, `GIT_SSL_CAINFO`, each pointing to a bundle of the
-  session (see "Trust"). Inherited values of these names are not lost: they
+  session (see "Trust"), and `GIT_HTTP_PROXY_AUTHMETHOD=basic` so Git sends
+  the credentials without a 407 first. Inherited values of these names are not lost: they
   go into that bundle.
 - **Proxy credentials.** Each port has a random password; the proxy URLs
   then read `http://hangar:<password>@127.0.0.1:<port>`. mitmproxy's
@@ -150,13 +174,14 @@ listen_host=127.0.0.1` and without a default listener; each session gets
   mitmproxy does not keep a second history. mitmproxy 12.3.1 collects the
   fragments of an unfinished message in `WebsocketConnection.frame_buf`
   (`proxy/layers/websocket.py`) before that hook and has no size option, so no
-  hook sees them. The addon therefore wraps `WebsocketLayer._handle_event`:
-  after each received event it sums `frame_buf` of both sides; above 16 MB it
+  hook sees them. The addon therefore wraps `WebsocketLayer.relay_messages`
+  (not `_handle_event`, which `start` reassigns per instance): after each
+  received event it sums `frame_buf` of both sides; above 16 MB it
   closes both sides with code 1009 (message too big), drops the buffer and
   sends a `ws.tooLarge` row. The wrapper touches a private API: the bay
   supports mitmproxy `>=12.3,<13` only, the addon reports
   `mitmproxy.version.VERSION` at start and the engine refuses other versions
-  with the reason (`proxy.status` `failed`). Step 0 proves the abort without a
+  with the reason (`proxy.status` `failed`). Step 0 showed the abort without a
   final fragment.
 - **Storage: memory only, redacted copies.** Flows live in a ring buffer
   (default 5 000 flows or 200 MB). Only the serialized copy for Hangar is
@@ -254,8 +279,10 @@ kind: 'sse' | 'ws-text' | 'ws-binary', encoding: 'utf8' | 'base64', data }[]`;
 - Without proxy credentials any local process can use a session's port; its
   traffic would show as that session's and be intercepted the same way.
   Listening only on `127.0.0.1` limits this to the own machine.
-- Tools that ignore proxy variables bypass the bay; step 0 measures the
-  agents, the UI says "Only traffic that uses the proxy is shown".
+- Tools that ignore proxy variables bypass the bay, the UI says "Only traffic
+  that uses the proxy is shown". Step 0 found one: MCP servers that Codex
+  starts itself (`npx @playwright/mcp`) connected directly. Hangar does not
+  fix this in v1; `bays/proxy/CLAUDE.md` and the UI hint name it.
 - An agent with released `flow.get` reads bodies of everything its shell
   sent, also of programs it did not start itself in that shell.
 - Captured bodies can contain secrets the redaction misses. They stay in

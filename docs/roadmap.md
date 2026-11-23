@@ -678,6 +678,9 @@ Windows.
 
 ### Step 0 – Spike: what the engine and the agents really do
 
+**Done 2026-11-23 on macOS**, results in ADR 0049 ("Spike results"). Open:
+point 7 on a Windows machine (`mitmdump.exe`, both agents through the proxy).
+
 Throwaway scripts in the scratchpad, no product code. Results go into ADR 0049
 and this section; the ADR changes where a result contradicts it.
 
@@ -701,7 +704,7 @@ and this section; the ADR changes where a result contradicts it.
 6. WebSocket: does Codex's `codex/responses` arrive in `websocket_message`,
    and does clearing `flow.websocket.messages` keep memory flat over 10 min?
    Send 20 MB in fragments without the final one: does the wrapper around
-   `WebsocketLayer._handle_event` (ADR 0049) close both sides with 1009 at
+   `WebsocketLayer.relay_messages` (ADR 0049) close both sides with 1009 at
    16 MB, emit `ws.tooLarge` and free the buffer, without a final fragment?
 7. Windows: `mitmdump.exe` from `uv tool install mitmproxy`, the bundle from
    `tls.getCACertificates('system')` – is that available in the Node of the
@@ -766,7 +769,7 @@ result; the ADR names what changed.
   per connection) and removal of `Proxy-Authorization`, redaction of the copy
   only, body limit, streaming set in `responseheaders` and `requestheaders`,
   WebSocket forward and clear, 16 MB limit for fragmented messages via the
-  `_handle_event` wrapper, version check `>=12.3,<13` at start, `tunnel`
+  `relay_messages` wrapper, version check `>=12.3,<13` at start, `tunnel`
   rows for ignored hosts with bytes counted in `tcp_message`, `capture`
   on/off.
 
