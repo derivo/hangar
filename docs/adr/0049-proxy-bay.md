@@ -55,18 +55,21 @@ The captured file held access tokens in plain text.
   as JSON lines on stdin with a request id (`listen`, `unlisten`, `rules`,
   `capture`, `ignore`); the addon answers each with `reply` (`ok` or `error`,
   for `listen` after the listener is bound or failed). The bay waits at most
-  5 s per command. Both queues are bounded (1 000 lines); the addon drops
-  events beyond that and reports the count.
+  5 s per command. Both queues are bounded by lines (1 000) and bytes
+  (8 MB); the addon drops events beyond that and reports the count. stdout
+  carries only these lines: `mitmdump` runs with `flow_detail=0` and
+  `termlog_verbosity=error`, and the addon sends mitmproxy's own log to
+  stderr, so neither unredacted flow dumps nor log text reach the bay.
 - **Listeners only on loopback.** `mitmdump` starts with `--set
 listen_host=127.0.0.1` and without a default listener; each session gets
   `regular@127.0.0.1:<port>`. The integration test checks the bound addresses.
 - **Start order.** The server activates bays in alphabetical order, and the
   agent bay restores shells in `activate` right after offering its functions
-  (`bays/agents/src/main/index.ts`), before a proxy bay would exist. The
-  host therefore activates bays in the order of their `uses`: a bay whose
-  `uses` names a bay that runs in the same process is activated after it
-  (cycles: alphabetical as today, with a warning). A missing bay stays an
-  error of the call.
+  (`bays/agents/src/main/index.ts`), before a proxy bay would exist. Ordering
+  by `uses` does not help: agent bay and proxy bay name each other. Instead
+  the SDK gets `ctx.onBaysStarted(listener)`, called once after every bay of
+  the process has finished `activate`; the agent bay moves `restore()` there.
+  A bay that is missing then stays an error of the call.
 
 ### Sessions
 
@@ -88,39 +91,49 @@ listen_host=127.0.0.1` and without a default listener; each session gets
   freed this way is not reused for 60 s.
 - **Environment.** The agent bay applies the answer after merging process and
   session environment, so it wins over both. Variables, in upper and lower
-  case: `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` (each
-  `http://127.0.0.1:<port>`), `NO_PROXY=localhost,127.0.0.1,::1` (Hangar's own
+  case: `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` (each the URL of the session's
+  port, with credentials, see below), `NO_PROXY=localhost,127.0.0.1,::1` (Hangar's own
   MCP server stays direct). CA variables: `NODE_EXTRA_CA_CERTS`,
   `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE`,
   `CODEX_CA_CERTIFICATE`, `GIT_SSL_CAINFO`, each pointing to a bundle of the
   session (see "Trust"). Inherited values of these names are not lost: they
   go into that bundle.
-- **Proxy credentials.** mitmproxy's `proxyauth` has one validator for all
-  listeners, so it cannot tie a password to a port. The addon checks the
-  `Proxy-Authorization` of each request against the password of the listener
-  it arrived on (`client_conn.proxy_mode`) and answers 407 otherwise. Whether
-  both agents send credentials from `HTTPS_PROXY` is checked in step 0; if one
-  does not, ports run without credentials and the threat model names that.
+- **Proxy credentials.** Each port has a random password; the proxy URLs
+  then read `http://hangar:<password>@127.0.0.1:<port>`. mitmproxy's
+  `proxyauth` has one validator for all listeners, so the addon checks
+  instead: plain HTTP requests by their `Proxy-Authorization`, HTTPS once at
+  `http_connect`, after which the client connection counts as authenticated
+  (requests inside the tunnel carry no such header), each against the
+  password of the listener (`client_conn.proxy_mode`); otherwise 407. It
+  removes `Proxy-Authorization` before forwarding. Whether both agents send
+  credentials from `HTTPS_PROXY` is checked in step 0; if one does not, ports
+  run without credentials and the threat model names that.
 
 ### Trust
 
 - **CA per installation, never in a system trust store.** The bay creates the
   CA in `<dataDir>/ca/` (folder 0700). mitmproxy's `mitmproxy-ca.pem` holds
   certificate and key (0600); sessions only get `mitmproxy-ca-cert.pem`.
-- **Bundle per session** in `<dataDir>/bundles/<session>.pem`: the system roots
+- **Bundle per session and CA generation** in
+  `<dataDir>/bundles/<generation>/<session>.pem`, never rewritten in place: the system roots
   plus inherited extra certificates (`NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`
   etc. of the merged environment) plus the CA. System roots: macOS
   `/etc/ssl/cert.pem`, Linux `/etc/ssl/certs/ca-certificates.crt` or
   `/etc/pki/tls/certs/ca-bundle.crt`, Windows the certificate store `ROOT`
   exported via `tls.getCACertificates('system')` (Node 22.15+). Without any
   source the start fails with the reason.
-- **Upstream trust is separate.** mitmproxy verifies servers against the
-  system roots plus the setting `upstreamCaFile` (for company CAs); never
-  `ssl_insecure`.
-- **Renewing the CA** is ordered: block new `proxy.env` answers, write the new
-  CA and bundles atomically, restart the engine with its listeners, then
-  answer again. Running shells keep the old bundle and fail TLS until they are
-  restarted; the UI says so.
+- **Upstream trust is separate.** mitmproxy 12.3.1 uses certifi by default,
+  and `ssl_verify_upstream_trusted_ca` replaces that default instead of adding
+  to it. The bay therefore writes `<dataDir>/upstream.pem` from the system
+  roots (as above) plus the setting `upstreamCaFile` (for company CAs) and
+  passes it as `ssl_verify_upstream_trusted_ca`; never `ssl_insecure`.
+- **Renewing the CA** is ordered: block new `proxy.env` answers, create the
+  new CA and a new bundle generation, restart the engine with its listeners,
+  clear the cached `proxy.env` answers, then answer again. Effects: a shell
+  restarted afterwards gets the new generation and works; a running shell
+  keeps pointing to the old generation, so its processes, old and new, fail
+  TLS until the shell is restarted; the UI names these sessions. Old
+  generations are removed when no session uses them.
 
 ### Capture
 
@@ -130,7 +143,9 @@ listen_host=127.0.0.1` and without a default listener; each session gets
   `flow.request.stream`. The function forwards chunks to the bay up to the
   body limit and passes all data on. WebSocket messages are forwarded from
   `websocket_message` and then removed from `flow.websocket.messages`, so
-  mitmproxy does not keep a second history.
+  mitmproxy does not keep a second history. mitmproxy buffers the fragments of
+  an unfinished message before that hook: a message above 16 MB in fragments
+  ends the connection with an error row (`ws.tooLarge`); step 0 measures it.
 - **Storage: memory only, redacted copies.** Flows live in a ring buffer
   (default 5 000 flows or 200 MB). Only the serialized copy for Hangar is
   redacted; the request upstream keeps its headers. Redacted: values of
@@ -150,10 +165,13 @@ listen_host=127.0.0.1` and without a default listener; each session gets
   numbers and rules are text settings validated by the bay; an invalid line
   is named in the UI and the default applies.
 - **Pass-through hosts** (pinning): a `tls.failed` row offers "Pass through
-  this host". The bay escapes the host and anchors it (`^host:443$`) for
-  `ignore_hosts`, which takes regular expressions; it applies from the next
-  connection. The addon reports passed connections as `tunnel` rows from its
-  connection hooks (host, bytes, duration, no content).
+  this host" with host and port of the failed connection. The bay escapes and
+  anchors both (`^host:port$`) for `ignore_hosts`, which takes regular
+  expressions; it applies from the next connection. With
+  `show_ignored_hosts=true` mitmproxy keeps a TCP flow for passed
+  connections; the addon counts bytes in `tcp_message`, then drops the
+  message, and reports a `tunnel` row (host, port, bytes each way, duration,
+  no content).
 
 ### Sorting by project
 
@@ -166,24 +184,41 @@ listen_host=127.0.0.1` and without a default listener; each session gets
   its state, at most every 5 s per session; an ended session keeps the last
   values. The UI groups sessions under their project.
 
+### Export
+
+- **HAR 1.2 from the UI**, redacted as stored, to a file the person picks,
+  with the warning about bodies. Agents cannot export.
+
 ### Functions for agents
 
 - An agent reads the traffic of its own session, for example to check which
   requests a tool sent or why one failed. Two MCP tools, like those of the
   browser bay:
-  - `flow.list({ since?, classes?, text?, limit? })`: newest first, at most
-    200, each `{ id, time, method, url, status, class, bytesUp, bytesDown,
-durationMs, error? }`.
-  - `flow.get({ id })`: one flow with redacted headers, bodies up to 100 000
-    characters per direction (`truncated`), stream events or WebSocket
-    messages up to the same limit.
-- **Own session only.** The bay takes the session from the caller
-  (`caller.kind === 'session'`, or `local-server` with its `sessionId`, as the
-  browser bay does for its partitions); a flow of another session is
-  `Unknown flow`. A caller without a session gets `No session`; the functions
-  are not `remote`.
-- **Permission as usual** (ADR 0006): neither `sensitive` nor `openToAgents`;
-  the person releases them per session or permanently.
+  - `flow.list({ since?, classes?, text?, limit? })` → `{ flows, more }`:
+    newest first; `since` an ISO 8601 time, only flows started after it
+    (exclusive); `limit` 1–200, default 50; `more` true if older ones match.
+    Each flow `{ id, time (ISO 8601, start), method, url, status (number |
+null while open or failed), class, bytesUp, bytesDown, durationMs (number
+| null while open), state ('open' | 'done' | 'failed' | 'tunnel'), error
+(string | null) }`.
+  - `flow.get({ id })` → the same fields plus `requestHeaders`,
+    `responseHeaders` (redacted), `requestBody`, `responseBody` (text, base64
+    for binary, `null` if none) and `messages` (stream events or WebSocket
+    messages, `{ time, direction, text }`). The 100 000 characters count per
+    direction across body and messages together; `truncated` per direction.
+- **Own session only.** Flows are keyed by origin and session: the agent
+  bay's `proxy.env` call fixes the key (`dev.hangar.agents` of this process,
+  or `local-server:dev.hangar.agents` on the desktop side) for its session id.
+  A caller is accepted only as `{ kind: 'session', bayId:
+'dev.hangar.agents', sessionId }` (or the `local-server` form with the same
+  bay), as the browser bay builds its partitions from `bayId` and
+  `sessionId`; the same session id from another bay or origin gets nothing.
+  A flow of another session is `Unknown flow`; a caller without a session
+  gets `No session`; the functions are not `remote`.
+- **Permission per session** (ADR 0006): both are `sensitive`, because only
+  sensitive functions can be released for one session
+  (`packages/bus/src/bus.ts`, `authorize`); a non-sensitive release would
+  hold for every session of the agent bay. Not `openToAgents`.
 - Same redaction as in the UI. The bodies are the session's own traffic,
   including what other programs of its shell sent (for example a `curl` with a
   token in the body); the description of the tools says so.
@@ -193,7 +228,6 @@ durationMs, error? }`.
 - **No link from the agent bay** to a filtered proxy bay: bays cannot open
   another bay with arguments (`packages/sdk/src/types.ts`); counters and
   filters are in the proxy bay.
-- **Export as HAR** (UI only), redacted as stored, to a file the person picks.
 
 ## Threat model (short)
 

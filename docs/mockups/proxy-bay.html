@@ -420,7 +420,7 @@
         border-top: 1px solid var(--hangar-color-border);
         background: var(--hangar-color-surface);
         display: grid;
-        grid-template-rows: auto auto 1fr;
+        grid-template-rows: auto auto auto 1fr;
         min-height: 0;
       }
       .detail-head {
@@ -465,6 +465,11 @@
         margin: 0;
         white-space: pre-wrap;
         word-break: break-word;
+      }
+      .body-warning {
+        margin: 6px 16px 0;
+        color: var(--hangar-color-text-muted);
+        font-size: 12px;
       }
       .redacted {
         color: var(--hangar-color-status-waiting);
@@ -542,7 +547,9 @@
         <span class="spacer"></span>
         <button class="btn" type="button" aria-pressed="false" id="pause">Pausieren</button>
         <button class="btn" type="button">Leeren</button>
-        <button class="btn" type="button">Als HAR exportieren</button>
+        <button class="btn" type="button" aria-describedby="body-warning">
+          Als HAR exportieren
+        </button>
         <button class="btn" type="button" id="theme" aria-label="Farbschema wechseln">◐</button>
       </header>
 
@@ -673,8 +680,14 @@
               <strong id="d-title"></strong>
               <span class="muted" id="d-meta"></span>
               <span class="spacer"></span>
-              <button class="btn" type="button">Als curl kopieren (geschwärzt)</button>
+              <button class="btn" type="button" aria-describedby="body-warning">
+                Als curl kopieren (Header geschwärzt)
+              </button>
             </div>
+            <p class="body-warning" id="body-warning">
+              Header sind geschwärzt. Bodies können Secrets enthalten – auch beim Kopieren und
+              Exportieren.
+            </p>
             <div role="tablist" aria-label="Ansicht">
               <button
                 role="tab"

@@ -62,4 +62,32 @@ platforms (Windows included), `session.info` (extended).
   scrolling table); fixed by positioning the scroll containers.
 - `prettier --check` on the changed files.
 
-No second Codex round yet.
+## Second round
+
+On `4fd1177` (after the rename to "Proxy" and the agent functions `flow.list`/`flow.get`).
+15 findings, all confirmed and adopted; checked against the code and the installed
+mitmproxy 12.3.1 package.
+
+| #   | Sev.   | Finding                                                                                     | Checked                                                                                  | Change                                                                                        |
+| --- | ------ | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| 1   | high   | First-round 2 still open: agent and proxy bay name each other, `uses` order falls back      | plan text; `bays/agents/src/main/index.ts` restores in `activate`                        | Step 1 is now `ctx.onBaysStarted`; the agent bay restores there                               |
+| 2   | high   | Per-request credential check breaks HTTPS inside an authenticated CONNECT; URLs lacked them | mitmproxy `addons/proxyauth.py` keeps `authenticated` per client connection              | Check at `http_connect`, then per connection; credentials in the URLs; header removed         |
+| 3   | high   | Flows keyed only by session id; same id from another bay or origin                          | `bays/browser/src/main/index.ts` partitions by `bayId` and `sessionId`                   | Key by origin and session; only `dev.hangar.agents` callers; negative tests                   |
+| 4   | high   | "Per session" release does not exist for non-sensitive functions                            | `packages/bus/src/bus.ts` `authorize`: non-sensitive answers become permanent allow/deny | `flow.list`/`flow.get` are `sensitive`; bus test over two sessions                            |
+| 5   | high   | Dumper and log write to the same stdout, unredacted                                         | mitmproxy `addons/dumper.py` writes to `sys.stdout`, option `flow_detail`                | `flow_detail=0`, `termlog_verbosity=error`, log to stderr; test: stdout only JSON lines       |
+| 6   | high   | Fragmented WebSocket messages buffer before the hook; queues not bounded by bytes           | design                                                                                   | 16 MB limit with error row, queues 8 MB, spike point                                          |
+| 7   | medium | Connection hooks give no byte counts for passed hosts                                       | mitmproxy `options.py` `show_ignored_hosts`, `next_layer.py`                             | `show_ignored_hosts=true`, bytes from `tcp_message`, test with known sizes                    |
+| 8   | medium | Pass-through only for port 443                                                              | design                                                                                   | `passThrough({ host, port })`, anchored `host:port`, 8443 test                                |
+| 9   | medium | Without engine a watched session can neither start nor be switched off                      | plan text                                                                                | Only switching on is disabled; test switching off                                             |
+| 10  | medium | Upstream trust uses certifi; the trusted-CA option replaces it                              | mitmproxy `net/tls.py` loads `certifi.where()` by default                                | `upstream.pem` from system roots plus `upstreamCaFile`; public and company CA tested together |
+| 11  | medium | Rewriting the bundle in place mixes old and new trust                                       | design                                                                                   | Bundle generations, never rewritten; effects per shell state specified                        |
+| 12  | medium | MCP contract of `flow.list`/`flow.get` not specified                                        | plan text                                                                                | Schemas, ISO 8601, exclusive `since`, nullable fields, limit per direction                    |
+| 13  | medium | Mockup still promised full redaction                                                        | mockup                                                                                   | "Copy as curl (headers redacted)", body warning at detail, copy and export                    |
+| 14  | medium | Performance criterion not measurable from a trace                                           | design                                                                                   | Scroll run with frame timing, 95th percentile below 25 ms on CI macOS                         |
+| 15  | low    | HAR export both out of scope and planned                                                    | plan text                                                                                | Moved into the decision                                                                       |
+
+Verification of the mockup after round 2: axe 0 violations light and dark, groups open
+and collapsed; focus, arrow keys, visible panel and 640 × 430 without horizontal scroll by
+script; `prettier --check`.
+
+No third round yet.
