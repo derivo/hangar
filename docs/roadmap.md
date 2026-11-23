@@ -649,6 +649,326 @@ claim with a lease, run the agent in a worktree per task, push a branch, note
 and complete; robust against restarts, lost connections, cancellation and usage
 limits. Requires ADR 0046. Steps and acceptance in the ADR.
 
+## Proxy bay
+
+Proposed in [ADR 0049](adr/0049-proxy-bay.md), revised after the Codex review
+([reviews/2026-11-23-traffic-bay-plan.md](reviews/2026-11-23-traffic-bay-plan.md));
+UI mockup [mockups/proxy-bay.html](mockups/proxy-bay.html). Wish
+2026-11-23: see everything an agent session sends and receives, sorted by
+project.
+
+**Goal:** A new bay `dev.hangar.proxy` runs mitmproxy as a local
+intercepting proxy, the agent bay routes watched sessions through it, and the
+person sees each request and response grouped by project and session – model
+API, telemetry, MCP, packages – redacted, in memory, live. macOS, Linux and
+Windows.
+
+**Decided (2026-11-23)**
+
+- Name: "Proxy" in both languages, id `dev.hangar.proxy`, folder `bays/proxy`.
+- Watching is switched only in the agent bay (project default, per session);
+  the proxy bay shows the state.
+- No link from the agent bay to a filtered proxy bay in this plan.
+- Pause stops recording, traffic goes on.
+- Windows is part of the plan.
+- `session.info` gains `color`, `status`, `agent`, `watchActive`.
+- mitmproxy stays an external tool, no own engine in Node.
+- Flows only in memory; across a restart only the HAR export.
+- Agents get `flow.list` and `flow.get` for their own session.
+
+### Step 0 – Spike: what the engine and the agents really do
+
+Throwaway scripts in the scratchpad, no product code. Results go into ADR 0049
+and this section; the ADR changes where a result contradicts it.
+
+1. One `mitmdump --set listen_host=127.0.0.1` with two
+   `regular@127.0.0.1:<port>` listeners; add and remove a third at run time
+   from the addon (`ctx.options.update(mode=…)`), confirm the bind before
+   answering, and record whether open connections of other listeners survive.
+   Check the bound addresses with `lsof -iTCP -sTCP:LISTEN`.
+2. Proxy credentials in `HTTPS_PROXY` (`http://hangar:<pw>@127.0.0.1:<port>`):
+   do `claude -p` and `codex exec` send them? Addon check per listener for
+   plain HTTP and at `http_connect` for HTTPS (connection counts as
+   authenticated afterwards), 407 otherwise.
+3. Codex: start once with only `SSL_CERT_FILE`, once with only
+   `CODEX_CA_CERTIFICATE`; note which one is needed.
+4. Bypass: run both agents with a proxy and compare their open TCP connections
+   (`lsof -i -a -p <pid>` in a loop, children included) with the flows; every
+   connection not to the proxy port is a finding. Repeat with inherited
+   lower-case `https_proxy` and `no_proxy=*` to prove the override.
+5. Streaming: time to the first token of `claude -p` with and without the
+   proxy, with `flow.response.stream` set in `responseheaders`.
+6. WebSocket: does Codex's `codex/responses` arrive in `websocket_message`,
+   and does clearing `flow.websocket.messages` keep memory flat over 10 min?
+   Send 20 MB in fragments without the final one: does the wrapper around
+   `WebsocketLayer._handle_event` (ADR 0049) close both sides with 1009 at
+   16 MB, emit `ws.tooLarge` and free the buffer, without a final fragment?
+7. Windows: `mitmdump.exe` from `uv tool install mitmproxy`, the bundle from
+   `tls.getCACertificates('system')` – is that available in the Node of the
+   Electron version Hangar ships? Both agents once through the proxy.
+
+**Acceptance criteria:** a table in the ADR with one line per point, command and
+result; the ADR names what changed.
+
+### Step 1 – Host: `onBaysStarted`
+
+- `packages/sdk` and `packages/host` (runtime) plus `apps/server` and the
+  desktop host: `ctx.onBaysStarted(listener)`, called once after every bay of
+  the process has finished `activate` (also after a failed one); a listener
+  added later runs at once. Agent bay: `manager.restore()` moves from
+  `activate` into it.
+
+**Acceptance criteria**
+
+1. Red first: a server test with fixture bays "A" and "Z" that name each other
+   in `uses`; "A" calls "Z" in its `onBaysStarted` listener. Called in
+   `activate` today it fails with `Unknown function`; in the listener it
+   succeeds.
+2. A listener added after the start runs at once; a bay whose `activate`
+   throws does not hold the others back.
+
+### Step 2 – Bay skeleton and engine
+
+- `bays/proxy` per skill `new-bay`: manifest (`id dev.hangar.proxy`,
+  functions `proxy.env` and `proxy.status`, both `bayOnly`, and `flow.list`,
+  `flow.get` for agents (`sensitive`, ADR 0049); `uses`
+  `dev.hangar.agents/session.info` and `dev.hangar.agents/project.list`;
+  text settings `mitmdumpPath`, `maxFlows` (default `5000`), `maxMegabytes`
+  (`200`), `upstreamCaFile`, `rules` (one rule per line, defaults below)),
+  `CLAUDE.md`, icon.
+- Shipping: `electron-builder.yml` entry with `dist/**` and `asarUnpack` for
+  `bays/proxy/dist/addon/**`; `IN_SERVER` in `apps/desktop/src/main/index.ts`
+  and the data move of ADR 0036; `docker/linux-server/Dockerfile` and
+  `scripts/linux-server-package.mjs`.
+- `src/main/engine.ts`: find `mitmdump` (setting, then `PATH`; `.exe` on
+  Windows), read its version, start it with `listen_host=127.0.0.1`, no
+  default listener, `flow_detail=0`, `termlog_verbosity=error`,
+  `show_ignored_hosts=true`, `ssl_verify_upstream_trusted_ca=<dataDir>/upstream.pem`,
+  the addon and `confdir=<dataDir>/ca`; restart with backoff
+  1 s, 5 s, 30 s and the same listeners; stop on `deactivate`. Interface
+  `Engine` (`start`, `stop`, `listen`, `unlisten`, `setRules`, `setCapture`,
+  `ignore`, events) so tests use a fake engine.
+- `src/main/protocol.ts`: JSON lines both ways, request ids, `reply` with
+  `ok`/`error`, 5 s timeout, bounded queues (1 000 lines and 8 MB, overflow
+  counted); broken or unknown lines are counted warnings, never a crash.
+- `src/main/ca.ts`: CA on first start (folder 0700, `mitmproxy-ca.pem` 0600,
+  sessions get only `mitmproxy-ca-cert.pem`); `upstream()` writes
+  `<dataDir>/upstream.pem` from the system roots plus `upstreamCaFile`;
+  `bundle(env)` writes `<dataDir>/bundles/<generation>/<session>-<hash>.pem`
+  (hash over the content, never rewritten) from the system roots (macOS
+  `/etc/ssl/cert.pem`; Linux `/etc/ssl/certs/ca-certificates.crt` or
+  `/etc/pki/tls/certs/ca-bundle.crt`; Windows `tls.getCACertificates('system')`),
+  the extra certificates named in the merged environment and the CA; no source
+  → error with the reason. `renew()` in the order of ADR 0049.
+- `addon/hangar_proxy.py` (built to `dist/addon/`): commands from stdin,
+  only its JSON lines to stdout, mitmproxy's log to stderr, per-listener
+  credentials check (plain HTTP per request, HTTPS at `http_connect`, then
+  per connection) and removal of `Proxy-Authorization`, redaction of the copy
+  only, body limit, streaming set in `responseheaders` and `requestheaders`,
+  WebSocket forward and clear, 16 MB limit for fragmented messages via the
+  `_handle_event` wrapper, version check `>=12.3,<13` at start, `tunnel`
+  rows for ignored hosts with bytes counted in `tcp_message`, `capture`
+  on/off.
+
+**Acceptance criteria**
+
+1. Unit tests for `protocol.ts` (timeouts, overflow by lines and by bytes,
+   broken lines), `ca.ts` (modes 0700/0600, bundle with inherited
+   certificates, new generation path on renewal, missing source),
+   engine restart with listeners (fake process); 90 % coverage in
+   `bays/proxy/src/main`.
+2. Integration test with a real `mitmdump` against a test HTTPS server on a
+   host name outside `NO_PROXY` (`proxy-test.invalid` mapped to `127.0.0.1`
+   in the test's resolver, or the proxy's upstream address override), with an
+   own test CA given to mitmproxy as `upstreamCaFile`, and once against a
+   public HTTPS host (both trusted together):
+   - the request appears as `flow.request`/`flow.response` with the session
+     port, `Authorization` redacted in the event,
+   - the test server received the original `Authorization`,
+   - `lsof` (macOS/Linux) or `Get-NetTCPConnection` (Windows) shows only
+     `127.0.0.1` listeners,
+   - a wrong proxy password gets 407, HTTPS through an authenticated CONNECT
+     works, the upstream never sees `Proxy-Authorization`,
+   - stdout of `mitmdump` holds only parsable JSON lines, and a token in a
+     query string appears only redacted,
+   - a pass-through of a host on port 8443 yields a `tunnel` row with the
+     known byte counts.
+     Skipped with a visible reason if `mitmdump` is missing; CI installs it
+     (`uv tool install mitmproxy`) on all three runners.
+3. Packaged smoke test: the addon is a real file under `app.asar.unpacked`
+   and `mitmdump` loads it from there.
+4. `python -m py_compile` of the addon in `pnpm lint`.
+
+### Step 3 – Sessions through the proxy
+
+- Proxy bay `proxy.env({ sessionId, inherited })`: only from
+  `dev.hangar.agents` (bay caller, with or without `local-server:`), which
+  fixes the origin key of the session; idempotent per session (same port
+  and credentials on repeated calls, also after a shell restart; the bundle
+  path changes only when `inherited` yields other certificates); binds the port
+  via `listen` and answers only after its `reply`; returns the variables of
+  ADR 0049 in upper and lower case (proxy URLs with the port's credentials)
+  and the path of the session bundle (built from `inherited`: `{
+NODE_EXTRA_CA_CERTS?, SSL_CERT_FILE?, … }` of the merged environment).
+  `onAgentSessionEnded` unbinds; a freed port is not reused for 60 s.
+  `proxy.status` returns `{ engine: 'running' | 'missing' | 'failed',
+version?, reason? }`.
+- Agent bay: `SessionRecord.watchTraffic` and `Project.watchTraffic` (default
+  for new sessions) in `state.json`. In `startShell` – also on `restore()` –
+  (now in `onBaysStarted`) – a watched session calls `proxy.env` next to
+  `secret.resolve`; the shell
+  starts only after both answers, only the answer of the last start counts.
+  `environment()` applies the proxy variables last, so they override process
+  and session values of the same names in both cases. Failure: `Shell not
+started: <reason>`, `session.exit` -1. `uses` gets
+  `dev.hangar.proxy/proxy.env` and `dev.hangar.proxy/proxy.status`.
+- Agent bay: `session.info` additionally returns `color` (or `null`),
+  `status`, `agent` (or `null`) and `watchActive` (the running shell got proxy
+  variables); additive, the board ignores them.
+- Agent bay UI: checkbox "Watch traffic" in the project overview (default for
+  new sessions) and in the context menu of a session ("Watch traffic – from the
+  next start"); a session whose wish differs from `watchActive` says "applies
+  at the next start". If `proxy.status` reports no proxy bay or no engine,
+  switching on is disabled with the reason (`aria-disabled`, description);
+  switching off always works, so a session whose shell does not start for
+  that reason can be run unwatched again.
+- Proxy bay `src/main/sessions.ts`: session id → `{ projectId, project,
+name, color, status, agent, watchActive, ended }` via `session.info` and
+  `project.list`; asked at `proxy.env` and on UI `state`, at most every 5 s per
+  session; `Unknown session` marks it ended and keeps the last values.
+
+**Acceptance criteria**
+
+1. Unit tests in the agent bay with a fake `call`: watched session gets the
+   variables, unwatched does not and calls nothing, failure blocks the start,
+   only the answer of the last start counts, inherited `https_proxy` and
+   `no_proxy=*` are overridden, `session.info` returns the new fields;
+   without engine a watched session can be switched off and then starts.
+2. Unit tests in the proxy bay: repeated `proxy.env` returns the same port;
+   with other certificates in `inherited` it returns a new bundle path and
+   the old file is byte for byte unchanged; ended session unbinds; a port is not reused within 60 s; the same session
+   id from another origin gets its own key; a renamed session
+   shows the new name after the next refresh; an ended one keeps project and
+   name.
+3. Cold start (server test): a stored watched session restores with its shell
+   running through the proxy, not `Shell not started`.
+4. E2E: a watched session runs `curl https://proxy-test.invalid/` (resolved
+   as in step 2) and the flow appears under its project and session; a
+   request to Hangar's MCP URL does not appear (stays direct); `flow.list`
+   over MCP with the session's token returns the flow, with another session's
+   token not.
+
+### Step 4 – Flow store
+
+- `src/main/store.ts`: ring buffer by count and bytes, flows keyed by id,
+  stream chunks and WebSocket messages appended up to the body limit,
+  classification by `rules` (first match wins), counters per project and
+  session (requests, bytes up and down, errors, per class), pause markers.
+- Default rules:
+
+  ```text
+  model-api   api.anthropic.com/v1/messages
+  model-api   chatgpt.com/backend-api/codex/responses
+  model-api   api.openai.com/v1
+  telemetry   api.anthropic.com/api/event_logging
+  telemetry   api.anthropic.com/api/claude_code/metrics
+  telemetry   chatgpt.com/backend-api/codex/analytics-events
+  telemetry   *.datadoghq.com
+  telemetry   *.sentry.io
+  mcp         mcp-proxy.anthropic.com
+  mcp         api.githubcopilot.com/mcp
+  packages    registry.npmjs.org
+  packages    pypi.org
+  packages    files.pythonhosted.org
+  ```
+
+  Anything else is "other".
+
+- UI channels: `state` (engine, projects in `project.list` order with their
+  sessions and counters), `flows({ project?, session?, classes?, text?,
+errorsOnly?, before?, limit })`, `flow.get(id)`, `clear({ project?,
+session? })`, `pause(boolean)`, `export({ ids? })`, `passThrough({ host,
+port })`,
+  `renewCa`. Events: `state`, `flow` (new or changed, batched every 250 ms).
+
+- Functions for agents `flow.list` and `flow.get` with the schemas of ADR 0049
+  (`sensitive`): only callers `{ kind: 'session', bayId: 'dev.hangar.agents' }`
+  or its `local-server` form, keyed by origin and session.
+
+**Acceptance criteria:** unit tests for `flow.list`/`flow.get` (own flows only,
+another session's id is `Unknown flow`, the same session id from another bay
+or origin gets nothing, a bay caller gets `No session`, schema: `since`
+exclusive, `limit` 1–200, `more`, open and failed flows with `null` fields,
+bodies as `utf8` and as `base64`, a text and a binary WebSocket message, an
+SSE event, `truncated` per direction, repeated header names, 100 000
+characters per direction across body and messages, redaction as in
+the UI), a bus test that a release "for this session" does not reach a second
+session, and unit tests for eviction by count and by bytes, rule
+parsing (invalid line named, default applies), first-match classification,
+filters, batching, pause (during the pause a request passes, nothing is stored
+or counted, the marker row appears on resume).
+
+### Step 5 – UI
+
+As in the mockup ([mockups/proxy-bay.html](mockups/proxy-bay.html)):
+
+- Header: engine state with version and port count, or the install hint
+  (`uv tool install mitmproxy`, `brew install mitmproxy`); "Pause"/"Resume",
+  "Clear", "Export HAR".
+- Left column: "All sessions", then one group per project in the agent bay's
+  order (name, requests, bytes; collapsible, state in `localStorage`) with its
+  watched sessions (tab color stripe, status light with the status as text for
+  screen readers, agent, requests, bytes); ended sessions marked "ended".
+  A project filters to all its sessions, a session to itself.
+- Middle: filter field (host, path, method), class chips with counts,
+  "Follow" toggle; table with time, session, method, host + path, status,
+  class, size, duration. One focusable element per row; selecting keeps focus
+  on it (no re-render of the row list), ↑/↓ move, Enter opens the detail.
+- Detail below or right (by width): tabs "Overview", "Request", "Response",
+  "Stream", "Headers" (WAI-ARIA tabs, panel labelled by the active tab); JSON
+  pretty-printed; redacted values marked; notice "Bodies may contain secrets"
+  in the detail, next to "Copy as curl (headers redacted)" and in the export
+  dialog; "Pass through this host" with host and port on TLS errors.
+- Texts de/en in `messages.ts`; empty states: no engine, no watched session,
+  no flows yet ("Only traffic that uses the proxy is shown").
+
+**Acceptance criteria**
+
+1. E2E with the fake engine: project and session filter, collapse, keyboard
+   selection keeps focus, detail tabs, follow, pause/resume marker, clear, live
+   stream rows.
+2. axe-core light and dark: 0 violations; keyboard walkthrough and 200 % zoom
+   documented; `A11y-Check:` trailer.
+3. 5 000 rows stay usable: virtualized rows; an E2E test scrolls the table
+   from top to bottom in 2 s with `requestAnimationFrame` timing in the page
+   and attaches the frame times; budget: 95th percentile below 25 ms on the
+   CI macOS runner. If it fails, the default limit is lowered.
+
+### Step 6 – Export, pass-through, CA renewal
+
+- HAR 1.2 export of the filtered rows or the selection, redacted as stored,
+  with the warning about bodies.
+- "Pass through this host": escaped and anchored `host:port` for
+  `ignore_hosts`, list in the settings, `tunnel` rows; applies from the next
+  connection.
+- "Renew CA" in the order of ADR 0049 (new bundle generation, cached
+  `proxy.env` answers cleared); running watched shells are named ("restart to
+  trust the new CA").
+
+**Acceptance criteria:** HAR opens in a browser's network panel (manual check,
+noted in STATUS); pass-through of `pinned.invalid:8443` does not match
+`xpinned.invalid:8443` or `pinned.invalid:443`; after renewal a restarted shell
+works, a running one fails TLS and is named, `proxy.env` answers nothing during
+the swap, the old bundle file is unchanged.
+
+### Step 7 – Documentation and review
+
+`bays/proxy/CLAUDE.md`, `docs/mcp.md` (`flow.list`, `flow.get`),
+`docs/bay-development.md` (bay list, `onBaysStarted`), `bays/agents/CLAUDE.md` (watch traffic, `session.info`), README
+packages, STATUS, CHANGELOG "Unreleased", ADR 0049 to "accepted". Codex review
+of the whole diff with `--sandbox read-only`, record in `docs/reviews/`;
+second pass because TLS interception and secrets are involved.
+
 ## Outside this roadmap
 
 Third-party bays (not planned for now: only a registry with own bays; would
