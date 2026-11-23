@@ -649,15 +649,15 @@ claim with a lease, run the agent in a worktree per task, push a branch, note
 and complete; robust against restarts, lost connections, cancellation and usage
 limits. Requires ADR 0046. Steps and acceptance in the ADR.
 
-## Traffic bay
+## Proxy bay
 
-Proposed in [ADR 0049](adr/0049-traffic-bay.md), revised after the Codex review
+Proposed in [ADR 0049](adr/0049-proxy-bay.md), revised after the Codex review
 ([reviews/2026-11-23-traffic-bay-plan.md](reviews/2026-11-23-traffic-bay-plan.md));
-UI mockup [mockups/traffic-bay.html](mockups/traffic-bay.html). Wish
+UI mockup [mockups/proxy-bay.html](mockups/proxy-bay.html). Wish
 2026-11-23: see everything an agent session sends and receives, sorted by
 project.
 
-**Goal:** A new bay `dev.hangar.traffic` runs mitmproxy as a local
+**Goal:** A new bay `dev.hangar.proxy` runs mitmproxy as a local
 intercepting proxy, the agent bay routes watched sessions through it, and the
 person sees each request and response grouped by project and session – model
 API, telemetry, MCP, packages – redacted, in memory, live. macOS, Linux and
@@ -665,19 +665,16 @@ Windows.
 
 **Decided (2026-11-23)**
 
+- Name: "Proxy" in both languages, id `dev.hangar.proxy`, folder `bays/proxy`.
 - Watching is switched only in the agent bay (project default, per session);
-  the traffic bay shows the state.
-- No link from the agent bay to a filtered traffic bay in this plan.
+  the proxy bay shows the state.
+- No link from the agent bay to a filtered proxy bay in this plan.
 - Pause stops recording, traffic goes on.
 - Windows is part of the plan.
 - `session.info` gains `color`, `status`, `agent`, `watchActive`.
-
-**Open questions (default in brackets)**
-
-- Name in the UI ["Traffic" / "Datenverkehr"].
-- mitmproxy as a required external tool or an own engine in Node [mitmproxy].
-- Keep flows across a restart [no, memory only; export as HAR].
-- Functions for agents (`traffic.list` of the own session) [none].
+- mitmproxy stays an external tool, no own engine in Node.
+- Flows only in memory; across a restart only the HAR export.
+- Agents get `flow.list` and `flow.get` for their own session.
 
 ### Step 0 – Spike: what the engine and the agents really do
 
@@ -724,14 +721,15 @@ result; the ADR names what changed.
 
 ### Step 2 – Bay skeleton and engine
 
-- `bays/traffic` per skill `new-bay`: manifest (`id dev.hangar.traffic`,
-  functions `proxy.env` and `proxy.status`, both `bayOnly`; `uses`
+- `bays/proxy` per skill `new-bay`: manifest (`id dev.hangar.proxy`,
+  functions `proxy.env` and `proxy.status`, both `bayOnly`, and `flow.list`,
+  `flow.get` for agents (ADR 0049); `uses`
   `dev.hangar.agents/session.info` and `dev.hangar.agents/project.list`;
   text settings `mitmdumpPath`, `maxFlows` (default `5000`), `maxMegabytes`
   (`200`), `upstreamCaFile`, `rules` (one rule per line, defaults below)),
   `CLAUDE.md`, icon.
 - Shipping: `electron-builder.yml` entry with `dist/**` and `asarUnpack` for
-  `bays/traffic/dist/addon/**`; `IN_SERVER` in `apps/desktop/src/main/index.ts`
+  `bays/proxy/dist/addon/**`; `IN_SERVER` in `apps/desktop/src/main/index.ts`
   and the data move of ADR 0036; `docker/linux-server/Dockerfile` and
   `scripts/linux-server-package.mjs`.
 - `src/main/engine.ts`: find `mitmdump` (setting, then `PATH`; `.exe` on
@@ -750,7 +748,7 @@ result; the ADR names what changed.
   `/etc/pki/tls/certs/ca-bundle.crt`; Windows `tls.getCACertificates('system')`),
   the extra certificates named in the merged environment and the CA; no source
   → error with the reason. `renew()` in the order of ADR 0049.
-- `addon/hangar_traffic.py` (built to `dist/addon/`): commands from stdin,
+- `addon/hangar_proxy.py` (built to `dist/addon/`): commands from stdin,
   events to stdout, per-listener credentials check, redaction of the copy
   only, body limit, streaming set in `responseheaders` and `requestheaders`,
   WebSocket forward and clear, `tunnel` rows from connection hooks for
@@ -761,7 +759,7 @@ result; the ADR names what changed.
 1. Unit tests for `protocol.ts` (timeouts, overflow, broken lines), `ca.ts`
    (modes 0700/0600, bundle with inherited certificates, missing source),
    engine restart with listeners (fake process); 90 % coverage in
-   `bays/traffic/src/main`.
+   `bays/proxy/src/main`.
 2. Integration test with a real `mitmdump` against a test HTTPS server on a
    host name outside `NO_PROXY` (`traffic-test.invalid` mapped to `127.0.0.1`
    in the test's resolver, or the proxy's upstream address override), with an
@@ -780,7 +778,7 @@ result; the ADR names what changed.
 
 ### Step 3 – Sessions through the proxy
 
-- Traffic bay `proxy.env({ sessionId })`: idempotent per session (same port
+- Proxy bay `proxy.env({ sessionId })`: idempotent per session (same port
   and variables on repeated calls, also after a shell restart); binds the port
   via `listen` and answers only after its `reply`; returns the variables of
   ADR 0049 in upper and lower case and the path of the session bundle (built
@@ -796,16 +794,16 @@ version?, reason? }`.
   `environment()` applies the proxy variables last, so they override process
   and session values of the same names in both cases. Failure: `Shell not
 started: <reason>`, `session.exit` -1. `uses` gets
-  `dev.hangar.traffic/proxy.env` and `dev.hangar.traffic/proxy.status`.
+  `dev.hangar.proxy/proxy.env` and `dev.hangar.proxy/proxy.status`.
 - Agent bay: `session.info` additionally returns `color` (or `null`),
   `status`, `agent` (or `null`) and `watchActive` (the running shell got proxy
   variables); additive, the board ignores them.
 - Agent bay UI: checkbox "Watch traffic" in the project overview (default for
   new sessions) and in the context menu of a session ("Watch traffic – from the
   next start"); a session whose wish differs from `watchActive` says "applies
-  at the next start". If `proxy.status` reports no traffic bay or no engine,
+  at the next start". If `proxy.status` reports no proxy bay or no engine,
   the checkbox is disabled with the reason (`aria-disabled`, description).
-- Traffic bay `src/main/sessions.ts`: session id → `{ projectId, project,
+- Proxy bay `src/main/sessions.ts`: session id → `{ projectId, project,
 name, color, status, agent, watchActive, ended }` via `session.info` and
   `project.list`; asked at `proxy.env` and on UI `state`, at most every 5 s per
   session; `Unknown session` marks it ended and keeps the last values.
@@ -816,7 +814,7 @@ name, color, status, agent, watchActive, ended }` via `session.info` and
    variables, unwatched does not and calls nothing, failure blocks the start,
    only the answer of the last start counts, inherited `https_proxy` and
    `no_proxy=*` are overridden, `session.info` returns the new fields.
-2. Unit tests in the traffic bay: repeated `proxy.env` returns the same port;
+2. Unit tests in the proxy bay: repeated `proxy.env` returns the same port;
    ended session unbinds; a port is not reused within 60 s; a renamed session
    shows the new name after the next refresh; an ended one keeps project and
    name.
@@ -824,7 +822,9 @@ name, color, status, agent, watchActive, ended }` via `session.info` and
    running through the proxy, not `Shell not started`.
 4. E2E: a watched session runs `curl https://traffic-test.invalid/` (resolved
    as in step 2) and the flow appears under its project and session; a
-   request to Hangar's MCP URL does not appear (stays direct).
+   request to Hangar's MCP URL does not appear (stays direct); `flow.list`
+   over MCP with the session's token returns the flow, with another session's
+   token not.
 
 ### Step 4 – Flow store
 
@@ -858,14 +858,19 @@ errorsOnly?, before?, limit })`, `flow.get(id)`, `clear({ project?,
 session? })`, `pause(boolean)`, `export({ ids? })`, `passThrough(host)`,
   `renewCa`. Events: `state`, `flow` (new or changed, batched every 250 ms).
 
-**Acceptance criteria:** unit tests for eviction by count and by bytes, rule
+- Functions for agents `flow.list` and `flow.get` (ADR 0049): session from
+  the caller, only own flows, limits 200 rows and 100 000 characters per body.
+
+**Acceptance criteria:** unit tests for `flow.list`/`flow.get` (own flows only,
+another session's id is `Unknown flow`, a bay caller gets `No session`,
+limits, redaction as in the UI), for eviction by count and by bytes, rule
 parsing (invalid line named, default applies), first-match classification,
 filters, batching, pause (during the pause a request passes, nothing is stored
 or counted, the marker row appears on resume).
 
 ### Step 5 – UI
 
-As in the mockup ([mockups/traffic-bay.html](mockups/traffic-bay.html)):
+As in the mockup ([mockups/proxy-bay.html](mockups/proxy-bay.html)):
 
 - Header: engine state with version and port count, or the install hint
   (`uv tool install mitmproxy`, `brew install mitmproxy`); "Pause"/"Resume",
@@ -913,7 +918,8 @@ nothing during the swap.
 
 ### Step 7 – Documentation and review
 
-`bays/traffic/CLAUDE.md`, `docs/bay-development.md` (bay list, activation
+`bays/proxy/CLAUDE.md`, `docs/mcp.md` (`flow.list`, `flow.get`),
+`docs/bay-development.md` (bay list, activation
 order), `bays/agents/CLAUDE.md` (watch traffic, `session.info`), README
 packages, STATUS, CHANGELOG "Unreleased", ADR 0049 to "accepted". Codex review
 of the whole diff with `--sandbox read-only`, record in `docs/reviews/`;

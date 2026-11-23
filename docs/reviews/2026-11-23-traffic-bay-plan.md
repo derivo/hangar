@@ -1,11 +1,15 @@
 # Review: traffic bay plan (2026-11-23)
 
 Reviewer: Codex (`codex exec -s read-only`), on PR #40 at `80fc1b5` (ADR 0049, the
-"Traffic bay" section of the roadmap, `docs/mockups/traffic-bay.html`). A first run on
+"Traffic bay" section of the roadmap, `docs/mockups/traffic-bay.html` (now `proxy-bay.html`)). A first run on
 `c0d84a2` was stopped before it finished, because the grouping by project and a gap found
 meanwhile were not yet in the PR.
 
 ## Context
+
+After this review the bay was renamed to "Proxy" (`dev.hangar.proxy`, ADR
+[0049-proxy-bay.md](../adr/0049-proxy-bay.md), mockup `docs/mockups/proxy-bay.html`); the
+record keeps the old name.
 
 Plan only, no product code. Codex was asked to check the plan against the code and the
 mitmproxy 12.3.1 sources, not against itself. Every finding was checked here against the

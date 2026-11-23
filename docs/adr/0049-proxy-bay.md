@@ -1,4 +1,4 @@
-# ADR 0049 – Traffic bay: watch what agent sessions send and receive
+# ADR 0049 – Proxy bay: watch what agent sessions send and receive
 
 Status: proposed 2026-11-23, revised after the Codex review
 ([reviews/2026-11-23-traffic-bay-plan.md](../reviews/2026-11-23-traffic-bay-plan.md)).
@@ -7,8 +7,8 @@ Builds on [ADR 0004](0004-bay-runtime.md) (bay runtime),
 start), [ADR 0032](0032-manifest-permissions.md) (`uses`),
 [ADR 0036](0036-shells-survive-restart.md) (agent bay in the local server) and
 [ADR 0037](0037-board-bay.md) (`session.info`, `project.list`). UI mockup:
-[mockups/traffic-bay.html](../mockups/traffic-bay.html). Plan:
-[roadmap.md – Traffic bay](../roadmap.md#traffic-bay).
+[mockups/proxy-bay.html](../mockups/proxy-bay.html). Plan:
+[roadmap.md – Proxy bay](../roadmap.md#proxy-bay).
 
 ## Context
 
@@ -36,7 +36,7 @@ The captured file held access tokens in plain text.
 
 ### Bay and engine
 
-- **New bay `dev.hangar.traffic`** ("Traffic" / "Datenverkehr"). Its main part
+- **New bay `dev.hangar.proxy`** ("Proxy" in both languages, so it is unmistakable). Its main part
   runs a local intercepting proxy, its UI lists the flows per project and
   session. It has no `hostModules`. Like the agent bay it belongs to the local
   server (ADR 0036): it joins `IN_SERVER` in `apps/desktop/src/main/index.ts`,
@@ -45,7 +45,7 @@ The captured file held access tokens in plain text.
   (`docker/linux-server/Dockerfile`, `scripts/linux-server-package.mjs`).
 - **Engine: mitmproxy, not an own TLS interceptor.** The bay starts `mitmdump`
   as a child process with an addon shipped in the bay. The build copies it to
-  `dist/addon/hangar_traffic.py`; `electron-builder.yml` unpacks it from
+  `dist/addon/hangar_proxy.py`; `electron-builder.yml` unpacks it from
   `app.asar` (`asarUnpack`), because an external Python cannot read inside the
   archive. mitmproxy is not bundled: the bay looks for `mitmdump` on `PATH` or
   in the setting `mitmdumpPath`.
@@ -62,7 +62,7 @@ listen_host=127.0.0.1` and without a default listener; each session gets
   `regular@127.0.0.1:<port>`. The integration test checks the bound addresses.
 - **Start order.** The server activates bays in alphabetical order, and the
   agent bay restores shells in `activate` right after offering its functions
-  (`bays/agents/src/main/index.ts`), before a traffic bay would exist. The
+  (`bays/agents/src/main/index.ts`), before a proxy bay would exist. The
   host therefore activates bays in the order of their `uses`: a bay whose
   `uses` names a bay that runs in the same process is activated after it
   (cycles: alphabetical as today, with a warning). A missing bay stays an
@@ -71,11 +71,11 @@ listen_host=127.0.0.1` and without a default listener; each session gets
 ### Sessions
 
 - **Opt-in per session**, default for new sessions from the project, default
-  off. Only the agent bay switches it; the traffic bay shows the state.
+  off. Only the agent bay switches it; the proxy bay shows the state.
 - **Hand-over at shell start like passwords (ADR 0021).** If `watchTraffic` is
-  on, the agent bay calls `dev.hangar.traffic/proxy.env({ sessionId, inherited })` (`inherited`: the CA variables of the merged environment)
+  on, the agent bay calls `dev.hangar.proxy/proxy.env({ sessionId, inherited })` (`inherited`: the CA variables of the merged environment)
   (`bayOnly`, in its `uses`) before `spawnShell`, also for restored sessions.
-  The shell starts only with an answer. A missing traffic bay, a missing
+  The shell starts only with an answer. A missing proxy bay, a missing
   `mitmdump`, a failed engine or a timeout write `Shell not started: <reason>`
   and report `session.exit` -1. A watched session never runs unwatched;
   unwatched sessions are not affected by any of this.
@@ -166,12 +166,33 @@ listen_host=127.0.0.1` and without a default listener; each session gets
   its state, at most every 5 s per session; an ended session keeps the last
   values. The UI groups sessions under their project.
 
+### Functions for agents
+
+- An agent reads the traffic of its own session, for example to check which
+  requests a tool sent or why one failed. Two MCP tools, like those of the
+  browser bay:
+  - `flow.list({ since?, classes?, text?, limit? })`: newest first, at most
+    200, each `{ id, time, method, url, status, class, bytesUp, bytesDown,
+durationMs, error? }`.
+  - `flow.get({ id })`: one flow with redacted headers, bodies up to 100 000
+    characters per direction (`truncated`), stream events or WebSocket
+    messages up to the same limit.
+- **Own session only.** The bay takes the session from the caller
+  (`caller.kind === 'session'`, or `local-server` with its `sessionId`, as the
+  browser bay does for its partitions); a flow of another session is
+  `Unknown flow`. A caller without a session gets `No session`; the functions
+  are not `remote`.
+- **Permission as usual** (ADR 0006): neither `sensitive` nor `openToAgents`;
+  the person releases them per session or permanently.
+- Same redaction as in the UI. The bodies are the session's own traffic,
+  including what other programs of its shell sent (for example a `curl` with a
+  token in the body); the description of the tools says so.
+
 ### Out of scope
 
-- **No functions for agents.** Only `bayOnly` `proxy.env` and `proxy.status`.
-- **No link from the agent bay** to a filtered traffic bay: bays cannot open
+- **No link from the agent bay** to a filtered proxy bay: bays cannot open
   another bay with arguments (`packages/sdk/src/types.ts`); counters and
-  filters are in the traffic bay.
+  filters are in the proxy bay.
 - **Export as HAR** (UI only), redacted as stored, to a file the person picks.
 
 ## Threat model (short)
@@ -185,6 +206,8 @@ listen_host=127.0.0.1` and without a default listener; each session gets
   Listening only on `127.0.0.1` limits this to the own machine.
 - Tools that ignore proxy variables bypass the bay; step 0 measures the
   agents, the UI says "Only traffic that uses the proxy is shown".
+- An agent with released `flow.get` reads bodies of everything its shell
+  sent, also of programs it did not start itself in that shell.
 - Captured bodies can contain secrets the redaction misses. They stay in
   memory; detail view, copy and export warn.
 
@@ -198,6 +221,8 @@ listen_host=127.0.0.1` and without a default listener; each session gets
   A native engine in Node can replace mitmproxy later behind the same
   protocol.
 - Host change: activation order by `uses` (affects all bays, own test).
+- Two new MCP tools (`dev.hangar.proxy/flow.list`, `flow.get`), documented in
+  `docs/mcp.md`.
 - Agent bay change: `session.info` gains four fields, `watchTraffic` on
   projects and sessions.
 
@@ -212,5 +237,5 @@ listen_host=127.0.0.1` and without a default listener; each session gets
   needs elevated rights.
 - **Reading agent logs** instead of a proxy: incomplete, different per agent,
   no telemetry.
-- **A function of the agent bay to switch watching from the traffic bay**:
+- **A function of the agent bay to switch watching from the proxy bay**:
   one place to switch is enough.
