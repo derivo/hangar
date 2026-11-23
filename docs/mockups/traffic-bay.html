@@ -1,0 +1,866 @@
+<!doctype html>
+<html lang="de" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hangar – Datenverkehr (Mockup)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Michroma&family=Geist+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* Mockup for ADR 0049. Token names as in @hangar/theme, values copied from tokens.css. */
+      :root,
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --hangar-color-bg: #111214;
+        --hangar-color-surface: #18191c;
+        --hangar-color-surface-raised: #1f2024;
+        --hangar-color-border: #2e2f33;
+        --hangar-color-text: #eeeae5;
+        --hangar-color-text-muted: #a19b94;
+        --hangar-color-accent: #ff8a2a;
+        --hangar-color-accent-text: #1a0d00;
+        --hangar-color-focus: #ff8a2a;
+        --hangar-color-danger: #ff7b72;
+        --hangar-color-status-working: #ff8a2a;
+        --hangar-color-status-waiting: #ffd84a;
+        --hangar-color-status-done: #7bd88f;
+        --hangar-color-status-idle: #8a857f;
+        --hangar-color-dock: #111214;
+        --hangar-color-dock-text: #a19b94;
+        --hangar-color-glow: #ff8a2a;
+        --hangar-color-tab-teal: #49d6f0;
+        --hangar-color-tab-violet: #c3a6ff;
+        --hangar-color-tab-green: #4fd19b;
+      }
+      [data-theme='light'] {
+        color-scheme: light;
+        --hangar-color-bg: #f1efec;
+        --hangar-color-surface: #fbfaf8;
+        --hangar-color-surface-raised: #ffffff;
+        --hangar-color-border: #d9d5cf;
+        --hangar-color-text: #17140f;
+        --hangar-color-text-muted: #5f5a53;
+        --hangar-color-accent: #b34a00;
+        --hangar-color-accent-text: #ffffff;
+        --hangar-color-focus: #b34a00;
+        --hangar-color-danger: #b42318;
+        --hangar-color-status-working: #b34a00;
+        --hangar-color-status-waiting: #8f6c00;
+        --hangar-color-status-done: #1d7a3a;
+        --hangar-color-status-idle: #6f6a63;
+        --hangar-color-dock: #17140f;
+        --hangar-color-dock-text: #a19b94;
+        --hangar-color-glow: #b34a00;
+        --hangar-color-tab-teal: #0a6e7d;
+        --hangar-color-tab-violet: #6d28d9;
+        --hangar-color-tab-green: #136b4b;
+      }
+      :root {
+        --hangar-font-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+        --hangar-font-display: 'Michroma', 'Geist', system-ui, sans-serif;
+        --hangar-radius: 6px;
+        --hangar-glow: 0 0 10px color-mix(in srgb, var(--hangar-color-glow) 35%, transparent);
+        --sidebar: 64px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        height: 100vh;
+        display: grid;
+        grid-template-columns: var(--sidebar) 1fr;
+        background: var(--hangar-color-bg);
+        color: var(--hangar-color-text);
+        font: 13px/1.45 var(--hangar-font-mono);
+      }
+      button,
+      input {
+        font: inherit;
+        color: inherit;
+      }
+      :focus-visible {
+        outline: 2px solid var(--hangar-color-focus);
+        outline-offset: 2px;
+      }
+      .muted {
+        color: var(--hangar-color-text-muted);
+      }
+
+      /* Sidebar of the app (only to place the bay). */
+      .dock {
+        background: var(--hangar-color-dock);
+        border-right: 1px solid var(--hangar-color-border);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 0;
+      }
+      .dock span {
+        width: 36px;
+        height: 36px;
+        border-radius: var(--hangar-radius);
+        border: 1px solid #2e2f33;
+        display: grid;
+        place-items: center;
+        color: var(--hangar-color-dock-text);
+        font-size: 11px;
+      }
+      .dock span[aria-current] {
+        border-color: #ff8a2a;
+        color: #ff8a2a;
+        box-shadow: 0 0 10px rgb(255 138 42 / 0.35);
+      }
+
+      .bay {
+        display: grid;
+        grid-template-rows: auto 1fr;
+        min-width: 0;
+        min-height: 0;
+      }
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--hangar-color-border);
+      }
+      h1 {
+        font: 400 15px var(--hangar-font-display);
+        letter-spacing: 0.06em;
+        margin: 0 8px 0 0;
+      }
+      .engine {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .light {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--hangar-color-status-done);
+        flex: none;
+      }
+      .light.working {
+        background: var(--hangar-color-status-working);
+        box-shadow: var(--hangar-glow);
+      }
+      .light.idle {
+        background: var(--hangar-color-status-idle);
+      }
+      .spacer {
+        flex: 1;
+      }
+      .btn {
+        border: 1px solid var(--hangar-color-border);
+        background: var(--hangar-color-surface);
+        border-radius: 4px;
+        padding: 4px 10px;
+        cursor: pointer;
+      }
+      .btn:hover {
+        border-color: var(--hangar-color-accent);
+      }
+      .btn[aria-pressed='true'] {
+        border-color: var(--hangar-color-accent);
+        color: var(--hangar-color-accent);
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 230px minmax(0, 1fr);
+        min-height: 0;
+      }
+      nav.sessions {
+        border-right: 1px solid var(--hangar-color-border);
+        padding: 10px 8px;
+        overflow: auto;
+      }
+      nav.sessions h2,
+      .detail h2 {
+        font-size: 11px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--hangar-color-text-muted);
+        margin: 4px 8px 8px;
+      }
+      .session {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 8px 1fr;
+        gap: 2px 8px;
+        align-items: center;
+        text-align: left;
+        padding: 8px;
+        margin-bottom: 4px;
+        border: 1px solid transparent;
+        border-radius: var(--hangar-radius);
+        background: none;
+        cursor: pointer;
+        box-shadow: inset 3px 0 0 var(--tab, transparent);
+      }
+      .session[aria-current='true'] {
+        border-color: var(--hangar-color-accent);
+        box-shadow:
+          inset 3px 0 0 var(--tab, transparent),
+          var(--hangar-glow);
+      }
+      .session small {
+        grid-column: 2;
+        color: var(--hangar-color-text-muted);
+      }
+      /* Ended: dashed outline and muted name, no opacity (contrast stays 4.5:1). */
+      .session.ended {
+        border: 1px dashed var(--hangar-color-border);
+        color: var(--hangar-color-text-muted);
+      }
+
+      .main {
+        display: grid;
+        grid-template-rows: auto auto minmax(120px, 1fr) minmax(200px, 42%);
+        min-width: 0;
+        min-height: 0;
+      }
+      .filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--hangar-color-border);
+      }
+      .filters input[type='search'] {
+        flex: 1 1 220px;
+        min-width: 0;
+        background: var(--hangar-color-surface);
+        border: 1px solid var(--hangar-color-border);
+        border-radius: 4px;
+        padding: 4px 8px;
+      }
+      .chip {
+        border: 1px solid var(--hangar-color-border);
+        border-radius: 999px;
+        padding: 2px 10px;
+        background: none;
+        cursor: pointer;
+      }
+      .chip[aria-pressed='true'] {
+        border-color: var(--hangar-color-accent);
+        background: color-mix(in srgb, var(--hangar-color-accent) 14%, transparent);
+      }
+      .chip .n {
+        color: var(--hangar-color-text-muted);
+        margin-left: 4px;
+      }
+      .summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 20px;
+        padding: 6px 16px;
+        border-bottom: 1px solid var(--hangar-color-border);
+        color: var(--hangar-color-text-muted);
+      }
+      .summary b {
+        color: var(--hangar-color-text);
+        font-weight: 500;
+      }
+      .table-wrap {
+        overflow: auto;
+        min-height: 0;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th {
+        position: sticky;
+        top: 0;
+        background: var(--hangar-color-bg);
+        text-align: left;
+        font-weight: 500;
+        color: var(--hangar-color-text-muted);
+        border-bottom: 1px solid var(--hangar-color-border);
+        padding: 6px 8px;
+        white-space: nowrap;
+      }
+      td {
+        padding: 0;
+        border-bottom: 1px solid var(--hangar-color-border);
+        white-space: nowrap;
+      }
+      td > button {
+        all: unset;
+        display: block;
+        padding: 5px 8px;
+        cursor: pointer;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 46ch;
+      }
+      td > button:focus-visible {
+        outline: 2px solid var(--hangar-color-focus);
+        outline-offset: -2px;
+      }
+      /* Selection without a tint: status colours keep 4.5:1. */
+      tr[aria-selected='true'] td {
+        background: var(--hangar-color-surface-raised);
+        box-shadow:
+          inset 0 1px 0 var(--hangar-color-accent),
+          inset 0 -1px 0 var(--hangar-color-accent);
+      }
+      tr:hover td {
+        background: var(--hangar-color-surface);
+      }
+      .tab-stripe {
+        display: inline-block;
+        width: 3px;
+        height: 12px;
+        margin-right: 6px;
+        vertical-align: -1px;
+        background: var(--tab);
+      }
+      .cls {
+        font-size: 11px;
+        border: 1px solid var(--hangar-color-border);
+        border-radius: 4px;
+        padding: 0 5px;
+      }
+      .cls.api {
+        border-color: var(--hangar-color-accent);
+        color: var(--hangar-color-accent);
+      }
+      .status-err {
+        color: var(--hangar-color-danger);
+      }
+      .num {
+        text-align: right;
+      }
+      .live {
+        color: var(--hangar-color-status-working);
+      }
+
+      .detail {
+        border-top: 1px solid var(--hangar-color-border);
+        background: var(--hangar-color-surface);
+        display: grid;
+        grid-template-rows: auto auto 1fr;
+        min-height: 0;
+      }
+      .detail-head {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 16px;
+        align-items: center;
+        padding: 10px 16px 0;
+      }
+      .detail-head strong {
+        font-weight: 500;
+        word-break: break-all;
+      }
+      [role='tablist'] {
+        display: flex;
+        gap: 4px;
+        padding: 8px 16px 0;
+        border-bottom: 1px solid var(--hangar-color-border);
+      }
+      [role='tab'] {
+        background: none;
+        border: 1px solid transparent;
+        border-bottom: none;
+        border-radius: 4px 4px 0 0;
+        padding: 5px 10px;
+        cursor: pointer;
+        color: var(--hangar-color-text-muted);
+      }
+      [role='tab'][aria-selected='true'] {
+        color: var(--hangar-color-text);
+        border-color: var(--hangar-color-border);
+        background: var(--hangar-color-surface-raised);
+        box-shadow: inset 0 2px 0 var(--hangar-color-accent);
+      }
+      [role='tabpanel'] {
+        overflow: auto;
+        padding: 12px 16px;
+        background: var(--hangar-color-surface-raised);
+        min-height: 0;
+      }
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .redacted {
+        color: var(--hangar-color-status-waiting);
+      }
+      dl {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 4px 16px;
+        margin: 0;
+      }
+      dt {
+        color: var(--hangar-color-text-muted);
+      }
+      dd {
+        margin: 0;
+        word-break: break-all;
+      }
+      .hint {
+        border: 1px dashed var(--hangar-color-border);
+        border-radius: var(--hangar-radius);
+        padding: 8px 12px;
+        margin: 8px 16px;
+        color: var(--hangar-color-text-muted);
+      }
+      .note {
+        position: fixed;
+        right: 12px;
+        bottom: 12px;
+        max-width: 340px;
+        font-size: 11px;
+        padding: 8px 10px;
+        border: 1px solid var(--hangar-color-border);
+        border-radius: var(--hangar-radius);
+        background: var(--hangar-color-surface-raised);
+        color: var(--hangar-color-text-muted);
+      }
+      @media (max-width: 900px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+        nav.sessions {
+          border-right: none;
+          border-bottom: 1px solid var(--hangar-color-border);
+          display: flex;
+          gap: 6px;
+          overflow-x: auto;
+        }
+        nav.sessions h2 {
+          display: none;
+        }
+        .session {
+          width: auto;
+          min-width: 170px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="dock" aria-label="Bays">
+      <span>AG</span><span>BR</span><span>BO</span><span>PW</span>
+      <span aria-current="page" title="Datenverkehr">DV</span>
+    </div>
+
+    <div class="bay">
+      <header>
+        <h1>DATENVERKEHR</h1>
+        <div class="engine" role="status">
+          <span class="light"></span>
+          <span>mitmproxy 12.3.1 läuft · 127.0.0.1 · 3 Ports</span>
+        </div>
+        <span class="spacer"></span>
+        <button class="btn" type="button" aria-pressed="false" id="pause">Pausieren</button>
+        <button class="btn" type="button">Leeren</button>
+        <button class="btn" type="button">Als HAR exportieren</button>
+        <button class="btn" type="button" id="theme" aria-label="Farbschema wechseln">◐</button>
+      </header>
+
+      <div class="layout">
+        <nav class="sessions" aria-label="Sessions">
+          <h2>Beobachtete Sessions</h2>
+          <button class="session" type="button">
+            <span class="light idle"></span><span>Alle Sessions</span>
+            <small>214 Anfragen · 3,8 MB</small>
+          </button>
+          <button
+            class="session"
+            type="button"
+            aria-current="true"
+            style="--tab: var(--hangar-color-tab-teal)"
+          >
+            <span class="light working"></span><span>hangar · Proxy-Bay planen</span>
+            <small>Claude Code · 148 Anfragen · 2,9 MB</small>
+          </button>
+          <button class="session" type="button" style="--tab: var(--hangar-color-tab-violet)">
+            <span class="light"></span><span>hangar · Review 0.9.0</span>
+            <small>Codex · 61 Anfragen · 0,8 MB</small>
+          </button>
+          <button class="session ended" type="button" style="--tab: var(--hangar-color-tab-green)">
+            <span class="light idle"></span><span>board · 3f2a9c1e</span>
+            <small>beendet · 5 Anfragen · 12 kB</small>
+          </button>
+        </nav>
+
+        <section class="main" aria-label="Anfragen">
+          <div class="filters">
+            <label class="muted" for="q">Filter</label>
+            <input id="q" type="search" placeholder="Host, Pfad oder Methode" />
+            <button class="chip" type="button" aria-pressed="true">
+              Modell-API<span class="n">23</span>
+            </button>
+            <button class="chip" type="button" aria-pressed="true">
+              Telemetrie<span class="n">71</span>
+            </button>
+            <button class="chip" type="button" aria-pressed="true">
+              MCP<span class="n">38</span>
+            </button>
+            <button class="chip" type="button" aria-pressed="true">
+              Pakete<span class="n">4</span>
+            </button>
+            <button class="chip" type="button" aria-pressed="true">
+              Sonstige<span class="n">12</span>
+            </button>
+            <button class="chip" type="button" aria-pressed="false">
+              Nur Fehler<span class="n">2</span>
+            </button>
+            <button class="btn" type="button" aria-pressed="true" id="follow">Folgen</button>
+          </div>
+
+          <div class="summary" aria-live="off">
+            <span>Session <b>hangar · Proxy-Bay planen</b></span>
+            <span>gesendet <b>1,1 MB</b></span>
+            <span>empfangen <b>1,8 MB</b></span>
+            <span>Hosts <b>7</b></span>
+            <span>Fehler <b>2</b></span>
+          </div>
+
+          <div class="table-wrap">
+            <table aria-label="Anfragen der Session">
+              <thead>
+                <tr>
+                  <th scope="col">Zeit</th>
+                  <th scope="col">Session</th>
+                  <th scope="col">Methode</th>
+                  <th scope="col">Host und Pfad</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Art</th>
+                  <th scope="col" class="num">Größe</th>
+                  <th scope="col" class="num">Dauer</th>
+                </tr>
+              </thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+
+          <section class="detail" aria-label="Details der Anfrage">
+            <div class="detail-head">
+              <strong id="d-title"></strong>
+              <span class="muted" id="d-meta"></span>
+              <span class="spacer"></span>
+              <button class="btn" type="button">Als curl kopieren (geschwärzt)</button>
+            </div>
+            <div role="tablist" aria-label="Ansicht">
+              <button
+                role="tab"
+                type="button"
+                aria-selected="true"
+                aria-controls="panel"
+                data-tab="overview"
+              >
+                Übersicht
+              </button>
+              <button
+                role="tab"
+                type="button"
+                aria-selected="false"
+                aria-controls="panel"
+                data-tab="request"
+                tabindex="-1"
+              >
+                Anfrage
+              </button>
+              <button
+                role="tab"
+                type="button"
+                aria-selected="false"
+                aria-controls="panel"
+                data-tab="response"
+                tabindex="-1"
+              >
+                Antwort
+              </button>
+              <button
+                role="tab"
+                type="button"
+                aria-selected="false"
+                aria-controls="panel"
+                data-tab="stream"
+                tabindex="-1"
+              >
+                Stream
+              </button>
+              <button
+                role="tab"
+                type="button"
+                aria-selected="false"
+                aria-controls="panel"
+                data-tab="headers"
+                tabindex="-1"
+              >
+                Header
+              </button>
+            </div>
+            <div role="tabpanel" id="panel" tabindex="0"></div>
+          </section>
+        </section>
+      </div>
+    </div>
+
+    <p class="note">
+      Mockup zu ADR 0049 – Beispieldaten, keine Logik. Nur Verkehr, der den Proxy nutzt, wird
+      gezeigt.
+    </p>
+
+    <script>
+      const teal = 'var(--hangar-color-tab-teal)';
+      const violet = 'var(--hangar-color-tab-violet)';
+      const flows = [
+        {
+          t: '11:19:12.70',
+          tab: teal,
+          s: 'Proxy-Bay',
+          m: 'GET',
+          u: 'api.anthropic.com/api/claude_cli/bootstrap',
+          st: 200,
+          c: 'Sonstige',
+          size: '3,1 kB',
+          d: '84 ms',
+        },
+        {
+          t: '11:19:12.74',
+          tab: teal,
+          s: 'Proxy-Bay',
+          m: 'POST',
+          u: 'api.githubcopilot.com/mcp/',
+          st: 200,
+          c: 'MCP',
+          size: '1,4 kB',
+          d: '212 ms',
+        },
+        {
+          t: '11:19:12.81',
+          tab: teal,
+          s: 'Proxy-Bay',
+          m: 'GET',
+          u: 'registry.npmjs.org/@playwright%2fmcp',
+          st: 200,
+          c: 'Pakete',
+          size: '88 kB',
+          d: '140 ms',
+        },
+        {
+          t: '11:19:13.02',
+          tab: teal,
+          s: 'Proxy-Bay',
+          m: 'POST',
+          u: 'api.anthropic.com/v1/messages?beta=true',
+          st: 200,
+          c: 'Modell-API',
+          size: '41 kB ↑ · 6,2 kB ↓',
+          d: '4,8 s',
+          live: true,
+        },
+        {
+          t: '11:19:13.05',
+          tab: teal,
+          s: 'Proxy-Bay',
+          m: 'POST',
+          u: 'api.anthropic.com/api/event_logging/v2/batch',
+          st: 200,
+          c: 'Telemetrie',
+          size: '9,7 kB',
+          d: '96 ms',
+        },
+        {
+          t: '11:19:13.40',
+          tab: teal,
+          s: 'Proxy-Bay',
+          m: 'POST',
+          u: 'http-intake.logs.us5.datadoghq.com/api/v2/logs',
+          st: 202,
+          c: 'Telemetrie',
+          size: '2,2 kB',
+          d: '310 ms',
+        },
+        {
+          t: '11:21:40.11',
+          tab: violet,
+          s: 'Review 0.9.0',
+          m: 'GET',
+          u: 'chatgpt.com/backend-api/codex/responses',
+          st: 101,
+          c: 'Modell-API',
+          size: 'WebSocket · 52 Nachr.',
+          d: 'offen',
+          live: true,
+        },
+        {
+          t: '11:21:40.30',
+          tab: violet,
+          s: 'Review 0.9.0',
+          m: 'POST',
+          u: 'chatgpt.com/backend-api/codex/analytics-events/events',
+          st: 200,
+          c: 'Telemetrie',
+          size: '1,9 kB',
+          d: '120 ms',
+        },
+        {
+          t: '11:22:05.77',
+          tab: teal,
+          s: 'Proxy-Bay',
+          m: 'CONNECT',
+          u: 'pinned.example.com:443',
+          st: 'TLS',
+          c: 'Sonstige',
+          size: '–',
+          d: '–',
+          err: 'Client lehnt das Zertifikat ab',
+        },
+      ];
+      const rows = document.getElementById('rows');
+      let selected = 3;
+      let tab = 'overview';
+
+      function cell(text, cls) {
+        const td = document.createElement('td');
+        if (cls) td.className = cls;
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.tabIndex = -1;
+        b.innerHTML = text;
+        td.append(b);
+        return td;
+      }
+      function render() {
+        rows.replaceChildren();
+        flows.forEach((f, i) => {
+          const tr = document.createElement('tr');
+          tr.setAttribute('aria-selected', String(i === selected));
+          const status = f.err
+            ? `<span class="status-err">${f.st} ✕</span>`
+            : f.live
+              ? `<span class="live">${f.st} ●</span>`
+              : String(f.st);
+          tr.append(
+            cell(f.t),
+            cell(`<span class="tab-stripe" style="--tab:${f.tab}"></span>${f.s}`),
+            cell(f.m),
+            cell(f.u),
+            cell(status),
+            cell(`<span class="cls ${f.c === 'Modell-API' ? 'api' : ''}">${f.c}</span>`),
+            cell(f.size, 'num'),
+            cell(f.d, 'num'),
+          );
+          const first = tr.querySelector('button');
+          first.tabIndex = i === selected ? 0 : -1;
+          first.setAttribute('aria-label', `${f.m} ${f.u}, Status ${f.st}, ${f.c}`);
+          tr.addEventListener('click', () => select(i, false));
+          rows.append(tr);
+        });
+        detail();
+      }
+      function select(i, focus) {
+        selected = Math.max(0, Math.min(flows.length - 1, i));
+        render();
+        if (focus) rows.children[selected].querySelector('button').focus();
+      }
+      rows.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          select(selected + 1, true);
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          select(selected - 1, true);
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          document.getElementById('panel').focus();
+        }
+      });
+
+      const R = '<span class="redacted">•••• (geschwärzt, 108 Zeichen)</span>';
+      const panels = {
+        overview: (f) => `<dl>
+          <dt>Session</dt><dd>${f.s}</dd>
+          <dt>Adresse</dt><dd>https://${f.u}</dd>
+          <dt>Status</dt><dd>${f.err ? `<span class="status-err">${f.err}</span> · <button class="btn" type="button">Diesen Host durchleiten</button>` : f.st}</dd>
+          <dt>Art</dt><dd>${f.c}</dd>
+          <dt>Größe</dt><dd>${f.size}</dd>
+          <dt>Dauer</dt><dd>${f.d}</dd>
+          <dt>TLS</dt><dd>${f.err ? 'abgebrochen' : 'entschlüsselt · Upstream-Zertifikat geprüft'}</dd>
+        </dl>`,
+        request: () => `<pre>{
+  "model": "claude-opus-5-5",
+  "max_tokens": 32000,
+  "stream": true,
+  "system": [ … 3 Einträge, 18,4 kB ],
+  "messages": [
+    { "role": "user", "content": "plan das bay bitte vollständig aus …" },
+    … 46 weitere
+  ],
+  "tools": [ … 212 Einträge ]
+}</pre>`,
+        response: () => `<pre>HTTP/2 200  text/event-stream
+Gestreamt – siehe „Stream“. Gespeichert: 6,2 kB von 6,2 kB.</pre>`,
+        stream: () => `<pre>event: message_start      11:19:13.61
+event: content_block_start 11:19:13.62
+event: content_block_delta 11:19:13.70  {"type":"text_delta","text":"Plane jetzt drei …"}
+event: content_block_delta 11:19:13.74  …
+<span class="live">● läuft – 214 Ereignisse</span></pre>`,
+        headers: () => `<dl>
+          <dt>authorization</dt><dd>${R}</dd>
+          <dt>anthropic-version</dt><dd>2023-06-01</dd>
+          <dt>anthropic-beta</dt><dd>oauth-2025-04-20,…</dd>
+          <dt>user-agent</dt><dd>claude-cli/2.1.330 (external, sdk-cli)</dd>
+          <dt>x-api-key</dt><dd>—</dd>
+          <dt>content-type</dt><dd>application/json</dd>
+        </dl>`,
+      };
+      function detail() {
+        const f = flows[selected];
+        document.getElementById('d-title').textContent = `${f.m} https://${f.u}`;
+        document.getElementById('d-meta').textContent = `${f.s} · ${f.t} · ${f.d}`;
+        document.getElementById('panel').innerHTML = panels[tab](f);
+      }
+      const tabs = [...document.querySelectorAll('[role="tab"]')];
+      tabs.forEach((b, i) => {
+        b.addEventListener('click', () => choose(i));
+        b.addEventListener('keydown', (e) => {
+          if (e.key === 'ArrowRight') choose((i + 1) % tabs.length, true);
+          if (e.key === 'ArrowLeft') choose((i - 1 + tabs.length) % tabs.length, true);
+        });
+      });
+      function choose(i, focus) {
+        tabs.forEach((b, j) => {
+          b.setAttribute('aria-selected', String(i === j));
+          b.tabIndex = i === j ? 0 : -1;
+        });
+        tab = tabs[i].dataset.tab;
+        detail();
+        if (focus) tabs[i].focus();
+      }
+      document
+        .querySelectorAll('.chip, #pause, #follow')
+        .forEach((b) =>
+          b.addEventListener('click', () =>
+            b.setAttribute('aria-pressed', String(b.getAttribute('aria-pressed') !== 'true')),
+          ),
+        );
+      document.getElementById('theme').addEventListener('click', () => {
+        const html = document.documentElement;
+        html.dataset.theme = html.dataset.theme === 'dark' ? 'light' : 'dark';
+      });
+      render();
+    </script>
+  </body>
+</html>

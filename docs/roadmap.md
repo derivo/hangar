@@ -649,6 +649,167 @@ claim with a lease, run the agent in a worktree per task, push a branch, note
 and complete; robust against restarts, lost connections, cancellation and usage
 limits. Requires ADR 0046. Steps and acceptance in the ADR.
 
+## Traffic bay
+
+Proposed in [ADR 0049](adr/0049-traffic-bay.md); UI mockup
+[mockups/traffic-bay.html](mockups/traffic-bay.html). Wish 2026-11-23: see
+everything an agent session sends and receives.
+
+**Goal:** A new bay `dev.hangar.traffic` runs mitmproxy as a local
+intercepting proxy, the agent bay routes watched sessions through it, and the
+person sees each request and response per session – model API, telemetry, MCP,
+packages – redacted, in memory, live.
+
+**Open questions (default in brackets)**
+
+- Name in the UI ["Traffic" / "Datenverkehr"].
+- mitmproxy as a required external tool or an own engine in Node [mitmproxy;
+  own engine only if the dependency proves to be a problem].
+- Watching on for new sessions [off; per project switchable].
+- Keep flows across a restart [no, memory only; export as HAR].
+- Functions for agents (`traffic.list` of the own session) [none in this plan].
+
+### Step 0 – Spike: what the engine and the agents really do
+
+Throwaway scripts under `scratchpad`, no product code. Results go into ADR 0049
+(status "accepted" or changed) and into this section.
+
+1. One `mitmdump` with two `--mode regular@<port>` listeners; add and remove a
+   third at run time (`options.update(mode=…)` from the addon). Record whether
+   existing connections survive.
+2. Proxy credentials in `HTTPS_PROXY` (`http://hangar:<pw>@127.0.0.1:<port>`):
+   do `claude -p` and `codex exec` send them? (Decides the credentials part of
+   the ADR.)
+3. Codex: start once with only `SSL_CERT_FILE`, once with only
+   `CODEX_CA_CERTIFICATE`; note which one is needed.
+4. Bypass: run both agents with a proxy and compare their open TCP connections
+   (`lsof -i -a -p <pid>` in a loop, also child processes) with the flows;
+   every connection that does not go to the proxy port is a finding.
+5. Streaming: the time to the first token of `claude -p` with and without the
+   proxy, with `flow.response.stream` set for `text/event-stream`.
+6. WebSocket: does Codex's `codex/responses` arrive in `websocket_message`?
+
+**Acceptance criteria:** a table in the ADR with one line per point, command and
+result; the ADR names what changed.
+
+### Step 1 – Bay skeleton and engine
+
+- `bays/traffic` per skill `new-bay`: manifest (`id dev.hangar.traffic`,
+  functions `proxy.env` and `proxy.status`, both `bayOnly`; settings
+  `mitmdumpPath`, `maxFlows`, `maxMegabytes`, host rules), `CLAUDE.md`, icon.
+- `src/main/engine.ts`: find `mitmdump` (setting, then `PATH`), read its
+  version, start it with the addon and `confdir=<dataDir>/ca`, restart with
+  backoff 1 s, 5 s, 30 s, stop on `deactivate`. Interface `Engine` (start,
+  stop, `addPort`, `removePort`, events) so tests use a fake engine.
+- `src/main/ca.ts`: create the CA on first start (folder 0700, key 0600), the
+  combined bundle (system roots from `/etc/ssl/cert.pem` on macOS,
+  `/etc/ssl/certs/ca-certificates.crt` on Linux, plus the CA), "Renew CA".
+- `addon/hangar_traffic.py`: JSON lines to stdout, header redaction, body
+  limit, session port in every event, streaming and WebSocket hooks.
+- `src/main/events.ts`: parse JSON lines, reject unknown or broken lines with a
+  counted warning (never crash the bay).
+
+**Acceptance criteria**
+
+1. Unit tests for `events.ts`, `ca.ts`, engine restart (fake process); 90 %
+   coverage in `bays/traffic/src/main`.
+2. Integration test with a real `mitmdump` against a local HTTPS test server
+   (own test CA): one request appears as `flow.request` and `flow.response`
+   with the session port and a redacted `Authorization`. Skipped with a
+   visible reason if `mitmdump` is missing; CI installs it (`uv tool install
+mitmproxy`) so the test runs there.
+3. Python addon: `python -m py_compile` in `pnpm lint`.
+
+### Step 2 – Sessions through the proxy
+
+- Traffic bay: `proxy.env({ sessionId })` allocates a free port on
+  `127.0.0.1` (`isPortFree` like `ports.ts`), registers it with the engine and
+  returns the variables of ADR 0049; `onAgentSessionEnded` frees the port.
+  `proxy.status` returns `{ engine: 'running' | 'missing' | 'failed',
+version?, reason? }`.
+- Agent bay: `SessionRecord.watchTraffic` and `Project.watchTraffic` (default
+  for new sessions), stored in `state.json`. In `startShell` the call to
+  `proxy.env` joins the secrets path: the shell starts only after both
+  answers; a failure writes `Shell not started: <reason>` and reports
+  `session.exit` -1. `uses` gets `dev.hangar.traffic/proxy.env`.
+- Agent bay UI: checkbox "Watch traffic" in the project overview (default for
+  new sessions) and in the context menu of a session ("Watch traffic – from the
+  next start"); in row 3 of the field header a link "Traffic: 42 · 1.2 MB" that
+  opens the traffic bay filtered to this session.
+
+**Acceptance criteria**
+
+1. Unit tests in the agent bay with a fake `call`: watched session gets the
+   variables, unwatched does not, failure blocks the start, only the answer of
+   the last start counts (as with `secret.resolve`).
+2. Without the traffic bay installed, "Watch traffic" is disabled with the
+   reason as description (`aria-disabled`), not hidden.
+3. E2E: a watched session runs `curl https://<local test server>` and the flow
+   appears in the traffic bay with the session's name.
+
+### Step 3 – Flow store
+
+- `src/main/store.ts`: ring buffer by count and bytes, flows keyed by id,
+  stream chunks and WebSocket messages appended to their flow, classification
+  by host rules (ADR 0049 defaults), per session counters (requests, bytes up
+  and down, errors, per class).
+- UI channels: `state` (engine, sessions with counters), `flows({ session?,
+classes?, text?, errorsOnly?, before?, limit })`, `flow.get(id)`,
+  `clear({ session? })`, `pause(boolean)`, `export({ ids? })`,
+  `passThrough(host)`, `renewCa`. Events: `state`, `flow` (new or changed,
+  batched every 250 ms).
+
+**Acceptance criteria:** unit tests for eviction by count and by bytes,
+classification, filters, batching; 90 % coverage.
+
+### Step 4 – UI
+
+As in the mockup ([mockups/traffic-bay.html](mockups/traffic-bay.html)):
+
+- Header: engine state with version and port count, or the install hint with
+  the two commands; "Pause", "Clear", "Export HAR".
+- Left column: "All sessions" and every watched session (tab color stripe,
+  status light, requests, bytes), ended sessions greyed until cleared.
+- Middle: filter field (host, path, method), class chips with counts ("Model
+  API", "Telemetry", "MCP", "Packages", "Other", "Errors"), "Follow" toggle;
+  table with time, session, method, host + path, status, class, size, duration.
+  Rows are buttons in a native `<table>`; ↑/↓ move, Enter opens.
+- Detail below or right (by width): tabs "Overview", "Request", "Response",
+  "Stream" (SSE events or WebSocket messages, live), "Headers"; JSON
+  pretty-printed and collapsible; redacted values marked "redacted"; "Copy as
+  curl" (redacted), "Pass through this host" on TLS errors.
+- Texts de/en in `messages.ts`; empty states: no engine, no watched session, no
+  flows yet ("Only traffic that uses the proxy is shown").
+
+**Acceptance criteria**
+
+1. E2E with the fake engine: filters, selection by keyboard, detail tabs,
+   follow on/off, pause, clear, live stream rows.
+2. axe-core light and dark: 0 violations; keyboard walkthrough and 200 % zoom
+   documented; `A11y-Check:` trailer.
+3. Table with 5 000 rows stays usable (virtualized rows; measured: scrolling
+   without dropped frames in the E2E trace, or the limit is lowered).
+
+### Step 5 – Export, pass-through, server
+
+- HAR 1.2 export of the filtered rows or the selection, redacted as stored,
+  with a warning that bodies may still contain secrets.
+- Pass-through list in the settings (`ignore_hosts`), shown as tunnel rows.
+- Server: the bay loads in `apps/server` and the local server; the UI talks
+  over the bridge like the agent bay; ADR 0041 machines: install hint names
+  the server.
+
+**Acceptance criteria:** HAR opens in a browser's network panel (manual check,
+noted in STATUS); server test with the fake engine over the bridge.
+
+### Step 6 – Documentation and review
+
+`bays/traffic/CLAUDE.md`, `docs/bay-development.md` (bay list),
+`bays/agents/CLAUDE.md` (watch traffic), README packages, STATUS, CHANGELOG
+"Unreleased", ADR 0049 to "accepted". Codex review of the whole diff with
+`--sandbox read-only`, record in `docs/reviews/`; second pass because TLS
+interception and secrets are involved.
+
 ## Outside this roadmap
 
 Third-party bays (not planned for now: only a registry with own bays; would
