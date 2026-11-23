@@ -668,6 +668,8 @@ packages – redacted, in memory, live.
 - Watching on for new sessions [off; per project switchable].
 - Keep flows across a restart [no, memory only; export as HAR].
 - Functions for agents (`traffic.list` of the own session) [none in this plan].
+- Switch "Watch traffic" also in the traffic bay [no; only in the agent bay,
+  the traffic bay shows the state].
 
 ### Step 0 – Spike: what the engine and the agents really do
 
@@ -695,7 +697,8 @@ result; the ADR names what changed.
 ### Step 1 – Bay skeleton and engine
 
 - `bays/traffic` per skill `new-bay`: manifest (`id dev.hangar.traffic`,
-  functions `proxy.env` and `proxy.status`, both `bayOnly`; settings
+  functions `proxy.env` and `proxy.status`, both `bayOnly`; `uses`
+  `dev.hangar.agents/session.info` and `dev.hangar.agents/project.list`; settings
   `mitmdumpPath`, `maxFlows`, `maxMegabytes`, host rules), `CLAUDE.md`, icon.
 - `src/main/engine.ts`: find `mitmdump` (setting, then `PATH`), read its
   version, start it with the addon and `confdir=<dataDir>/ca`, restart with
@@ -732,6 +735,12 @@ version?, reason? }`.
   `proxy.env` joins the secrets path: the shell starts only after both
   answers; a failure writes `Shell not started: <reason>` and reports
   `session.exit` -1. `uses` gets `dev.hangar.traffic/proxy.env`.
+- Agent bay: `session.info` additionally returns `color` (tab color or
+  `null`); additive, the board ignores it. Test in `functions.test.ts`.
+- Traffic bay: `src/main/sessions.ts` maps session id to `{ projectId,
+project, name, color, ended }` via `session.info` and `project.list`; asked
+  at `proxy.env` and on UI `state`, at most every 5 s per session; `Unknown
+session` marks it ended and keeps the last values.
 - Agent bay UI: checkbox "Watch traffic" in the project overview (default for
   new sessions) and in the context menu of a session ("Watch traffic – from the
   next start"); in row 3 of the field header a link "Traffic: 42 · 1.2 MB" that
@@ -745,17 +754,20 @@ version?, reason? }`.
 2. Without the traffic bay installed, "Watch traffic" is disabled with the
    reason as description (`aria-disabled`), not hidden.
 3. E2E: a watched session runs `curl https://<local test server>` and the flow
-   appears in the traffic bay with the session's name.
+   appears in the traffic bay with the session's name under its project.
+4. Unit test for the mapping: renamed session shows the new name after the
+   next refresh; ended session keeps project and name.
 
 ### Step 3 – Flow store
 
 - `src/main/store.ts`: ring buffer by count and bytes, flows keyed by id,
   stream chunks and WebSocket messages appended to their flow, classification
-  by host rules (ADR 0049 defaults), per session counters (requests, bytes up
-  and down, errors, per class).
-- UI channels: `state` (engine, sessions with counters), `flows({ session?,
+  by host rules (ADR 0049 defaults), per session and per project counters
+  (requests, bytes up and down, errors, per class).
+- UI channels: `state` (engine, projects with their sessions and counters),
+  `flows({ project?, session?,
 classes?, text?, errorsOnly?, before?, limit })`, `flow.get(id)`,
-  `clear({ session? })`, `pause(boolean)`, `export({ ids? })`,
+  `clear({ project?, session? })`, `pause(boolean)`, `export({ ids? })`,
   `passThrough(host)`, `renewCa`. Events: `state`, `flow` (new or changed,
   batched every 250 ms).
 
@@ -768,8 +780,12 @@ As in the mockup ([mockups/traffic-bay.html](mockups/traffic-bay.html)):
 
 - Header: engine state with version and port count, or the install hint with
   the two commands; "Pause", "Clear", "Export HAR".
-- Left column: "All sessions" and every watched session (tab color stripe,
-  status light, requests, bytes), ended sessions greyed until cleared.
+- Left column: "All sessions", then one group per project (name, requests,
+  bytes; collapsible, state in `localStorage`) with its watched sessions below
+  (tab color stripe, status light, requests, bytes); ended sessions marked
+  "ended" until cleared. Clicking a project filters to all its sessions,
+  clicking a session to that session. Sorted like the project tree of the
+  agent bay (`project.list` order).
 - Middle: filter field (host, path, method), class chips with counts ("Model
   API", "Telemetry", "MCP", "Packages", "Other", "Errors"), "Follow" toggle;
   table with time, session, method, host + path, status, class, size, duration.

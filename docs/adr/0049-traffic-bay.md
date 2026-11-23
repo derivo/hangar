@@ -47,7 +47,7 @@ The captured file held access tokens in plain text.
   for it (default for new sessions from the project, default off). It takes
   effect at the next shell start, like environment variables.
 - **Hand-over at shell start like passwords (ADR 0021).** The agent bay calls
-  `dev.hangar.traffic/proxy.env` (`bayOnly`, in `uses`) with the session id
+  `dev.hangar.traffic/proxy.env` (`bayOnly`, in its `uses`) with the session id
   before `spawnShell` and mixes the answer into the environment:
   `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` (each `http://127.0.0.1:<port>`),
   `NO_PROXY=localhost,127.0.0.1,::1` (Hangar's own MCP server stays direct),
@@ -88,6 +88,17 @@ The captured file held access tokens in plain text.
   `analytics-events`, `datadoghq.com`, `sentry.io`), "MCP" (paths ending in
   `/mcp` or `/mcp/`, `mcp-proxy.anthropic.com`), "Packages"
   (`registry.npmjs.org`, `pypi.org`), otherwise "Other".
+- **Flows sorted by project.** Every flow carries the session id from its
+  port; the bay maps it to project, name and tab color through
+  `dev.hangar.agents/session.info` (extended by `color`) and
+  `dev.hangar.agents/project.list` (both `bayOnly`, in `uses`, as the board
+  does, ADR 0037). It asks at `proxy.env` and again when the UI asks for its
+  state, at most every 5 s per session; an ended session keeps the last known
+  values. The UI groups sessions under their project; a project filters to all
+  of its sessions.
+- **Switching on stays in the agent bay.** The traffic bay shows the state but
+  does not change `watchTraffic`; it needs no function of the agent bay that
+  writes.
 - **No functions for agents in this step.** The bay offers only `bayOnly`
   functions (`proxy.env`, `proxy.status`); the flows are for the person. A
   later `traffic.list` for an agent's own session needs its own decision.
