@@ -114,14 +114,18 @@ listen_host=127.0.0.1` and without a default listener; each session gets
 - **CA per installation, never in a system trust store.** The bay creates the
   CA in `<dataDir>/ca/` (folder 0700). mitmproxy's `mitmproxy-ca.pem` holds
   certificate and key (0600); sessions only get `mitmproxy-ca-cert.pem`.
-- **Bundle per session and CA generation** in
-  `<dataDir>/bundles/<generation>/<session>.pem`, never rewritten in place: the system roots
+- **Bundle per session, CA generation and content** in
+  `<dataDir>/bundles/<generation>/<session>-<hash>.pem` (`hash`: first 16 hex
+  digits of SHA-256 over the bundle), never rewritten in place: the system roots
   plus inherited extra certificates (`NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`
   etc. of the merged environment) plus the CA. System roots: macOS
   `/etc/ssl/cert.pem`, Linux `/etc/ssl/certs/ca-certificates.crt` or
   `/etc/pki/tls/certs/ca-bundle.crt`, Windows the certificate store `ROOT`
   exported via `tls.getCACertificates('system')` (Node 22.15+). Without any
-  source the start fails with the reason.
+  source the start fails with the reason. A repeated `proxy.env` keeps port
+  and credentials but builds the bundle again from the given `inherited`: when
+  a shell restarts with other certificate variables (`session.env` changes
+  restart the shell), it gets a new path; the old file stays unchanged.
 - **Upstream trust is separate.** mitmproxy 12.3.1 uses certifi by default,
   and `ssl_verify_upstream_trusted_ca` replaces that default instead of adding
   to it. The bay therefore writes `<dataDir>/upstream.pem` from the system
@@ -143,9 +147,17 @@ listen_host=127.0.0.1` and without a default listener; each session gets
   `flow.request.stream`. The function forwards chunks to the bay up to the
   body limit and passes all data on. WebSocket messages are forwarded from
   `websocket_message` and then removed from `flow.websocket.messages`, so
-  mitmproxy does not keep a second history. mitmproxy buffers the fragments of
-  an unfinished message before that hook: a message above 16 MB in fragments
-  ends the connection with an error row (`ws.tooLarge`); step 0 measures it.
+  mitmproxy does not keep a second history. mitmproxy 12.3.1 collects the
+  fragments of an unfinished message in `WebsocketConnection.frame_buf`
+  (`proxy/layers/websocket.py`) before that hook and has no size option, so no
+  hook sees them. The addon therefore wraps `WebsocketLayer._handle_event`:
+  after each received event it sums `frame_buf` of both sides; above 16 MB it
+  closes both sides with code 1009 (message too big), drops the buffer and
+  sends a `ws.tooLarge` row. The wrapper touches a private API: the bay
+  supports mitmproxy `>=12.3,<13` only, the addon reports
+  `mitmproxy.version.VERSION` at start and the engine refuses other versions
+  with the reason (`proxy.status` `failed`). Step 0 proves the abort without a
+  final fragment.
 - **Storage: memory only, redacted copies.** Flows live in a ring buffer
   (default 5 000 flows or 200 MB). Only the serialized copy for Hangar is
   redacted; the request upstream keeps its headers. Redacted: values of
@@ -202,10 +214,14 @@ null while open or failed), class, bytesUp, bytesDown, durationMs (number
 | null while open), state ('open' | 'done' | 'failed' | 'tunnel'), error
 (string | null) }`.
   - `flow.get({ id })` → the same fields plus `requestHeaders`,
-    `responseHeaders` (redacted), `requestBody`, `responseBody` (text, base64
-    for binary, `null` if none) and `messages` (stream events or WebSocket
-    messages, `{ time, direction, text }`). The 100 000 characters count per
-    direction across body and messages together; `truncated` per direction.
+    `responseHeaders` (redacted, `[name, value][]` in wire order, repeated
+    names kept), `requestBody`, `responseBody` (`{ encoding: 'utf8' |
+'base64', data } | null`: `utf8` when the bytes decode as UTF-8, otherwise
+    `base64`; `null` if none), `messages` (`{ time, direction: 'up' | 'down',
+kind: 'sse' | 'ws-text' | 'ws-binary', encoding: 'utf8' | 'base64', data }[]`;
+    `up` is client to server; `ws-binary` always `base64`) and `truncated`
+    (`{ up: boolean, down: boolean }`). The 100 000 characters of `data` count
+    per direction across body and messages together.
 - **Own session only.** Flows are keyed by origin and session: the agent
   bay's `proxy.env` call fixes the key (`dev.hangar.agents` of this process,
   or `local-server:dev.hangar.agents` on the desktop side) for its session id.
@@ -252,9 +268,13 @@ null while open or failed), class, bytesUp, bytesDown, durationMs (number
   outage; meanwhile requests of watched sessions fail instead of going out
   unwatched.
 - Python dependency for those who use the bay; on Windows `mitmdump.exe`.
+- The WebSocket limit wraps a private mitmproxy method: the bay supports
+  mitmproxy `>=12.3,<13`; a new major version needs the spike point again.
   A native engine in Node can replace mitmproxy later behind the same
   protocol.
-- Host change: activation order by `uses` (affects all bays, own test).
+- Host change: SDK event `ctx.onBaysStarted`, called once after every bay of
+  the process has finished `activate` (own test); the agent bay moves
+  `restore()` there.
 - Two new MCP tools (`dev.hangar.proxy/flow.list`, `flow.get`), documented in
   `docs/mcp.md`.
 - Agent bay change: `session.info` gains four fields, `watchTraffic` on

@@ -90,4 +90,16 @@ Verification of the mockup after round 2: axe 0 violations light and dark, group
 and collapsed; focus, arrow keys, visible panel and 640 × 430 without horizontal scroll by
 script; `prettier --check`.
 
-No third round yet.
+## Third round
+
+On `5cc531b`. A first run hung on standard input and was restarted with
+`< /dev/null`. 4 findings, all confirmed and adopted.
+
+| #   | Sev.   | Finding                                                                      | Checked                                                                                                | Change                                                                                                                     |
+| --- | ------ | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| 1   | high   | Round 2 #6 still open: the 16 MB limit has no point where it can act         | mitmproxy `proxy/layers/websocket.py`: `frame_buf` grows before `WebsocketMessageHook`, no size option | Addon wraps `WebsocketLayer._handle_event`, closes with 1009 above 16 MB; mitmproxy `>=12.3,<13` only; spike without FIN   |
+| 2   | medium | Fixed bundle path keeps old trust when a restart brings other certificates   | `bays/agents/src/main/sessions.ts`: an `env` change calls `restart`                                    | Bundle path carries a content hash; port and credentials stay; test that the old file is unchanged                         |
+| 3   | medium | Round 2 #12 partly open: bodies and messages lack encoding and kind          | ADR text                                                                                               | `{ encoding, data }`, `direction: 'up' \| 'down'`, `kind`, headers as pairs, `truncated` typed; text and binary test cases |
+| 4   | medium | "Consequences" still named activation order by `uses`, which the ADR rejects | ADR text, both places                                                                                  | Consequence is now `ctx.onBaysStarted` and the move of `restore()`                                                         |
+
+The mockup did not change in this round.

@@ -700,8 +700,9 @@ and this section; the ADR changes where a result contradicts it.
    proxy, with `flow.response.stream` set in `responseheaders`.
 6. WebSocket: does Codex's `codex/responses` arrive in `websocket_message`,
    and does clearing `flow.websocket.messages` keep memory flat over 10 min?
-   How much does one unfinished fragmented message buffer before the hook
-   (send 20 MB in fragments), and does the 16 MB limit end it cleanly?
+   Send 20 MB in fragments without the final one: does the wrapper around
+   `WebsocketLayer._handle_event` (ADR 0049) close both sides with 1009 at
+   16 MB, emit `ws.tooLarge` and free the buffer, without a final fragment?
 7. Windows: `mitmdump.exe` from `uv tool install mitmproxy`, the bundle from
    `tls.getCACertificates('system')` – is that available in the Node of the
    Electron version Hangar ships? Both agents once through the proxy.
@@ -753,8 +754,8 @@ result; the ADR names what changed.
 - `src/main/ca.ts`: CA on first start (folder 0700, `mitmproxy-ca.pem` 0600,
   sessions get only `mitmproxy-ca-cert.pem`); `upstream()` writes
   `<dataDir>/upstream.pem` from the system roots plus `upstreamCaFile`;
-  `bundle(env)` writes `<dataDir>/bundles/<generation>/<session>.pem` (never
-  rewritten) from the system roots (macOS
+  `bundle(env)` writes `<dataDir>/bundles/<generation>/<session>-<hash>.pem`
+  (hash over the content, never rewritten) from the system roots (macOS
   `/etc/ssl/cert.pem`; Linux `/etc/ssl/certs/ca-certificates.crt` or
   `/etc/pki/tls/certs/ca-bundle.crt`; Windows `tls.getCACertificates('system')`),
   the extra certificates named in the merged environment and the CA; no source
@@ -764,7 +765,8 @@ result; the ADR names what changed.
   credentials check (plain HTTP per request, HTTPS at `http_connect`, then
   per connection) and removal of `Proxy-Authorization`, redaction of the copy
   only, body limit, streaming set in `responseheaders` and `requestheaders`,
-  WebSocket forward and clear, 16 MB limit for fragmented messages, `tunnel`
+  WebSocket forward and clear, 16 MB limit for fragmented messages via the
+  `_handle_event` wrapper, version check `>=12.3,<13` at start, `tunnel`
   rows for ignored hosts with bytes counted in `tcp_message`, `capture`
   on/off.
 
@@ -802,7 +804,8 @@ result; the ADR names what changed.
 - Proxy bay `proxy.env({ sessionId, inherited })`: only from
   `dev.hangar.agents` (bay caller, with or without `local-server:`), which
   fixes the origin key of the session; idempotent per session (same port
-  and variables on repeated calls, also after a shell restart); binds the port
+  and credentials on repeated calls, also after a shell restart; the bundle
+  path changes only when `inherited` yields other certificates); binds the port
   via `listen` and answers only after its `reply`; returns the variables of
   ADR 0049 in upper and lower case (proxy URLs with the port's credentials)
   and the path of the session bundle (built from `inherited`: `{
@@ -842,7 +845,8 @@ name, color, status, agent, watchActive, ended }` via `session.info` and
    `no_proxy=*` are overridden, `session.info` returns the new fields;
    without engine a watched session can be switched off and then starts.
 2. Unit tests in the proxy bay: repeated `proxy.env` returns the same port;
-   ended session unbinds; a port is not reused within 60 s; the same session
+   with other certificates in `inherited` it returns a new bundle path and
+   the old file is byte for byte unchanged; ended session unbinds; a port is not reused within 60 s; the same session
    id from another origin gets its own key; a renamed session
    shows the new name after the next refresh; an ended one keeps project and
    name.
@@ -895,7 +899,9 @@ port })`,
 another session's id is `Unknown flow`, the same session id from another bay
 or origin gets nothing, a bay caller gets `No session`, schema: `since`
 exclusive, `limit` 1–200, `more`, open and failed flows with `null` fields,
-100 000 characters per direction across body and messages, redaction as in
+bodies as `utf8` and as `base64`, a text and a binary WebSocket message, an
+SSE event, `truncated` per direction, repeated header names, 100 000
+characters per direction across body and messages, redaction as in
 the UI), a bus test that a release "for this session" does not reach a second
 session, and unit tests for eviction by count and by bytes, rule
 parsing (invalid line named, default applies), first-match classification,
