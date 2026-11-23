@@ -137,29 +137,30 @@ shows the bay in the sidebar with `Start failed: <message>`.
 Defined in `packages/sdk/src/types.ts`, implemented in
 `packages/host/src/bay-runtime.ts`.
 
-| Member                                             | Effect                                                                                                                |
-| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `bayId`                                            | Identifier from the manifest                                                                                          |
-| `dataDir`                                          | own data folder `<userData>/bays/<id>`; is created; the bay manages its state itself                                  |
-| `hangarVersion`                                    | Version of the running app                                                                                            |
-| `locale`                                           | Language of the app (`de`, `en`, in tests also `en-XA`); fixed until the next start, see "Texts and languages"        |
-| `onLocaleChange(listener)`                         | only on a server: the language follows the most recently connected desktop; `listener` receives the new one           |
-| `settings.get(key)`, `settings.onChange(listener)` | Value of a setting from the manifest (see "Settings"); `listener` receives `{ key, value }`                           |
-| `provide(name, handler, schema?)`                  | Offer a function on the bus (see below)                                                                               |
-| `call(target, args?)`                              | Call a function of another bay; `target` is `<bay-id>/<function>` and must be in `uses`                               |
-| `notify({ title, body? })`                         | System notification; a click brings the bay to the front                                                              |
-| `setBadge(count)`                                  | Badge on the entry in the sidebar; `0` hides it; values are rounded down, negative ones become `0`                    |
-| `setRunning(count)`                                | how many processes of the bay keep running (shells); the local server counts them for tray and restart (ADR 0036)     |
-| `registerAgentSession(sessionId)`                  | registers an agent session with the MCP server (only with `agentSessions: true`); returns `{ token, mcpUrl, cliDir }` |
-| `unregisterAgentSession(sessionId)`                | invalidates the token and discards the session permissions                                                            |
-| `onAgentSessionEnded(listener)`                    | `listener({ bayId, sessionId })` when any bay unregisters an agent session (ADR 0016)                                 |
-| `labelSessions(label)`                             | `label(sessionId)` returns the name of a session for the settings (instead of the identifier)                         |
-| `jobs.onRun(handler)`                              | runs due jobs of the bay; returning text = success, exception = failure (ADR 0013)                                    |
-| `jobs.add({ label, schedule, payload? })`          | creates a job (cron with five fields, local time); throws on an invalid schedule                                      |
-| `jobs.list()` / `jobs.remove(id)`                  | own jobs with next and last run / delete an own job                                                                   |
-| `pickFolder({ title?, path? })`                    | native folder dialog; `undefined` on cancel. On the server it checks `path` against `--root` (ADR 0018)               |
-| `ui.handle(channel, handler)`                      | answers `window.hangar.invoke(channel, ...args)` from the own UI                                                      |
-| `ui.send(channel, payload)`                        | event to the own UI (`window.hangar.on`); no effect without a loaded UI                                               |
+| Member                                             | Effect                                                                                                                                  |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `bayId`                                            | Identifier from the manifest                                                                                                            |
+| `dataDir`                                          | own data folder `<userData>/bays/<id>`; is created; the bay manages its state itself                                                    |
+| `hangarVersion`                                    | Version of the running app                                                                                                              |
+| `locale`                                           | Language of the app (`de`, `en`, in tests also `en-XA`); fixed until the next start, see "Texts and languages"                          |
+| `onLocaleChange(listener)`                         | only on a server: the language follows the most recently connected desktop; `listener` receives the new one                             |
+| `settings.get(key)`, `settings.onChange(listener)` | Value of a setting from the manifest (see "Settings"); `listener` receives `{ key, value }`                                             |
+| `provide(name, handler, schema?)`                  | Offer a function on the bus (see below)                                                                                                 |
+| `call(target, args?)`                              | Call a function of another bay; `target` is `<bay-id>/<function>` and must be in `uses`                                                 |
+| `notify({ title, body? })`                         | System notification; a click brings the bay to the front                                                                                |
+| `setBadge(count)`                                  | Badge on the entry in the sidebar; `0` hides it; values are rounded down, negative ones become `0`                                      |
+| `setRunning(count)`                                | how many processes of the bay keep running (shells); the local server counts them for tray and restart (ADR 0036)                       |
+| `registerAgentSession(sessionId)`                  | registers an agent session with the MCP server (only with `agentSessions: true`); returns `{ token, mcpUrl, cliDir }`                   |
+| `unregisterAgentSession(sessionId)`                | invalidates the token and discards the session permissions                                                                              |
+| `onAgentSessionEnded(listener)`                    | `listener({ bayId, sessionId })` when any bay unregisters an agent session (ADR 0016)                                                   |
+| `onBaysStarted(listener)`                          | `listener()` once after every bay of the process finished `activate`, later ones at once; for calls to bays that start later (ADR 0049) |
+| `labelSessions(label)`                             | `label(sessionId)` returns the name of a session for the settings (instead of the identifier)                                           |
+| `jobs.onRun(handler)`                              | runs due jobs of the bay; returning text = success, exception = failure (ADR 0013)                                                      |
+| `jobs.add({ label, schedule, payload? })`          | creates a job (cron with five fields, local time); throws on an invalid schedule                                                        |
+| `jobs.list()` / `jobs.remove(id)`                  | own jobs with next and last run / delete an own job                                                                                     |
+| `pickFolder({ title?, path? })`                    | native folder dialog; `undefined` on cancel. On the server it checks `path` against `--root` (ADR 0018)                                 |
+| `ui.handle(channel, handler)`                      | answers `window.hangar.invoke(channel, ...args)` from the own UI                                                                        |
+| `ui.send(channel, payload)`                        | event to the own UI (`window.hangar.on`); no effect without a loaded UI                                                                 |
 
 The sum of all badges additionally appears on the app icon (`app.setBadgeCount`).
 

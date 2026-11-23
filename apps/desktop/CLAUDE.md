@@ -60,6 +60,7 @@ bay runtime (context for the main part), IPC between bays and main process.
 - E2E: `launch` enters all bays from `bayDirs` into the sidebar in new data folders and selects the first; `seedBays: false` starts empty like a new Hangar (`e2e/sidebar-bays.spec.ts`, replaces `Menu.buildFromTemplate` for the context menu).
 - E2E: `repoBays` loads agent and browser bay. Browser functions are `openToAgents` (ADR 0016); `e2e/browser.spec.ts` counts permission dialogs and expects none.
 - If an agent session ends (`unregisterAgentSession`), `host.ts` calls `agentSessionEnded` on every runtime (→ `ctx.onAgentSessionEnded`).
+- After the sidebar bays started, `start()` calls `baysStarted` on every runtime (→ `ctx.onBaysStarted`, ADR 0049); a bay activated later gets it right after its `activate`.
 - On quit the server connections close after the window; `syncRemotes` then aborts (otherwise "Object has been destroyed").
 - E2E: `e2e/server.spec.ts` starts `apps/server/dist/hangar-server.mjs` as a child process and reads address, fingerprint and code from its log. On restart pass `seedBays: false`, otherwise `bayPage` finds the local agent bay instead of the server's.
 - E2E: a bay window has the same URL as the view plus `?window=<key>`; `bayPage(app, 'index.html?window=')` finds it.

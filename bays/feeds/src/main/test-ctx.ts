@@ -21,6 +21,8 @@ export function fakeContext(dataDir = mkdtempSync(join(tmpdir(), 'hangar-feeds-'
     registerAgentSession: vi.fn(),
     unregisterAgentSession: vi.fn(),
     onAgentSessionEnded: vi.fn(),
+    // Every bay counts as started at once.
+    onBaysStarted: vi.fn((listener: () => void | Promise<void>) => void listener()),
     onLocaleChange: vi.fn(),
     settings: { get: vi.fn(), onChange: vi.fn() },
     pickFolder: vi.fn(),

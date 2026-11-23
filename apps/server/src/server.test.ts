@@ -381,6 +381,68 @@ describe('host services on the server', () => {
   });
 });
 
+describe('ctx.onBaysStarted (ADR 0049)', () => {
+  /**
+   * Bay `id` offers `ping` and calls `<other>/ping` in `activate` and in `onBaysStarted`;
+   * with `gate` its `activate` then waits for `globalThis.__gate`.
+   */
+  const pinger = (id: string, other: string, gate = false) =>
+    bayRoot(
+      id,
+      `export default {
+        async activate(ctx) {
+          ctx.provide('ping', () => '${id}');
+          const r = (globalThis.__started ??= {});
+          r['${id}'] = { inActivate: await ctx.call('${other}/ping', {}).catch((e) => e.message) };
+          ctx.onBaysStarted(async () => {
+            r['${id}'].inListener = await ctx.call('${other}/ping', {});
+          });
+          if (${gate}) {
+            globalThis.__gated = true;
+            await globalThis.__gate;
+          }
+        },
+      };`,
+      { uses: [`${other}/ping`], functions: [{ name: 'ping' }] },
+    );
+
+  it('runs after every bay finished activate, so bays that name each other can call', async () => {
+    const g = globalThis as {
+      __started?: Record<string, Record<string, string>>;
+      __gate?: Promise<void>;
+      __gated?: boolean;
+    };
+    delete g.__started;
+    delete g.__gated;
+    let release = () => {};
+    g.__gate = new Promise((resolve) => (release = resolve));
+    const started = (id: string) => g.__started?.[id] ?? {};
+    const broken = bayRoot(
+      'dev.m.broken',
+      `export default { activate() { throw new Error('kaputt'); } };`,
+    );
+    const starting = startServer({
+      data: mkdtempSync(join(tmpdir(), 'hangar-server-')),
+      host: '127.0.0.1',
+      port: 0,
+      roots: [],
+      bays: [pinger('dev.a', 'dev.z'), broken, pinger('dev.z', 'dev.a', true)],
+      log: () => {},
+    });
+    // "Z" offers `ping` and then still runs `activate`: no listener may run yet.
+    await vi.waitFor(() => expect(g.__gated).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(started('dev.a').inListener).toBeUndefined();
+    release();
+    server = await starting;
+    await vi.waitFor(() => expect(started('dev.a').inListener).toBe('dev.z'));
+    // In `activate`, "A" starts before "Z" (name order): its call finds nothing.
+    expect(started('dev.a').inActivate).toMatch(/Unknown function/);
+    expect(started('dev.z').inActivate).toBe('dev.a');
+    expect(started('dev.z').inListener).toBe('dev.a');
+  });
+});
+
 describe('permission questions on the server (phase 11b)', () => {
   it('denies without a desktop and stores nothing; a desktop that denies stores the denial', async () => {
     const file = join(dataWithDueJob(), 'permissions.json');
@@ -625,8 +687,11 @@ describe('bays of the desktop for agents of the local server (ADR 0036)', () => 
       'dev.agents',
       `export default {
         activate(ctx) {
-          // Like restore() in the agent bay: before any desktop can connect.
-          const early = ctx.call('${target}', { names: ['TOKEN'] }).catch((e) => e.message);
+          // Like restore() in the agent bay (ADR 0049): before any desktop can connect.
+          let early;
+          ctx.onBaysStarted(() => {
+            early = ctx.call('${target}', { names: ['TOKEN'] }).catch((e) => e.message);
+          });
           ctx.ui.handle('early', () => early);
         },
       };`,

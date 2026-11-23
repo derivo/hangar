@@ -275,6 +275,62 @@ describe('BayRuntime', () => {
     error.mockRestore();
   });
 
+  it('runs onBaysStarted listeners once after the start, later ones at once (ADR 0049)', async () => {
+    const { runtime } = setup(`
+      module.exports = {
+        activate(c) {
+          globalThis.__baysStarted = [];
+          globalThis.__ctx = c;
+          c.onBaysStarted(async () => { throw new Error('kaputt'); });
+          c.onBaysStarted(() => globalThis.__baysStarted.push('early'));
+        },
+      };
+    `);
+    const g = globalThis as Record<string, unknown>;
+    await runtime.activate();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await Promise.resolve();
+    expect(g.__baysStarted).toEqual([]);
+
+    runtime.baysStarted();
+    runtime.baysStarted();
+    await vi.waitFor(() => expect(error).toHaveBeenCalledOnce());
+    expect(g.__baysStarted).toEqual(['early']);
+    (g.__ctx as BayContext).onBaysStarted(() => void (g.__baysStarted as string[]).push('late'));
+    await vi.waitFor(() => expect(g.__baysStarted).toEqual(['early', 'late']));
+    error.mockRestore();
+  });
+
+  it('waits on deactivate for running onBaysStarted listeners and starts no new ones', async () => {
+    const { runtime, services } = setup(`
+      module.exports = {
+        activate(c) {
+          globalThis.__ctx = c;
+          c.onBaysStarted(async () => {
+            await globalThis.__hold;
+            c.registerAgentSession('late');
+          });
+        },
+      };
+    `);
+    const g = globalThis as Record<string, unknown>;
+    let release = () => {};
+    g.__hold = new Promise<void>((resolve) => (release = resolve));
+    await runtime.activate();
+    runtime.baysStarted();
+    let done = false;
+    const stopping = runtime.deactivate().then(() => (done = true));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(done).toBe(false);
+    release();
+    await stopping;
+    // The token the listener got before the end is gone with the bay.
+    expect(services.unregisterAgentSession).toHaveBeenCalledWith('dev.hangar.test', 'late');
+    const later = vi.fn();
+    (g.__ctx as BayContext).onBaysStarted(later);
+    expect(later).not.toHaveBeenCalled();
+  });
+
   it('tells the bay when the language changes, once per change (server, ADR 0019)', async () => {
     const { runtime } = setup(`
       module.exports = {

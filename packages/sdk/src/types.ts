@@ -147,6 +147,14 @@ export interface BayContext {
   onAgentSessionEnded(listener: (session: { bayId: string; sessionId: string }) => void): void;
 
   /**
+   * Called once after every bay of this process has finished `activate`, also when one of
+   * them failed; a listener added later runs at once. For calls to bays that may start after
+   * this one, e.g. two bays that name each other in `uses` (ADR 0049). Runs synchronously;
+   * errors are logged; `deactivate` waits for a returned promise.
+   */
+  onBaysStarted(listener: () => void | Promise<void>): void;
+
+  /**
    * Names this bay's agent sessions where Hangar lists them (e.g. permissions in the
    * settings), instead of their id. Return `undefined` for unknown sessions.
    */

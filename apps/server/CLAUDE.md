@@ -85,6 +85,8 @@ available: …`, the bay runs without `ctx.workspaces`. A paired desktop
   desktop app does not show or change them.
 - A bay is in the list only after `activate`; a session end during
   `activate` does not reach it (as on the desktop).
+- After all bays ran `activate`, the server calls `baysStarted` on each runtime
+  (→ `ctx.onBaysStarted`, ADR 0049), before desktops are let in.
 - `server.integration.test.ts` builds the server with Vite into a temporary folder
   and starts it as a child process; `HANGAR_TICK_MS` shortens the job tick.
 - On start, `fingerprint SHA256:…` and `pairing code XXXX-XXXX` are in the log;

@@ -173,6 +173,8 @@ export class Host {
   private connectedServers = '';
   /** Every bay found on disk; only those in the sidebar run (ADR 0017). */
   private found: LoadedBay[] = [];
+  /** `start` activated the sidebar bays; a bay started later gets `onBaysStarted` at once. */
+  private started = false;
   /** A shell modal is open: bay views and tabs are hidden so it is not covered. */
   private modal = false;
   /** Measured by the shell (wrapped text at 200 % zoom); its fixed height until then. */
@@ -326,6 +328,8 @@ export class Host {
         });
       }
     }
+    this.started = true;
+    for (const r of this.runtimes.values()) r.baysStarted();
     const view = readViewState(this.viewFile);
     this.registerIpc();
     this.createWindow(view.bounds, view.maximized);
@@ -811,6 +815,7 @@ export class Host {
       throw new Error(`Start failed: ${(e as Error).message}`, { cause: e });
     }
     this.runtimes.set(bay.manifest.id, runtime);
+    if (this.started) runtime.baysStarted();
     return runtime;
   }
 

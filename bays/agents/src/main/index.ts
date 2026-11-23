@@ -9,7 +9,7 @@ import { provideFunctions } from './functions';
 import { SessionJobs } from './jobs';
 import { setLocale, t } from './messages';
 import { QuotaTracker, readCodexQuota } from './quota';
-import { remoteProjects, sharedState } from './share';
+import { remoteProjects } from './share';
 import type { EnvValue } from './types';
 
 const TICK_MS = 5_000;
@@ -57,9 +57,9 @@ export function createAgentsBay(
         readCodex: () => readCodexQuota(codexHome),
       });
       provideFunctions(ctx, manager, jobs, quotas);
-      manager.restore();
-      const view = manager.view();
-      ctx.workspaces?.publish(sharedState(view.projects, view.sessions));
+      // After every bay started: a restored shell may need another bay at its start (ADR 0049).
+      // `restore` also publishes the shared state, after the statuses are reset.
+      ctx.onBaysStarted(() => manager.restore());
       ctx.workspaces?.onState((states) => ctx.ui.send('remote', remoteProjects(states)));
       ctx.labelSessions((id) => {
         const s = manager.view().sessions.find((x) => x.id === id);

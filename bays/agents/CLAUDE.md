@@ -7,7 +7,7 @@ description, environment variables, status bar, scheduled commands ("Schedule jo
 
 - `manifest.json` – id, functions (visible over bus and MCP).
 - `src/main/` – runs in the main process (coverage gate 90 %).
-  - `index.ts` – `activate(ctx)`: wires UI channels and bus functions.
+  - `index.ts` – `activate(ctx)`: wires UI channels and bus functions; stored shells restart in `ctx.onBaysStarted` (ADR 0049), so a bay that starts after the agent bay can already answer at shell start.
   - `sessions.ts` – `SessionManager`: projects, sessions, shells, scrollback, status.
   - `git.ts` – worktrees (only `execFile`, never shell strings).
   - `pty.ts` – node-pty wrapper and default shell; `status.ts` – heuristic; `ports.ts` – port blocks.
