@@ -103,3 +103,16 @@ On `5cc531b`. A first run hung on standard input and was restarted with
 | 4   | medium | "Consequences" still named activation order by `uses`, which the ADR rejects | ADR text, both places                                                                                  | Consequence is now `ctx.onBaysStarted` and the move of `restore()`                                                         |
 
 The mockup did not change in this round.
+
+## Spike results (PR #41)
+
+Codex on `2e698b5` (spike results of step 0). 5 findings, all confirmed and
+adopted.
+
+| #   | Sev.   | Finding                                                                        | Checked                                                                    | Change                                                                                                   |
+| --- | ------ | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| 1   | high   | Compressed complete WebSocket messages bypass the 16 MB check                  | `wsproto/extensions.py`: `decompress` without `max_length`                 | Addon removes `Sec-WebSocket-Extensions` from upgrade requests; integration test                         |
+| 2   | high   | Codex's direct connection without CA contradicts "never runs unwatched"        | spike data (scenario without CA)                                           | Promises limited to proxied connections; threat model; renewal and outage tests watch direct connections |
+| 3   | medium | `CURL_CA_BUNDLE` is ignored by schannel `curl.exe`; the ADR claim was untested | spike tested only `--cacert`                                               | No variable for `curl.exe`; CA-only file and the working call documented                                 |
+| 4   | medium | Appending to `GIT_CONFIG_*` is impossible inside the proxy bay                 | `bays/agents/src/main/sessions.ts`: session values merged in the agent bay | `proxy.env` returns `gitConfig`; the agent bay appends after the merge; test                             |
+| 5   | medium | Removing a listener does not close its open connections                        | mitmproxy `proxy/mode_servers.py` `_stop` closes only listening sockets    | Addon tracks client connections per listener and closes them; test with open tunnel and WebSocket        |

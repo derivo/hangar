@@ -770,7 +770,8 @@ result; the ADR names what changed.
   per connection) and removal of `Proxy-Authorization`, redaction of the copy
   only, body limit, streaming set in `responseheaders` and `requestheaders`,
   WebSocket forward and clear, 16 MB limit for fragmented messages via the
-  `relay_messages` wrapper, version check `>=12.3,<13` at start, `tunnel`
+  `relay_messages` wrapper, `Sec-WebSocket-Extensions` removed from upgrade
+  requests, connections of a removed listener closed, version check `>=12.3,<13` at start, `tunnel`
   rows for ignored hosts with bytes counted in `tcp_message`, `capture`
   on/off.
 
@@ -796,7 +797,12 @@ result; the ADR names what changed.
    - stdout of `mitmdump` holds only parsable JSON lines, and a token in a
      query string appears only redacted,
    - a pass-through of a host on port 8443 yields a `tunnel` row with the
-     known byte counts.
+     known byte counts,
+   - a WebSocket test server offering `permessage-deflate` gets no
+     compression, and a 20 MB message in fragments ends with 1009 and
+     `ws.tooLarge`,
+   - `unlisten` closes an open CONNECT tunnel and an open WebSocket of that
+     listener, while one of another listener keeps working.
      Skipped with a visible reason if `mitmdump` is missing; CI installs it
      (`uv tool install mitmproxy`) on all three runners.
 3. Packaged smoke test: the addon is a real file under `app.asar.unpacked`
@@ -850,7 +856,10 @@ name, color, status, agent, watchActive, ended }` via `session.info` and
    without engine a watched session can be switched off and then starts.
 2. Unit tests in the proxy bay: repeated `proxy.env` returns the same port;
    with other certificates in `inherited` it returns a new bundle path and
-   the old file is byte for byte unchanged; ended session unbinds; a port is not reused within 60 s; the same session
+   the old file is byte for byte unchanged; on Windows the answer carries
+   `gitConfig` and the agent bay appends it after inherited `GIT_CONFIG_*`
+   entries without overwriting them, also on a shell restart; ended session
+   unbinds; a port is not reused within 60 s; the same session
    id from another origin gets its own key; a renamed session
    shows the new name after the next refresh; an ended one keeps project and
    name.
@@ -963,7 +972,9 @@ As in the mockup ([mockups/proxy-bay.html](mockups/proxy-bay.html)):
 noted in STATUS); pass-through of `pinned.invalid:8443` does not match
 `xpinned.invalid:8443` or `pinned.invalid:443`; after renewal a restarted shell
 works, a running one fails TLS and is named, `proxy.env` answers nothing during
-the swap, the old bundle file is unchanged.
+the swap, the old bundle file is unchanged; `codex exec` in the running shell
+and during an engine outage is watched with `lsof`/`Get-NetTCPConnection` for
+direct connections, and the result goes into the threat model.
 
 ### Step 7 – Documentation and review
 

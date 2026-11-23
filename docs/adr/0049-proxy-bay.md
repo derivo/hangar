@@ -51,7 +51,7 @@ protocol, credential check and WebSocket limit of this ADR.
 
 Changed in this ADR: the WebSocket wrapper targets `relay_messages`; the
 listener reply waits for the server instance; `GIT_HTTP_PROXY_AUTHMETHOD=basic`
-joins the variables, on Windows with the Git and curl variants; the threat model names the Codex MCP bypass and its cause.
+joins the variables, on Windows with the Git variant (curl.exe has none); the threat model names the Codex MCP bypass and its cause.
 
 ## Decision
 
@@ -103,14 +103,20 @@ listen_host=127.0.0.1` and without a default listener; each session gets
   (`bayOnly`, in its `uses`) before `spawnShell`, also for restored sessions.
   The shell starts only with an answer. A missing proxy bay, a missing
   `mitmdump`, a failed engine or a timeout write `Shell not started: <reason>`
-  and report `session.exit` -1. A watched session never runs unwatched;
-  unwatched sessions are not affected by any of this.
+  and report `session.exit` -1. A watched session never starts without its
+  proxy variables; unwatched sessions are not affected by any of this. What
+  goes through the proxy is watched; a process that ignores the variables or
+  falls back to a direct connection is not (see the threat model).
 - **One port per session, stable.** `proxy.env` is idempotent: the first call
   binds a port (bind confirmed by `reply`, not by `isPortFree`, which only
   probes), later calls of the same session return the same port and
   variables. Restarting the shell keeps the port, so jobs started with the old
   environment keep working. `onAgentSessionEnded` unbinds it; open
-  connections are closed and their flows stay with the old session. A port
+  connections are closed: removing a listener in mitmproxy only closes its
+  listening socket (`proxy/mode_servers.py`), so the addon tracks client
+  connections per listener (`client_connected`/`client_disconnected`) and
+  closes those of the removed one; connections of other listeners stay. Their
+  flows stay with the old session. A port
   freed this way is not reused for 60 s.
 - **Environment.** The agent bay applies the answer after merging process and
   session environment, so it wins over both. Variables, in upper and lower
@@ -120,13 +126,17 @@ listen_host=127.0.0.1` and without a default listener; each session gets
   `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE`,
   `CODEX_CA_CERTIFICATE`, `GIT_SSL_CAINFO`, each pointing to a bundle of the
   session (see "Trust"), and `GIT_HTTP_PROXY_AUTHMETHOD=basic` so Git sends
-  the credentials without a 407 first. On Windows additionally: Git gets
-  `http.sslBackend=openssl` through `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_n`/
-  `GIT_CONFIG_VALUE_n` (appended after inherited entries), because its default
-  schannel ignores `GIT_SSL_CAINFO`; `CURL_CA_BUNDLE` points to the CA alone,
-  because `curl.exe` rejects files above 1 MB. `curl.exe` still checks
-  revocation, which the CA cannot answer: its HTTPS requests fail unless the
-  person adds `--ssl-no-revoke` (named in `bays/proxy/CLAUDE.md`). Inherited values of these names are not lost: they
+  the credentials without a 407 first. On Windows additionally: Git's default
+  backend schannel ignores `GIT_SSL_CAINFO`, so `proxy.env` also returns
+  `gitConfig: [['http.sslBackend', 'openssl']]`; the agent bay, which alone
+  knows the merged environment, appends it after existing
+  `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_n`/`GIT_CONFIG_VALUE_n` entries.
+  `curl.exe` (schannel) ignores `CURL_CA_BUNDLE` and `SSL_CERT_FILE`, rejects
+  CA files above 1 MB and checks revocation, which the CA cannot answer: no
+  variable makes it work. `proxy.env` writes a CA-only file next to the bundle,
+  and `bays/proxy/CLAUDE.md` names the call that worked in the spike:
+  `curl.exe --cacert <ca-only file> --ssl-no-revoke …`. Without it its HTTPS
+  requests fail, they do not bypass the proxy. Inherited values of these names are not lost: they
   go into that bundle.
 - **Proxy credentials.** Each port has a random password; the proxy URLs
   then read `http://hangar:<password>@127.0.0.1:<port>`. mitmproxy's
@@ -165,8 +175,10 @@ listen_host=127.0.0.1` and without a default listener; each session gets
   new CA and a new bundle generation, restart the engine with its listeners,
   clear the cached `proxy.env` answers, then answer again. Effects: a shell
   restarted afterwards gets the new generation and works; a running shell
-  keeps pointing to the old generation, so its processes, old and new, fail
-  TLS until the shell is restarted; the UI names these sessions. Old
+  keeps pointing to the old generation, so its proxied connections fail TLS
+  until the shell is restarted; the UI names these sessions. A client may
+  then fall back to a direct connection (Codex did without a trusted CA in
+  step 0); that is not watched. Old
   generations are removed when no session uses them.
 
 ### Capture
@@ -184,7 +196,12 @@ listen_host=127.0.0.1` and without a default listener; each session gets
   (not `_handle_event`, which `start` reassigns per instance): after each
   received event it sums `frame_buf` of both sides; above 16 MB it
   closes both sides with code 1009 (message too big), drops the buffer and
-  sends a `ws.tooLarge` row. The wrapper touches a private API: the bay
+  sends a `ws.tooLarge` row. That check sees only fragments: wsproto inflates
+  `permessage-deflate` frames without a size bound (`wsproto/extensions.py`),
+  so a few KB of compressed input can become one complete 32 MB message
+  between two checks (reproduced in the Codex review of PR #41). The addon
+  therefore removes `Sec-WebSocket-Extensions` from upgrade requests in
+  `requestheaders`, so no compression is negotiated. The wrapper touches a private API: the bay
   supports mitmproxy `>=12.3,<13` only, the addon reports
   `mitmproxy.version.VERSION` at start and the engine refuses other versions
   with the reason (`proxy.status` `failed`). Step 0 showed the abort without a
@@ -290,7 +307,10 @@ kind: 'sse' | 'ws-text' | 'ws-binary', encoding: 'utf8' | 'base64', data }[]`;
   starts itself get only the variables in their `env_vars` and so connect
   directly. Hangar does not change the Codex configuration in v1;
   `bays/proxy/CLAUDE.md` and the UI hint name the gap and the `env_vars`
-  entries that close it.
+  entries that close it. Codex without a trusted CA also opened a direct
+  connection from its own process; whether it then reached the API directly
+  was not checked. CA renewal and engine outage produce exactly that state,
+  so their tests watch for direct connections.
 - An agent with released `flow.get` reads bodies of everything its shell
   sent, also of programs it did not start itself in that shell.
 - Captured bodies can contain secrets the redaction misses. They stay in
@@ -300,8 +320,9 @@ kind: 'sse' | 'ws-text' | 'ws-binary', encoding: 'utf8' | 'base64', data }[]`;
 
 - A watched session depends on a running `mitmdump`. If it crashes, the bay
   restarts it (backoff 1 s, 5 s, 30 s) with the same ports and reports the
-  outage; meanwhile requests of watched sessions fail instead of going out
-  unwatched.
+  outage; meanwhile proxied requests of watched sessions fail. A client
+  that falls back to a direct connection then goes out unwatched (threat
+  model).
 - Python dependency for those who use the bay; on Windows `mitmdump.exe`.
 - The WebSocket limit wraps a private mitmproxy method: the bay supports
   mitmproxy `>=12.3,<13`; a new major version needs the spike point again.
