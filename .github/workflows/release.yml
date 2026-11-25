@@ -49,6 +49,9 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # mitmproxy for the proxy bay's engine test (ADR 0049), as in ci.yml.
+      - uses: astral-sh/setup-uv@v6
+      - run: uv tool install mitmproxy==12.3.1
       - run: pnpm test
       - run: pnpm build
       - uses: actions/download-artifact@v4
