@@ -42,7 +42,15 @@ function listen(): void {
     }),
   );
   autoUpdater.on('update-downloaded', ({ version }) => set({ state: 'ready', version }));
-  autoUpdater.on('error', (e: Error) => set({ state: 'error', message: e.message }));
+  autoUpdater.on('error', (e: Error) => {
+    const version = status && 'version' in status ? status.version : '';
+    // Squirrel.Mac validates the signature of the app and of the update; an unsigned
+    // (ad-hoc signed) build always fails here, so the release page is the way to update.
+    if (process.platform === 'darwin' && version && /code signature/i.test(e.message)) {
+      return set({ state: 'manual', version });
+    }
+    set({ state: 'error', message: e.message });
+  });
 }
 
 /**
@@ -72,7 +80,7 @@ export function checkForUpdates(): void {
   check();
 }
 
-/** Quits and installs a downloaded update; a refusal (unsigned macOS build) comes as `error`. */
+/** Quits and installs a downloaded update; a refusal (unsigned macOS build) comes as `manual`. */
 export function installUpdate(): void {
   if (status?.state === 'ready') electronUpdater.autoUpdater.quitAndInstall();
 }

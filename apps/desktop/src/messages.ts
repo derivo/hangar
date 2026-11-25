@@ -149,6 +149,9 @@ const de = {
   appUpdateReady: (version: string) => `Update ${version} ist bereit.`,
   restartAndInstall: 'Neu starten und installieren',
   updateFailed: (message: string) => `Update fehlgeschlagen: ${message}`,
+  updateManual:
+    'Dieses Update lässt sich auf macOS nicht automatisch installieren, weil Hangar nicht signiert ist.',
+  downloadVersion: (version: string) => `Version ${version} herunterladen`,
   baySettings: 'Einstellungen der Bays',
   settingsSections: 'Einstellungsbereiche',
   settingsGeneral: 'Allgemein',
@@ -573,6 +576,9 @@ const en: typeof de = {
   appUpdateReady: (version) => `Update ${version} is ready.`,
   restartAndInstall: 'Restart and install',
   updateFailed: (message) => `Update failed: ${message}`,
+  updateManual:
+    'This update cannot be installed automatically on macOS because Hangar is not signed.',
+  downloadVersion: (version) => `Download version ${version}`,
   baySettings: 'Bay settings',
   settingsSections: 'Settings sections',
   settingsGeneral: 'General',

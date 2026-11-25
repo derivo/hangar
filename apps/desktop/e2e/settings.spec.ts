@@ -88,3 +88,61 @@ test('"Check for updates" shows each state of the updater, without violations', 
     await app.close();
   }
 });
+
+test('an update macOS cannot install links its release page; long errors stay in the card', async () => {
+  const { app, shell } = await launch();
+  try {
+    await shell.getByRole('button', { name: 'Einstellungen' }).click();
+    // The first status must have arrived, or it would overwrite a pushed one.
+    await expect(shell.getByText('Updates gibt es nur in der installierten App.')).toBeVisible();
+    const push = (status: unknown) =>
+      app.evaluate(({ BrowserWindow }, s) => {
+        BrowserWindow.getAllWindows()[0]!.webContents.send('shell:update', s);
+      }, status);
+    await app.evaluate(({ shell }) => {
+      (globalThis as { __opened?: string[] }).__opened = [];
+      shell.openExternal = (async (url: string) => {
+        (globalThis as unknown as { __opened: string[] }).__opened.push(url);
+      }) as never;
+    });
+
+    await push({ state: 'manual', version: '9.9.9' });
+    await expect(
+      shell.getByText(
+        'Dieses Update lässt sich auf macOS nicht automatisch installieren, weil Hangar nicht signiert ist.',
+      ),
+    ).toBeVisible();
+    const link = shell.getByRole('link', { name: 'Version 9.9.9 herunterladen' });
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await shell.emulateMedia({ colorScheme });
+      expect(await violations(shell), `manual (${colorScheme})`).toEqual([]);
+    }
+    // The keyboard reaches the link; the shell opens the release page outside.
+    await link.focus();
+    await expect(link).toBeFocused();
+    await link.press('Enter');
+    await expect
+      .poll(() => app.evaluate(() => (globalThis as { __opened?: string[] }).__opened))
+      .toEqual(['https://github.com/derivo/hangar/releases/tag/v9.9.9']);
+
+    // The message Squirrel.Mac gave for the unsigned 0.9.0, with a long file URL.
+    await push({
+      state: 'error',
+      message:
+        'Code signature at URL file:///Users/someone/Library/Caches/dev.hangar.app.ShipIt/update.X2veCAI/Hangar.app/ did not pass validation: Die angegebenen Code-Anforderungen wurden nicht erfüllt.',
+    });
+    const error = shell.getByRole('alert').filter({ hasText: 'Update fehlgeschlagen' });
+    await expect(error).toBeVisible();
+    const [text, card] = await error.evaluate((e) =>
+      [e, e.closest('.settings-card')!].map((n) => {
+        const r = n.getBoundingClientRect();
+        return { left: r.left, right: r.right, scroll: n.scrollWidth - n.clientWidth };
+      }),
+    );
+    expect(text!.left).toBeGreaterThanOrEqual(card!.left);
+    expect(text!.right).toBeLessThanOrEqual(card!.right);
+    expect(text!.scroll).toBe(0);
+  } finally {
+    await app.close();
+  }
+});

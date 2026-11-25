@@ -56,6 +56,24 @@ describe('UpdateCheck', () => {
     expect(api.installUpdate).toHaveBeenCalledTimes(1);
   });
 
+  it('offers the release page when macOS cannot install the update itself', async () => {
+    const { push } = setup({ state: 'ready', version: '0.9.0' });
+    await screen.findByText('Update 0.9.0 ist bereit.');
+    push({ state: 'manual', version: '0.9.0' });
+    expect(
+      screen.getByText(
+        'Dieses Update lässt sich auf macOS nicht automatisch installieren, weil Hangar nicht signiert ist.',
+      ),
+    ).toBeVisible();
+    const link = screen.getByRole('link', { name: 'Version 0.9.0 herunterladen' });
+    expect(link).toHaveAttribute('href', 'https://github.com/derivo/hangar/releases/tag/v0.9.0');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(screen.queryByRole('button', { name: 'Neu starten und installieren' })).toBeNull();
+    // A later release may be signed: checking again stays possible.
+    expect(screen.getByRole('button', { name: 'Nach Updates suchen' })).toBeEnabled();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('says that updates exist only in the packaged app', async () => {
     setup({ state: 'unsupported' });
     expect(await screen.findByText('Updates gibt es nur in der installierten App.')).toBeVisible();

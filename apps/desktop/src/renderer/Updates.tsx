@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { t } from '../messages';
-import type { ShellApi, UpdateStatus } from '../shared';
+import { RELEASES_URL, type ShellApi, type UpdateStatus } from '../shared';
 
 interface Props {
   api: Pick<ShellApi, 'getUpdate' | 'onUpdate' | 'checkForUpdates' | 'installUpdate'>;
@@ -20,6 +20,8 @@ const text = (s: UpdateStatus) => {
       return t.updateDownloading(s.version, s.percent);
     case 'ready':
       return t.appUpdateReady(s.version);
+    case 'manual':
+      return t.updateManual;
     default:
       return '';
   }
@@ -62,6 +64,14 @@ export function UpdateCheck({ api }: Props) {
       <p aria-live="polite">{text(status)}</p>
       {status.state === 'downloading' && (
         <progress max={100} value={status.percent} aria-label={t.updateDownload} />
+      )}
+      {status.state === 'manual' && (
+        <p>
+          {/* The shell window's open handler checks it: a release page, no `%`, no dot segments. */}
+          <a href={`${RELEASES_URL}tag/v${status.version}`} target="_blank" rel="noreferrer">
+            {t.downloadVersion(status.version)}
+          </a>
+        </p>
       )}
       {status.state === 'error' && (
         <p className="error" role="alert">

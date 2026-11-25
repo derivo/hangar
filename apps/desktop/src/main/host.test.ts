@@ -944,6 +944,35 @@ describe('Host: what a bay view may do', () => {
     expect(electron.shell.openExternal.mock.calls).toEqual([[PROJECT_URL]]);
   });
 
+  it('opens release pages of the project outside, but no look-alike', async () => {
+    await started();
+    const contents = FakeWindow.all[0]!.webContents;
+    const release = 'https://github.com/derivo/hangar/releases/tag/v0.9.0';
+    expect(contents.openHandler!({ url: release })).toEqual({ action: 'deny' });
+    expect(electron.shell.openExternal.mock.calls).toEqual([[release]]);
+    for (const url of [
+      'https://github.com/derivo/hangar/releases',
+      'https://github.com/derivo/hangar/releasesX/tag/v1',
+      'https://github.com/derivo/hangar-evil/releases/tag/v1',
+      'https://github.com/derivo/hangar/releases/../../evil/releases/tag/v1',
+      'https://github.com/derivo/hangar/releases/%2e%2e/%2e%2e/evil',
+      'https://github.com/derivo/hangar/releases/%2e%2e%2f%2e%2e%2fevil',
+      'https://github.com/derivo/hangar/releases/\\..\\..\\evil',
+      'https://github.com.evil.com/derivo/hangar/releases/tag/v1',
+      'https://evil.com@github.com/derivo/hangar/releases/tag/v1',
+      'https://github.com:444/derivo/hangar/releases/tag/v1',
+      'http://github.com/derivo/hangar/releases/tag/v1',
+      'https://GITHUB.com/derivo/hangar/releases/tag/v1',
+      'https://github.com/DERIVO/hangar/releases/tag/v1',
+      'javascript:alert(1)//https://github.com/derivo/hangar/releases/',
+      ' https://github.com/derivo/hangar/releases/tag/v1',
+      'not a url',
+    ]) {
+      expect(contents.openHandler!({ url })).toEqual({ action: 'deny' });
+    }
+    expect(electron.shell.openExternal).toHaveBeenCalledTimes(1);
+  });
+
   it('sends bay events to its view and windows, badges to the app and the shell', async () => {
     const { host, viewOf, shellState } = await started({ sidebar: ['dev.test.a', 'dev.test.c'] });
     const view = viewOf('dev.test.a')!;
