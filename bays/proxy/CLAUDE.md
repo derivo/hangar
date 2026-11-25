@@ -48,7 +48,8 @@ Events (stdout): `hello { version }` at start, `flow.request`, `flow.response`
   `WebsocketLayer.relay_messages`. Another version fails with the reason.
 - After the 1009 close frame the addon keeps reading each side and closes its
   TCP connection only after that side's close answer or end, at the latest after
-  `WS_CLOSE_WAIT` (2 s). Closing at once while the peer still sends makes the
+  `WS_CLOSE_WAIT` (2 s). The client goes last: closing it ends the whole
+  connection in mitmproxy, server included. Closing at once while the peer still sends makes the
   kernel reset the connection, and Node then destroys the socket on the write
   error before it reads the close frame. Closing from the client's own reading
   task also hits a cancel race in mitmproxy 12.3.1 (`handle_connection` gets the

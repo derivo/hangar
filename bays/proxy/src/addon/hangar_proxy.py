@@ -135,12 +135,13 @@ def _limited_relay(self, event):
     for w in (self.server_ws, self.client_ws):
         if w.state in {ConnectionState.OPEN, ConnectionState.REMOTE_CLOSING}:
             yield w.send2(CloseConnection(code=1009, reason="message too big"))
-        if w.state is not ConnectionState.LOCAL_CLOSING:
-            yield commands.CloseConnection(w.conn)
     # A peer still sending gets a reset when we close now, and the reset can discard the
     # close frame before the peer reads it. So read on until its close answer, its EOF or
     # WS_CLOSE_WAIT. (Closing it while it still sends can also hit a cancel race in
     # mitmproxy 12.3.1's handle_connection that never closes the socket.)
+    sides = (self.server_ws, self.client_ws)
+    self.hangar_done = {w for w in sides if w.state is not ConnectionState.LOCAL_CLOSING}
+    yield from _close_done(self)
     yield commands.RequestWakeup(WS_CLOSE_WAIT)
     self.flow.websocket.close_code = 1009
     self.flow.live = False
@@ -149,21 +150,29 @@ def _limited_relay(self, event):
     yield wsl.WebsocketEndHook(self.flow)
 
 
+def _close_done(self):
+    if self.server_ws in self.hangar_done:
+        yield commands.CloseConnection(self.server_ws.conn)
+    # Closing the client ends the whole connection in mitmproxy, server included: last.
+    if len(self.hangar_done) == 2:
+        yield commands.CloseConnection(self.client_ws.conn)
+
+
 def _closing(self, event):
     if isinstance(event, events.Wakeup):
-        for w in (self.server_ws, self.client_ws):
-            yield commands.CloseConnection(w.conn)
-        return
-    if not isinstance(event, events.ConnectionEvent):
-        return
-    w = self.client_ws if event.connection == self.context.client else self.server_ws
-    if w.state is not ConnectionState.LOCAL_CLOSING:
-        return
-    if isinstance(event, events.DataReceived):
-        w.receive_data(event.data)
-        if not any(isinstance(e, CloseConnection) for e in w.events()):
+        self.hangar_done = {self.server_ws, self.client_ws}
+    elif isinstance(event, events.ConnectionEvent):
+        w = self.client_ws if event.connection == self.context.client else self.server_ws
+        if w in self.hangar_done:
             return
-    yield commands.CloseConnection(w.conn)
+        if isinstance(event, events.DataReceived):
+            w.receive_data(event.data)
+            if not any(isinstance(e, CloseConnection) for e in w.events()):
+                return
+        self.hangar_done.add(w)
+    else:
+        return
+    yield from _close_done(self)
 
 
 wsl.WebsocketLayer.relay_messages = _limited_relay

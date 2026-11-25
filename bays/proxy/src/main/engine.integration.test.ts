@@ -194,7 +194,7 @@ describe.skipIf(missing)(
         res.end('hello');
       };
       const http = createHttpServer(handler);
-      // A WebSocket server that echoes text and records close codes.
+      // A WebSocket server that echoes text and answers and records close codes.
       http.on('upgrade', (req, socket: Socket) => {
         upgrades.push(req.headers);
         const deflate = req.url === '/ws-deflate';
@@ -217,7 +217,9 @@ describe.skipIf(missing)(
         }
         frames(socket, (opcode, payload) => {
           if (opcode === 1) socket.write(frame(1, payload, true, false));
-          if (opcode === 8) serverCloses.push(payload.readUInt16BE(0));
+          if (opcode !== 8) return;
+          serverCloses.push(payload.readUInt16BE(0));
+          socket.write(frame(8, payload, true, false));
         });
         socket.on('end', () => serverEnds++);
         socket.on('error', () => {});
@@ -435,7 +437,8 @@ describe.skipIf(missing)(
           { timeout: 20_000 },
         );
         socket.resume();
-        // The proxy closes both sides once the client answered, or after WS_CLOSE_WAIT.
+        const resumed = Date.now();
+        // The proxy closes both sides once both answered, or after WS_CLOSE_WAIT (2 s).
         await vi.waitFor(
           () => {
             expect(socket.destroyed, `client still open, errors: ${errors.join(', ')}`).toBe(true);
@@ -443,6 +446,7 @@ describe.skipIf(missing)(
           },
           { timeout: 10_000 },
         );
+        if (answers) expect(Date.now() - resumed).toBeLessThan(1500);
         expect(errors).toEqual([]);
         expect(fromProxy).toEqual([1009]);
         expect(serverCloses.slice(closes)).toEqual([1009]);
