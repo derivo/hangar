@@ -79,8 +79,11 @@ export interface SidebarLocalServer {
 /** Height of the hint „Neue Version bereit“ above a bay of the local server. */
 export const UPDATE_HINT_HEIGHT = 48;
 
-/** Project page, shown in "About Hangar" and the overview; the only link the shell opens. */
+/** Project page, shown in "About Hangar" and the overview; the shell window opens it outside. */
 export const PROJECT_URL = 'https://github.com/derivo/hangar';
+
+/** Release pages of the project; besides `PROJECT_URL` the only links the shell opens. */
+export const RELEASES_URL = `${PROJECT_URL}/releases/`;
 
 /** A program, folder, file or website in the sidebar (ADR 0027). */
 export interface SidebarShortcut {
@@ -300,6 +303,8 @@ export interface ShellApi {
 export type UpdateStatus =
   | { state: 'unsupported' | 'idle' | 'checking' | 'current' }
   | { state: 'available' | 'ready'; version: string }
+  /** macOS refused to install it (unsigned app): download it from its release page. */
+  | { state: 'manual'; version: string }
   | { state: 'downloading'; version: string; percent: number }
   | { state: 'error'; message: string };
 

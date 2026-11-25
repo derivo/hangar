@@ -13,6 +13,8 @@ All notable changes to this project. Format based on
 
 ### Fixed
 
+- Settings → General → Updates on macOS: when Squirrel.Mac refuses an update because Hangar is not signed ("Code signature … did not pass validation"), the card says so ("This update cannot be installed automatically on macOS because Hangar is not signed.") and links "Download version X.Y.Z" to the release page of the offered version instead of showing the raw error. Other errors keep their message. Besides the project page, the shell window now opens release pages of the project (`https://github.com/derivo/hangar/releases/…`, checked by prefix and URL parsing, no `%`).
+- Settings: long error texts (file URLs) no longer overflow their card.
 - Settings: the section navigation did not move the page when the target heading was already visible (tall windows), since `focus()` only scrolls headings out of view. A link now scrolls its section to the top and then focuses its heading, by mouse and Enter.
 - Release workflow: packages build unsigned when the signing secrets are missing (an empty `CSC_LINK` stopped the macOS build with "not a file"). Unsigned macOS apps get an ad-hoc signature, so macOS offers "Open Anyway" instead of calling the app damaged. Started by hand, the workflow is a dry run: packages as workflow artifacts, nothing published.
 - Relay test "answers asking announces of one member at most once per interval" no longer fails on slow runners: it waits for both expected delivers before clearing the inbox.

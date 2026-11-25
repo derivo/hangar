@@ -164,9 +164,18 @@ test:linux-server`) and its setup over SSH (`pnpm test:linux-setup`, ADR
   in the settings (status, progress, "Restart and install", error message of
   electron-updater, on every platform) is tested with a fake updater
   (`updates.test.ts`, `Updates.test.tsx`) and with pushed states in
-  `e2e/settings.spec.ts` (axe light and dark per state). Download and
-  installation are not checked end to end without a published release;
-  unsigned macOS builds are expected to show Squirrel's signature error.
+  `e2e/settings.spec.ts` (axe light and dark per state). A packaged 0.8.9
+  test build on macOS downloaded 0.9.0 and then got Squirrel.Mac's error
+  "Code signature at URL … did not pass validation" (2026-11-25). On macOS
+  an updater error that names the code signature, once a version is known,
+  now becomes the state `manual`: a message that the unsigned Hangar cannot
+  install it plus a link "Download version X.Y.Z" to its release page (the
+  shell window opens only `PROJECT_URL` and URLs under
+  `https://github.com/derivo/hangar/releases/` without `%` that URL parsing
+  leaves unchanged). Tested with the fake updater, `host.test.ts` (look-alike URLs)
+  and pushed states in `e2e/settings.spec.ts` (axe light and dark, keyboard,
+  long error text within its card); not yet observed with a real packaged
+  build.
 - **Real Claude Code run** (Claude Code 2.1.312, 2026-10-28, macOS,
   session with a cleaned environment in a temp repository):
   - `claude -p` in the session: server `hangar` connected, four tools

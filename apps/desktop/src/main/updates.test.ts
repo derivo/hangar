@@ -106,14 +106,52 @@ describe('update status', () => {
     updater.emit('update-downloaded', { version: '1.0.0' });
     installUpdate();
     expect(updater.quitAndInstall).toHaveBeenCalledTimes(1);
-    // Unsigned macOS builds: Squirrel refuses the update; its message is shown as is.
-    updater.emit('error', new Error('Could not get code signature for running application'));
-    expect(updateStatus()).toEqual({
-      state: 'error',
-      message: 'Could not get code signature for running application',
-    });
+    updater.emit('error', new Error('net::ERR_CONNECTION_RESET'));
+    expect(updateStatus()).toEqual({ state: 'error', message: 'net::ERR_CONNECTION_RESET' });
     installUpdate();
     expect(updater.quitAndInstall).toHaveBeenCalledTimes(1);
+  });
+
+  describe('signature errors of Squirrel.Mac', () => {
+    const platform = process.platform;
+    const on = (p: string) => Object.defineProperty(process, 'platform', { value: p });
+    afterEach(() => on(platform));
+    const squirrel =
+      'Code signature at URL file:///Users/a/Library/Caches/dev.hangar.app.ShipIt/update.X2veCAI/Hangar.app/ did not pass validation: Die angegebenen Code-Anforderungen wurden nicht erfüllt.';
+
+    it('offers the release page on macOS when the unsigned app cannot install the update', () => {
+      on('darwin');
+      startUpdates('stable');
+      updater.emit('update-downloaded', { version: '0.9.0' });
+      updater.emit('error', new Error(squirrel));
+      expect(updateStatus()).toEqual({ state: 'manual', version: '0.9.0' });
+      // Squirrel's refusal of the running app itself, before it validates the update.
+      updater.emit('download-progress', { percent: 99 });
+      updater.emit('error', new Error('Could not get code signature for running application'));
+      expect(updateStatus()).toEqual({ state: 'manual', version: '0.9.0' });
+      installUpdate();
+      expect(updater.quitAndInstall).not.toHaveBeenCalled();
+    });
+
+    it('keeps the message of other errors on macOS and of every error elsewhere', () => {
+      on('darwin');
+      startUpdates('stable');
+      updater.emit('update-downloaded', { version: '0.9.0' });
+      updater.emit('error', new Error('net::ERR_CONNECTION_RESET'));
+      expect(updateStatus()).toEqual({ state: 'error', message: 'net::ERR_CONNECTION_RESET' });
+      on('win32');
+      updater.emit('update-downloaded', { version: '0.9.0' });
+      updater.emit('error', new Error(squirrel));
+      expect(updateStatus()).toEqual({ state: 'error', message: squirrel });
+    });
+
+    it('keeps the message when no version is known yet', () => {
+      on('darwin');
+      startUpdates('stable');
+      updater.emit('checking-for-update');
+      updater.emit('error', new Error(squirrel));
+      expect(updateStatus()).toEqual({ state: 'error', message: squirrel });
+    });
   });
 
   it('checks on demand, but not while a check or download runs', () => {

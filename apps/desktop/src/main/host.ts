@@ -62,6 +62,7 @@ import {
 } from './view-state';
 import {
   PROJECT_URL,
+  RELEASES_URL,
   UPDATE_HINT_HEIGHT,
   type JobsView,
   type NotificationStatus,
@@ -1289,7 +1290,7 @@ export class Host {
     // The shell preload grants every shell:* channel; no other page may ever run here.
     this.window.webContents.on('will-navigate', (e) => e.preventDefault());
     this.window.webContents.setWindowOpenHandler(({ url }) => {
-      if (url === PROJECT_URL) void shell.openExternal(url);
+      if (url === PROJECT_URL || isReleasePage(url)) void shell.openExternal(url);
       return { action: 'deny' };
     });
     if (process.env.ELECTRON_RENDERER_URL) {
@@ -1631,4 +1632,14 @@ function shownUpdate(running: string, ready: string): { running: string; ready: 
   return plain(running) === plain(ready)
     ? { running, ready }
     : { running: plain(running), ready: plain(ready) };
+}
+
+/**
+ * A release page of the project: the exact prefix, and URL parsing must give back the same
+ * string (no dot segments, backslashes, case or encoding changes that could lead elsewhere).
+ * No `%` either: GitHub could decode an escaped `/` (`%2f`) into another path.
+ */
+function isReleasePage(url: string): boolean {
+  // After the prefix only the path follows, which URL parsing never rejects.
+  return url.startsWith(RELEASES_URL) && !url.includes('%') && new URL(url).href === url;
 }

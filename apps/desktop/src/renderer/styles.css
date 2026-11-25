@@ -669,6 +669,8 @@ li:has(> .sidebar-item[aria-current='page'])::before,
 
 .error {
   color: var(--hangar-color-danger);
+  /* Long words such as file URLs in an error must not overflow their card. */
+  overflow-wrap: anywhere;
 }
 
 .picker-actions {
