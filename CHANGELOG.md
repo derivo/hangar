@@ -8,6 +8,8 @@ All notable changes to this project. Format based on
 
 ## [0.9.0] - 2026-11-25
 
+First public release. The packages are not signed (see README, "Download").
+
 ### Added
 
 - Proxy bay, step 2 (ADR 0049): new bay `dev.hangar.proxy` ("Proxy") with its engine. It starts `mitmdump` (mitmproxy 12.3 or later below 13, installed separately, e.g. `uv tool install mitmproxy`) with a shipped addon once a listener is needed, binds listeners only on `127.0.0.1`, each with its own proxy password, and restarts the engine after a crash (1 s, 5 s, 30 s) with the same listeners. The addon reports requests, responses, streams, WebSocket messages and pass-through tunnels as JSON lines, with secrets in headers, query strings and URLs redacted, strips WebSocket compression and ends messages above 16 MB with code 1009. The CA lives in the bay's data folder (0700); the proxy trusts the system roots plus the setting "Extra CA for servers". The bay shows the engine state; sessions do not go through it yet (step 3). With a local server it runs there. `pnpm lint` compiles the addon; CI installs mitmproxy and tests the engine against a real `mitmdump` on macOS, Linux and Windows.

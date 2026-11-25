@@ -85,6 +85,19 @@ Details: [docs/architecture.md](docs/architecture.md). Background:
 - pnpm 10 (version in `package.json` under `packageManager`)
 - Git (for worktrees)
 
+## Download
+
+Packages for macOS (dmg, zip), Windows (installer) and Linux (AppImage) are on
+[GitHub Releases](https://github.com/derivo/hangar/releases). They are **not
+signed**:
+
+- **macOS**: on the first start macOS refuses the app. Allow it under System
+  Settings → Privacy & Security → "Open Anyway". Updates have to be installed
+  by hand (auto-update needs a signature).
+- **Windows**: SmartScreen warns about an unknown publisher → "More info" →
+  "Run anyway".
+- **Linux**: `chmod +x Hangar-*.AppImage`, then start it.
+
 ## Installation and start
 
 ```sh
