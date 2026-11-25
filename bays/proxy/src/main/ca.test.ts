@@ -205,6 +205,9 @@ const SSL = 'KoZIhvdjZAED';
 const SMIME = 'KoZIhvdjZAEI';
 const DENY = 3;
 const sha = (c: string) => c.repeat(40);
+const key = (k: string, tag: string, v: string) =>
+  `\t\t\t\t\t<key>kSecTrustSettings${k}</key>\n\t\t\t\t\t<${tag}>${v}</${tag}>\n`;
+const name = (n: string) => key('PolicyName', 'string', n);
 
 describe('distrustedRoots', () => {
   it('denies only what the first entry that applies to TLS denies', () => {
@@ -229,9 +232,6 @@ describe('distrustedRoots', () => {
   });
 
   it('stops at the first entry that applies to an SSL server check, as trustd does', () => {
-    const key = (k: string, tag: string, v: string) =>
-      `\t\t\t\t\t<key>kSecTrustSettings${k}</key>\n\t\t\t\t\t<${tag}>${v}</${tag}>\n`;
-    const name = (n: string) => key('PolicyName', 'string', n);
     const BASIC = 'KoZIhvdjZAEC';
     const admin = plist({
       // Unspecified ends the search like any other result; AllowedError does not scope an entry.
@@ -253,6 +253,35 @@ describe('distrustedRoots', () => {
     expect(
       [...distrustedRoots((domain) => (domain === 'admin' ? admin : plist({})))].sort(),
     ).toEqual([sha('0'), sha('B'), sha('D'), sha('F')]);
+  });
+
+  // Each pair: the entry that must apply denies (fail open if skipped); the entry that must not
+  // apply trusts before a later deny (fail closed if it applied).
+  it('matches key usage, policy OID and policy name exactly as trustd does', () => {
+    const usage = (n: string) => key('KeyUsage', 'integer', n);
+    const oid = (s: string) => key('Policy', 'string', s);
+    const admin = plist({
+      // A root in a TLS server chain is used to sign certificates: SignCert (8), compared exactly.
+      [sha('A')]: [usage('8') + result(DENY)],
+      [sha('B')]: [usage('8') + result(1), result(DENY)],
+      [sha('C')]: [usage('9') + result(DENY)],
+      // Compared as the low 32 bits of a 64-bit value; -1 is not kSecTrustSettingsKeyUseAny.
+      [sha('D')]: [usage('4294967304') + result(DENY)],
+      [sha('E')]: [usage('-1') + result(1), result(DENY)],
+      // Beyond 64 bits CFNumberGetValue fails, so the entry never applies.
+      [sha('5')]: [usage('18446744073709551624') + result(DENY)],
+      // String OIDs of SSL server and client normalise to the SSL policy; the name scopes them.
+      [sha('F')]: [oid('1.2.840.113635.100.1.3.1') + name('sslServer') + result(DENY)],
+      [sha('0')]: [oid('1.2.840.113635.100.1.3.1') + name('sslServer') + result(1), result(DENY)],
+      [sha('1')]: [oid('1.2.840.113635.100.1.3.2') + result(DENY)],
+      [sha('2')]: [oid('1.2.840.113635.100.1.3.2') + name('sslClient') + result(DENY)],
+      // Strings are compared as written; only base64 data may wrap.
+      [sha('3')]: [policy(SSL) + name('ssl Server') + result(DENY)],
+      [sha('4')]: [policy(SSL) + name('ssl Server') + result(1), result(DENY)],
+    });
+    expect(
+      [...distrustedRoots((domain) => (domain === 'admin' ? admin : plist({})))].sort(),
+    ).toEqual([sha('1'), sha('4'), sha('A'), sha('D'), sha('E'), sha('F')]);
   });
 
   it('lets admin settings of a certificate overrule its user settings', () => {

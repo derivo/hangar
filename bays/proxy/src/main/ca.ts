@@ -34,9 +34,25 @@ const ROOT_FILES: Partial<Record<NodeJS.Platform, string[]>> = {
 const PEM = /-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g;
 
 const DENY = 3; // kSecTrustSettingsResultDeny
-// The SSL policy OID 1.2.840.113635.100.1.3 as the export stores it: data or string.
-const SSL_POLICY = new Set(['KoZIhvdjZAED', '1.2.840.113635.100.1.3']);
-const KEY_USE_ANY = '4294967295'; // kSecTrustSettingsKeyUseAny
+// The SSL policy OID 1.2.840.113635.100.1.3 as the export stores it: DER data, or a string
+// that SecPolicyCreateWithProperties turns into the SSL policy, server (.1) and client (.2)
+// included (SecPolicyGetCompatibilityOidString).
+const SSL_POLICY = new Set([
+  'KoZIhvdjZAED',
+  '1.2.840.113635.100.1.3',
+  '1.2.840.113635.100.1.3.1',
+  '1.2.840.113635.100.1.3.2',
+]);
+
+/**
+ * Whether a key usage constraint applies to a root in a TLS server chain, as in trustd
+ * (`SecPVCContainsTrustSettingsKeyUsage`): kSecTrustSettingsKeyUseAny, or the low 32 bits of
+ * the 64-bit value equal the usage trustd computes, SignCert (8) for a non-leaf certificate.
+ */
+function keyUsageApplies(text: string): boolean {
+  const n = BigInt(text.trim());
+  return n === 0xffffffffn || (n === BigInt.asIntN(64, n) && BigInt.asUintN(32, n) === 8n);
+}
 
 /** One domain's trust settings as `security trust-settings-export` writes them (XML plist). */
 function exportTrustSettings(domain: 'user' | 'admin'): string {
@@ -54,9 +70,9 @@ function exportTrustSettings(domain: 'user' | 'admin'): string {
 /**
  * Whether one certificate's settings deny a TLS server check: the first entry that applies
  * decides, as in trustd (`SecPVCGetTrustSettingsResult`), `Unspecified` included. An entry
- * applies when it names no application or host (`PolicyString`), its key usage is absent or
- * any, its policy is absent or SSL and its policy name absent or `sslServer`. No entry that
- * applies (or none at all) is no deny.
+ * applies when it names no application or host (`PolicyString`), its key usage is absent, any
+ * or SignCert, its policy is absent or SSL and its policy name absent or `sslServer`. No
+ * entry that applies (or none at all) is no deny.
  */
 function deniesTls(cert: string): boolean {
   // The usage constraint dictionaries are flat (data, integer, string values only).
@@ -64,11 +80,14 @@ function deniesTls(cert: string): boolean {
     d.includes('<key>kSecTrustSettings'),
   );
   for (const entry of entries) {
-    const value = (key: string) =>
-      new RegExp(`<key>${key}</key>\\s*<\\w+>([^<]*)<`).exec(entry)?.[1]?.replace(/\s/g, '');
+    const value = (key: string) => {
+      const m = new RegExp(`<key>${key}</key>\\s*<(\\w+)>([^<]*)<`).exec(entry);
+      // Only base64 data may wrap; trustd compares strings as written.
+      return m?.[1] === 'data' ? m[2]!.replace(/\s/g, '') : m?.[2];
+    };
     if (/<key>kSecTrustSettings(Application|PolicyString)<\/key>/.test(entry)) continue;
     const usage = value('kSecTrustSettingsKeyUsage');
-    if (usage !== undefined && usage !== KEY_USE_ANY) continue;
+    if (usage !== undefined && !keyUsageApplies(usage)) continue;
     const policy = value('kSecTrustSettingsPolicy');
     if (policy !== undefined && !SSL_POLICY.has(policy)) continue;
     const name = value('kSecTrustSettingsPolicyName');

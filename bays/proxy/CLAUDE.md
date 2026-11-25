@@ -64,7 +64,8 @@ Events (stdout): `hello { version }` at start, `flow.request`, `flow.response`
   `systemRoots()` drops denied roots by SHA-1. As in trustd: admin settings of a
   certificate overrule its user settings; the first entry that applies to a TLS
   server check decides, `Unspecified` included (no application or host, key
-  usage absent or any, policy absent or SSL, name absent or `sslServer`).
+  usage absent, any or SignCert (8), policy absent or SSL, string OIDs `.3.1`
+  and `.3.2` included, name absent or exactly `sslServer`).
   Unreadable settings warn once and filter nothing.
 - The engine starts with the first `listen`, not with Hangar.
 - With a local server the bay runs there (`IN_SERVER`), like the agent bay.

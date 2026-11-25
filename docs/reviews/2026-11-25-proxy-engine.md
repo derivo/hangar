@@ -148,3 +148,55 @@ deny before and after the fix. Whether Keychain Access writes `KeyUsage` as
 4294967295 or as -1 is unknown; -1 stays skipped, as trustd's exact comparison would
 also not treat it as "any". Entries with `kSecTrustSettingsPolicyOptions` (a nested
 dictionary) are outside the flat-dictionary parser, as before.
+
+## Fifth review: commit ee001a6
+
+Reviewer: Codex (`codex exec -s read-only`), on commit ee001a6 (trust settings filter in
+`bays/proxy/src/main/ca.ts`). Codex confirmed the admin-before-user domain order and
+reported three findings, each with a fail-open and a fail-closed scenario. Every claim
+was checked against Apple's open-source Security code at commit
+`db15acbe6a7f257a859ad9a3bb86097bfe0679d9` of `apple-oss-distributions/Security` (raw
+files fetched; line numbers below refer to that commit).
+
+| #   | Sev. | Finding                                                                                | Checked                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Change |
+| --- | ---- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 1   | high | `KeyUsage` 8 (SignCert) skipped, although it applies to a root in a TLS server chain   | Confirmed: `SecPVCContainsTrustSettingsKeyUsage` (`trust/trustd/SecPolicyServer.c:3174`) reads the value as SInt64 (`:3179`, failure: no match), accepts `kSecTrustSettingsKeyUseAny` (`:3183`), adds SignCert for every certificate that is not the leaf (`:3206`), adds the policy's key usages (none for the SSL server policy: `KeyUsage` absent from `SecPolicyCreateSSL(true)`'s options, observed via `SecPolicyGetOptions` on this Mac) and compares the low 32 bits exactly (`:3222`)                                              | Fixed  |
+| 2   | high | String OIDs `1.2.840.113635.100.1.3.1` / `.3.2` compared without Apple's normalisation | Confirmed: a string policy becomes `SecPolicyCreateWithProperties(certPolicy, NULL)` (`OSX/libsecurity_keychain/lib/TrustSettings.cpp:1074`), which creates the SSL policy for `.3`, `.3.1` and `.3.2` (`OSX/sec/Security/SecPolicy.c:83-84`, `:333`); trustd takes its compatibility OID (`trust/trustd/SecPolicyServer.c:3292-3296`), which is `.3` for all three (`SecPolicy.c:603-607`). The stored name still scopes it (`SecPolicyServer.c:3041-3083`): `.3.2` without a name applies to a server check, with `sslClient` it does not | Fixed  |
+| 3   | med  | Whitespace stripped from every value, so `ssl Server` became `sslServer`               | Confirmed: the name is copied unchanged (`TrustSettings.cpp:1087`) and compared with `CFEqual` (`SecPolicyServer.c:3054-3063`)                                                                                                                                                                                                                                                                                                                                                                                                              | Fixed  |
+
+Decisions taken from Apple's code:
+
+- `KeyUsage` -1: not "any". trustd compares the SInt64 value with 0xFFFFFFFF
+  (`SecPolicyServer.c:3183`, `kSecTrustSettingsKeyUseAny` is a `uint32_t` option,
+  `trust/headers/SecTrustSettings.h:191-205`), so -1 fails there; its low 32 bits
+  (0xFFFFFFFF) do not equal SignCert either (`:3222`). The entry never applies to a root
+  in a TLS server chain. `security add-trusted-cert -u -1` writes exactly this value
+  (`SecurityTool/macOS/trusted_cert_add.c:182`, `:312`).
+- Values beyond 64 bits never apply (`CFNumberGetValue` fails, `:3179`); values whose low
+  32 bits are 8 apply (`:3222`).
+- DER (`<data>`) OIDs need no normalisation: `SecPolicyCopy` resolves data OIDs only
+  through the fixed list in `OSX/libsecurity_keychain/lib/PolicyCursor.cpp:46-65`, which
+  holds the SSL OID `.3` (`:49`) but no `.3.1` or `.3.2`.
+
+Fix in `bays/proxy/src/main/ca.ts`: `keyUsageApplies()` implements rule 1 (BigInt, so
+64-bit values and the low-32-bit mask stay exact); `SSL_POLICY` also holds the string
+OIDs `.3.1` and `.3.2`; `deniesTls()` strips whitespace only from `<data>` values. Test
+in `ca.test.ts` (red before the fix: eight wrong results): "matches key usage, policy
+OID and policy name exactly as trustd does", one entry per fail-open and fail-closed
+scenario of the review, plus -1, a non-matching usage (9) and a value beyond 64 bits.
+ADR 0049 and `bays/proxy/CLAUDE.md` follow the new rule.
+
+Known differences that stay (rare, only reachable through `security
+trust-settings-import` of hand-written settings):
+
+- A data OID outside the `PolicyCursor.cpp` list makes `copyTrustSettings` abort for the
+  certificate (`TrustSettings.cpp:1068-1071`), so trustd sees no settings for it in that
+  domain (admin then falls back to user). The filter instead skips only that entry.
+- A string OID that `SecPolicyCreateWithProperties` does not resolve leaves the entry
+  without a policy (`TrustSettings.cpp:1076`), so it applies to any policy. The filter
+  instead treats it as a non-SSL policy.
+- A self-signed root presented as the leaf gets no SignCert usage in trustd
+  (`SecPolicyServer.c:3197-3207`); the filter assumes the root signs a chain.
+
+Not observed: a live trustd evaluation with changed settings (that would change the
+keychain).
