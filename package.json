@@ -15,7 +15,7 @@
     "dev": "pnpm build:deps && pnpm --filter @hangar/desktop dev",
     "build:deps": "pnpm --filter @hangar/cli --filter @hangar/server --filter './bays/**' build",
     "build": "pnpm -r --if-present build",
-    "lint": "eslint . && prettier --check .",
+    "lint": "eslint . && prettier --check . && node scripts/check-python.mjs",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run --coverage",

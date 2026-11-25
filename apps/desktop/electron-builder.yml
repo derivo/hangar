@@ -26,6 +26,9 @@ files:
   - from: ../../bays/feeds
     to: bays/feeds
     filter: [manifest.json, icon.svg, dist/**]
+  - from: ../../bays/proxy
+    to: bays/proxy
+    filter: [manifest.json, icon.svg, dist/**]
 extraResources:
   - from: ../../packages/cli/dist/hangar.mjs
     to: cli/hangar.mjs
@@ -43,6 +46,8 @@ npmRebuild: false
 asarUnpack:
   # Native addon plus spawn-helper must exist as real files.
   - node_modules/node-pty/**
+  # mitmdump's Python cannot read inside app.asar (ADR 0049).
+  - bays/proxy/dist/addon/**
 generateUpdatesFilesForAllChannels: true
 publish:
   provider: github

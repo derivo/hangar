@@ -124,6 +124,7 @@ test('the pseudo-locale finds no hard-coded text and no overflow at 200 % zoom',
       'Board',
       'Feeds',
       'Passwörter',
+      'Proxy',
     ]);
     const found = await texts(bay);
     await shell.getByRole('button', { name: /Séttíñgs/ }).click();

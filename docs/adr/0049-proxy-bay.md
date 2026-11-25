@@ -71,8 +71,9 @@ joins the variables, on Windows with the Git variant (curl.exe has none); the th
   archive. mitmproxy is not bundled: the bay looks for `mitmdump` on `PATH` or
   in the setting `mitmdumpPath`.
 - **Control protocol in both directions.** Events from the addon arrive as
-  JSON lines on stdout (`flow.request`, `flow.response`, `flow.error`,
-  `stream.chunk`, `ws.message`, `tunnel`, `tls.failed`, `reply`). Commands go
+  JSON lines on stdout (`hello` with the version, `flow.request`,
+  `flow.response`, `flow.done`, `flow.error`, `stream.chunk`, `ws.message`,
+  `ws.tooLarge`, `tunnel`, `tls.failed`, `dropped`, `reply`). Commands go
   as JSON lines on stdin with a request id (`listen`, `unlisten`, `rules`,
   `capture`, `ignore`); the addon answers each with `reply` (`ok` or `error`,
   for `listen` after the listener is bound or failed: after
@@ -84,7 +85,8 @@ joins the variables, on Windows with the Git variant (curl.exe has none); the th
   `termlog_verbosity=error`, and the addon sends mitmproxy's own log to
   stderr, so neither unredacted flow dumps nor log text reach the bay.
 - **Listeners only on loopback.** `mitmdump` starts with `--set
-listen_host=127.0.0.1` and without a default listener; each session gets
+listen_host=127.0.0.1` and without a default listener (`server=false` until
+  the first `listen`: an empty `mode` is refused); each session gets
   `regular@127.0.0.1:<port>`. The integration test checks the bound addresses.
 - **Start order.** The server activates bays in alphabetical order, and the
   agent bay restores shells in `activate` right after offering its functions
@@ -113,9 +115,9 @@ listen_host=127.0.0.1` and without a default listener; each session gets
   variables. Restarting the shell keeps the port, so jobs started with the old
   environment keep working. `onAgentSessionEnded` unbinds it; open
   connections are closed: removing a listener in mitmproxy only closes its
-  listening socket (`proxy/mode_servers.py`), so the addon tracks client
-  connections per listener (`client_connected`/`client_disconnected`) and
-  closes those of the removed one; connections of other listeners stay. Their
+  listening socket (`proxy/mode_servers.py`), so the addon closes the client
+  connections of the removed one from `proxyserver.connections` (their
+  `proxy_mode` names the port); connections of other listeners stay. Their
   flows stay with the old session. A port
   freed this way is not reused for 60 s.
 - **Environment.** The agent bay applies the answer after merging process and

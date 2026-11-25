@@ -1,0 +1,42 @@
+{
+  "id": "dev.hangar.proxy",
+  "name": "Proxy",
+  "version": "0.1.0",
+  "minHangarVersion": "0.1.0",
+  "icon": "icon.svg",
+  "ui": "dist/ui/index.html",
+  "main": "dist/main/index.js",
+  "functions": [
+    {
+      "name": "proxy.status",
+      "sensitive": false,
+      "bayOnly": true,
+      "description": "State of the proxy engine (mitmdump): stopped, starting, running, restarting or failed, with version, reason and counted warnings."
+    }
+  ],
+  "settings": [
+    {
+      "key": "mitmdumpPath",
+      "type": "text",
+      "default": "",
+      "label": { "de": "Pfad zu mitmdump", "en": "Path to mitmdump" },
+      "description": {
+        "de": "Leer: mitmdump aus PATH, ~/.local/bin, /opt/homebrew/bin oder /usr/local/bin. Installation: uv tool install mitmproxy (Version 12.3 oder neuer, unter 13).",
+        "en": "Empty: mitmdump from PATH, ~/.local/bin, /opt/homebrew/bin or /usr/local/bin. Install: uv tool install mitmproxy (version 12.3 or later, below 13)."
+      }
+    },
+    {
+      "key": "upstreamCaFile",
+      "type": "text",
+      "default": "",
+      "label": {
+        "de": "Zusätzliche CA für Server (PEM-Datei)",
+        "en": "Extra CA for servers (PEM file)"
+      },
+      "description": {
+        "de": "Etwa eine Firmen-CA. Der Proxy vertraut den Systemzertifikaten und dieser Datei.",
+        "en": "For example a company CA. The proxy trusts the system certificates and this file."
+      }
+    }
+  ]
+}

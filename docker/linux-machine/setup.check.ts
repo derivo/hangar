@@ -133,7 +133,7 @@ it('sets up the server as a user service, pairs, and runs a session that reaches
       .list()[0]!
       .bays.map((b) => b.id)
       .sort(),
-  ).toEqual([AGENTS, 'dev.hangar.board', 'dev.hangar.feeds']);
+  ).toEqual([AGENTS, 'dev.hangar.board', 'dev.hangar.feeds', 'dev.hangar.proxy']);
   root(
     "runuser -u person -- sh -c 'git init -q -b main ~/demo && cd ~/demo && echo x > a && git add a && " +
       "git -c user.name=h -c user.email=h@localhost commit -q -m init'",

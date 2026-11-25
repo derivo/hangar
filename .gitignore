@@ -15,3 +15,4 @@ docker/server/server.env
 docker/server/ssh/
 docker/relay/relay.env
 docker/relay/tls/
+__pycache__/

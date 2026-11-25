@@ -19,6 +19,9 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # mitmproxy for the proxy bay's engine test and packaged addon check (ADR 0049).
+      - uses: astral-sh/setup-uv@v6
+      - run: uv tool install mitmproxy==12.3.1
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
@@ -39,6 +42,7 @@ jobs:
         run: pnpm --filter @hangar/desktop package
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
+      - run: node scripts/check-proxy-addon.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: hangar-${{ runner.os }}

@@ -16,7 +16,12 @@ const pty = JSON.parse(readFileSync(join(root, 'bays/agents/package.json'), 'utf
 ];
 
 const bundles = ['@hangar/server', '@hangar/cli', '@hangar/bay-agents', '@hangar/bay-board'];
-run('pnpm', [...bundles, '@hangar/bay-feeds'].flatMap((b) => ['--filter', b]).concat('build'));
+run(
+  'pnpm',
+  [...bundles, '@hangar/bay-feeds', '@hangar/bay-proxy']
+    .flatMap((b) => ['--filter', b])
+    .concat('build'),
+);
 const out = join(root, 'dist/linux-server');
 mkdirSync(out, { recursive: true });
 for (const arch of arches) {

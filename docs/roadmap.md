@@ -735,6 +735,28 @@ result; the ADR names what changed.
 
 ### Step 2 – Bay skeleton and engine
 
+**Done 2026-11-25** (`bays/proxy/src/main/engine.integration.test.ts` with a
+real mitmdump 12.3.1 on macOS; CI runs it on all three runners). Differences
+from the plan below:
+
+- The manifest declares only what this step uses: `proxy.status` and the
+  settings `mitmdumpPath` and `upstreamCaFile`. `proxy.env` and `uses` come
+  with step 3, `flow.list`, `flow.get`, `maxFlows`, `maxMegabytes`, `rules`
+  and `setRules` with step 4, so no function or setting exists without effect.
+- The engine starts with the first `listen`, not with Hangar, and `mitmdump`
+  with `server=false`: an empty `mode` is refused and the default would bind
+  port 8080.
+- `unlisten` closes the connections of the listener through mitmproxy's
+  `proxyserver.connections` instead of tracking them in hooks.
+- Events added: `hello` (version), `flow.done` (bytes, WebSocket close code),
+  `dropped`, `warning`.
+- The integration test uses `127.0.0.1` with a certificate for that address
+  instead of `proxy-test.invalid`: its client is the test's own and ignores
+  `NO_PROXY`. The tunnel byte counts match the client's up to the TLS close
+  alerts (24 bytes in TLS 1.3), which race the shutdown.
+- `pnpm lint` compiles the addon with `compile()` instead of
+  `python -m py_compile`, which leaves `__pycache__` behind.
+
 - `bays/proxy` per skill `new-bay`: manifest (`id dev.hangar.proxy`,
   functions `proxy.env` and `proxy.status`, both `bayOnly`, and `flow.list`,
   `flow.get` for agents (`sensitive`, ADR 0049); `uses`

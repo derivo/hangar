@@ -77,9 +77,10 @@ const secrets = {
 const AGENTS = 'dev.hangar.agents';
 /**
  * Bays the local server runs instead of the app (ADR 0036); the board with the agents (ADR 0037).
- * The server loads every bundled bay without a missing host module, so feeds must not run twice (ADR 0040).
+ * The server loads every bundled bay without a missing host module, so feeds must not run twice (ADR 0040);
+ * the proxy next to the agents whose sessions it watches, one engine and CA (ADR 0049).
  */
-const IN_SERVER = [AGENTS, 'dev.hangar.board', 'dev.hangar.feeds'];
+const IN_SERVER = [AGENTS, 'dev.hangar.board', 'dev.hangar.feeds', 'dev.hangar.proxy'];
 
 /** Runs a command and returns its exit code. */
 const run = (cmd: string, args: string[]) =>

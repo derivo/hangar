@@ -11,3 +11,6 @@
 !bays/feeds/manifest.json
 !bays/feeds/icon.svg
 !bays/feeds/dist
+!bays/proxy/manifest.json
+!bays/proxy/icon.svg
+!bays/proxy/dist
