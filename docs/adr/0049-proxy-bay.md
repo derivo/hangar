@@ -162,7 +162,10 @@ listen_host=127.0.0.1` and without a default listener (`server=false` until
   digits of SHA-256 over the bundle), never rewritten in place: the system roots
   plus inherited extra certificates (`NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`
   etc. of the merged environment) plus the CA. System roots: macOS
-  `/etc/ssl/cert.pem`, Linux `/etc/ssl/certs/ca-certificates.crt` or
+  `/etc/ssl/cert.pem` (if present) plus the keychain
+  (`tls.getCACertificates('system')`, company CAs too) and Node's bundled
+  Mozilla roots (`'bundled'`), each certificate once, because `cert.pem` alone
+  can lack a chain's root (CI runners); Linux `/etc/ssl/certs/ca-certificates.crt` or
   `/etc/pki/tls/certs/ca-bundle.crt`, Windows the certificate store `ROOT`
   exported via `tls.getCACertificates('system')` (Node 22.15+). Without any
   source the start fails with the reason. A repeated `proxy.env` keeps port

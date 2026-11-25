@@ -28,13 +28,28 @@ const ROOT_FILES: Partial<Record<NodeJS.Platform, string[]>> = {
   linux: ['/etc/ssl/certs/ca-certificates.crt', '/etc/pki/tls/certs/ca-bundle.crt'],
 };
 
-/** The system's root certificates as PEM; Windows exports its `ROOT` store through Node. */
+const PEM = /-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g;
+
+/**
+ * The system's root certificates as PEM; Windows exports its `ROOT` store through Node.
+ * macOS: `cert.pem` alone can lack roots the keychain and browsers trust (CI runners), so it
+ * adds the keychain (`system`, enterprise CAs too) and Node's Mozilla roots, each once.
+ */
 export function systemRoots(
   platform: NodeJS.Platform = process.platform,
   files = ROOT_FILES[platform] ?? [],
+  store: (type: 'system' | 'bundled') => readonly string[] = getCACertificates,
 ): string {
-  if (platform === 'win32') return getCACertificates('system').join('\n');
+  if (platform === 'win32') return store('system').join('\n');
   const file = files.find((f) => existsSync(f));
+  if (platform === 'darwin') {
+    const certs = [
+      ...(file ? (readFileSync(file, 'utf8').match(PEM) ?? []) : []),
+      ...store('system'),
+      ...store('bundled'),
+    ].map((c) => c.trim());
+    return `${[...new Set(certs)].join('\n')}\n`;
+  }
   if (!file) throw new Error(`No system root certificates found (${files.join(', ')})`);
   return readFileSync(file, 'utf8');
 }

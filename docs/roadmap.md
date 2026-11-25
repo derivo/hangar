@@ -760,6 +760,11 @@ from the plan below:
   alerts (24 bytes in TLS 1.3), which race the shutdown.
 - `pnpm lint` compiles the addon with `compile()` instead of
   `python -m py_compile`, which leaves `__pycache__` behind.
+- The macOS system roots are not `/etc/ssl/cert.pem` alone: the CI runner's
+  file lacked the root of `example.com`'s chain (mitmproxy 502 "unable to get
+  local issuer certificate"). `systemRoots()` adds the keychain
+  (`tls.getCACertificates('system')`) and Node's bundled roots, each
+  certificate once; Linux and Windows are unchanged.
 
 - `bays/proxy` per skill `new-bay`: manifest (`id dev.hangar.proxy`,
   functions `proxy.env` and `proxy.status`, both `bayOnly`, and `flow.list`,

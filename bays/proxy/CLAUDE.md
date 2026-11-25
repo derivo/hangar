@@ -18,7 +18,8 @@ UI shows only the engine state (step 5).
 - `src/main/protocol.ts` – JSON lines to and from the addon, request ids, 5 s
   per command, bounded queue (1 000 lines, 8 MB), counted warnings.
 - `src/main/ca.ts` – CA folder (0700, key files 0600), `upstream.pem` (system
-  roots plus `upstreamCaFile`), session bundles
+  roots plus `upstreamCaFile`; macOS roots: `cert.pem`, keychain and Node's
+  bundled roots, each once), session bundles
   `bundles/<generation>/<session>-<hash>.pem`, `renew()`.
 - `src/ui/` – status line of the engine.
 

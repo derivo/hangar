@@ -8,6 +8,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { getCACertificates } from 'node:tls';
 import { Ca, systemRoots } from './ca';
 
 const ROOTS = '-----BEGIN CERTIFICATE-----\nROOTS\n-----END CERTIFICATE-----\n';
@@ -114,7 +115,29 @@ describe('systemRoots', () => {
     expect(systemRoots('win32')).toContain('-----BEGIN CERTIFICATE-----');
   });
 
-  it.runIf(process.platform === 'darwin')('uses /etc/ssl/cert.pem on macOS', () => {
-    expect(systemRoots('darwin')).toBe(readFileSync('/etc/ssl/cert.pem', 'utf8'));
+  it('joins cert.pem, the keychain and the bundled roots on macOS, each certificate once', () => {
+    const pem = (name: string) => `-----BEGIN CERTIFICATE-----\n${name}\n-----END CERTIFICATE-----`;
+    const dir = mkdtempSync(join(tmpdir(), 'hangar-proxy-roots-'));
+    const file = join(dir, 'cert.pem');
+    writeFileSync(file, `# comment\n${pem('FILE')}\n${pem('SHARED')}\n`);
+    const store = (type: string) =>
+      type === 'system' ? [`${pem('KEYCHAIN')}\n`, `${pem('SHARED')}\n`] : [`${pem('BUNDLED')}\n`];
+    const roots = systemRoots('darwin', [file], store);
+    expect(roots).toBe(`${['FILE', 'SHARED', 'KEYCHAIN', 'BUNDLED'].map(pem).join('\n')}\n`);
+    expect(systemRoots('darwin', [join(dir, 'missing.pem')], store)).toBe(
+      `${['KEYCHAIN', 'SHARED', 'BUNDLED'].map(pem).join('\n')}\n`,
+    );
   });
+
+  it.runIf(process.platform === 'darwin')(
+    "includes cert.pem and Node's bundled roots on macOS",
+    () => {
+      const roots = systemRoots('darwin');
+      const first = readFileSync('/etc/ssl/cert.pem', 'utf8').match(
+        /-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/,
+      )![0];
+      expect(roots).toContain(first);
+      for (const cert of getCACertificates('bundled')) expect(roots).toContain(cert.trim());
+    },
+  );
 });
