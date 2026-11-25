@@ -91,6 +91,10 @@ jobs:
           # macOS notarization (App Store Connect API key; APPLE_API_KEY is set above).
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      # A broken signature makes macOS call the downloaded app "damaged" (adhoc-sign.mjs).
+      - name: Check the app signature (macOS)
+        if: runner.os == 'macOS'
+        run: codesign --verify --deep --strict apps/desktop/release/*/mac*/Hangar.app
       - name: Keep the packages (dry run)
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4

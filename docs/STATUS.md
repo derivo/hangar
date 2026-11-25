@@ -71,7 +71,17 @@ manual step is needed. pnpm reports ignored build scripts of
   published yet: packaged apps find no update until the first one. The first
   `release.yml` run (tag `v0.9.0`, run 45622289549) stopped at `pnpm test`
   because the workflow did not install mitmproxy; the tag is set again after
-  the fix. No signing secrets exist, so the 0.9.0 packages are unsigned.
+  the fix. No signing secrets exist, so the 0.9.0 packages are unsigned. The
+  second run (45633628234) failed on macOS with `apps/desktop not a file`
+  (a missing secret arrives as an empty `CSC_LINK`, which electron-builder
+  resolves to the working directory) and on Windows with the flaky relay test
+  "answers asking announces … at most once per interval" (also red in `ci.yml`
+  on the same commit). Both fixed; empty signing variables are now unset. A
+  manual run (`workflow_dispatch`) is a dry run that keeps the packages as
+  workflow artifacts; dry run 45635936716 built dmg/zip, NSIS installer and
+  AppImage. Unsigned macOS apps get an ad-hoc signature (`adhoc-sign.mjs`,
+  checked by `codesign --verify` in the workflow); without it macOS calls the
+  downloaded app "damaged".
 - **Security audit 2026-11-17** (source-only, `main` at 2c19132, no
   confirmed finding): of six leads that need validation, the main window's
   navigation guard (#29) and the bridge's Origin check and pairing limit
@@ -132,7 +142,7 @@ manual step is needed. pnpm reports ignored build scripts of
     first `state()` call. Since 2026-11-12 the feeds UI shows such errors
     (`App.tsx`); 10 of 10 local runs with `--repeat-each=10` passed.
 
-  `release.yml` is untested.
+  `release.yml` runs as a dry run (`workflow_dispatch`); publishing is untested.
 
 - **Windows**: The installer was cross-built on macOS and never started.
   Unchecked are shell start (`defaultShell`), `hangar.cmd` and the app itself.

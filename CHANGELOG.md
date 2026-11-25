@@ -6,6 +6,11 @@ All notable changes to this project. Format based on
 
 ## [Unreleased]
 
+### Fixed
+
+- Release workflow: packages build unsigned when the signing secrets are missing (an empty `CSC_LINK` stopped the macOS build with "not a file"). Unsigned macOS apps get an ad-hoc signature, so macOS offers "Open Anyway" instead of calling the app damaged. Started by hand, the workflow is a dry run: packages as workflow artifacts, nothing published.
+- Relay test "answers asking announces of one member at most once per interval" no longer fails on slow runners: it waits for both expected delivers before clearing the inbox.
+
 ## [0.9.0] - 2026-11-25
 
 First public release. The packages are not signed (see README, "Download").
