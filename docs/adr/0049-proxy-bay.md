@@ -66,13 +66,15 @@ joins the variables, on Windows with the Git variant (curl.exe has none); the th
   (`docker/linux-server/Dockerfile`, `scripts/linux-server-package.mjs`).
 - **Engine: mitmproxy, not an own TLS interceptor.** The bay starts `mitmdump`
   as a child process with an addon shipped in the bay. The build copies it to
-  `dist/addon/hangar_proxy.py`; `electron-builder.yml` unpacks it from
-  `app.asar` (`asarUnpack`), because an external Python cannot read inside the
-  archive. mitmproxy is not bundled: the bay looks for `mitmdump` on `PATH` or
+  `dist/addon/hangar_proxy.py`; at activation the bay copies it into its data
+  folder (`addon/hangar_proxy.py`), because in the app it lies in `app.asar`,
+  which an external Python cannot read (`asarUnpack` does not reach files that
+  `electron-builder.yml` maps in from `bays/`). mitmproxy is not bundled: the bay looks for `mitmdump` on `PATH` or
   in the setting `mitmdumpPath`.
 - **Control protocol in both directions.** Events from the addon arrive as
-  JSON lines on stdout (`flow.request`, `flow.response`, `flow.error`,
-  `stream.chunk`, `ws.message`, `tunnel`, `tls.failed`, `reply`). Commands go
+  JSON lines on stdout (`hello` with the version, `flow.request`,
+  `flow.response`, `flow.done`, `flow.error`, `stream.chunk`, `ws.message`,
+  `ws.tooLarge`, `tunnel`, `tls.failed`, `dropped`, `reply`). Commands go
   as JSON lines on stdin with a request id (`listen`, `unlisten`, `rules`,
   `capture`, `ignore`); the addon answers each with `reply` (`ok` or `error`,
   for `listen` after the listener is bound or failed: after
@@ -84,7 +86,8 @@ joins the variables, on Windows with the Git variant (curl.exe has none); the th
   `termlog_verbosity=error`, and the addon sends mitmproxy's own log to
   stderr, so neither unredacted flow dumps nor log text reach the bay.
 - **Listeners only on loopback.** `mitmdump` starts with `--set
-listen_host=127.0.0.1` and without a default listener; each session gets
+listen_host=127.0.0.1` and without a default listener (`server=false` until
+  the first `listen`: an empty `mode` is refused); each session gets
   `regular@127.0.0.1:<port>`. The integration test checks the bound addresses.
 - **Start order.** The server activates bays in alphabetical order, and the
   agent bay restores shells in `activate` right after offering its functions
@@ -113,9 +116,9 @@ listen_host=127.0.0.1` and without a default listener; each session gets
   variables. Restarting the shell keeps the port, so jobs started with the old
   environment keep working. `onAgentSessionEnded` unbinds it; open
   connections are closed: removing a listener in mitmproxy only closes its
-  listening socket (`proxy/mode_servers.py`), so the addon tracks client
-  connections per listener (`client_connected`/`client_disconnected`) and
-  closes those of the removed one; connections of other listeners stay. Their
+  listening socket (`proxy/mode_servers.py`), so the addon closes the client
+  connections of the removed one from `proxyserver.connections` (their
+  `proxy_mode` names the port); connections of other listeners stay. Their
   flows stay with the old session. A port
   freed this way is not reused for 60 s.
 - **Environment.** The agent bay applies the answer after merging process and
@@ -159,7 +162,22 @@ listen_host=127.0.0.1` and without a default listener; each session gets
   digits of SHA-256 over the bundle), never rewritten in place: the system roots
   plus inherited extra certificates (`NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`
   etc. of the merged environment) plus the CA. System roots: macOS
-  `/etc/ssl/cert.pem`, Linux `/etc/ssl/certs/ca-certificates.crt` or
+  `/etc/ssl/cert.pem` (if present) plus the keychain
+  (`tls.getCACertificates('system')`, company CAs too) and Node's bundled
+  Mozilla roots (`'bundled'`), each certificate once, because `cert.pem` alone
+  can lack a chain's root (CI runners); a root the keychain trust settings deny
+  for TLS is dropped from all three: `security trust-settings-export` for the
+  user and the admin domain (the system domain is Apple's read-only root list),
+  matched by SHA-1. As in trustd, a certificate's admin settings overrule its
+  user settings (the user domain counts only without `DisableUserTrustSettings`),
+  entries are converted as Security.framework's `copyTrustSettings` does (an
+  unknown DER policy OID drops the certificate's settings in that domain, an
+  unresolved string OID means no policy), and its first entry that applies to a
+  TLS server check decides, `Unspecified` included (no application or host; key
+  usage absent, any or that of the role: SignCert as chain signer, none as leaf;
+  policy absent, unresolved or SSL, as data or string, the SSL server and client
+  OIDs included; policy name absent or exactly `sslServer`). A self-signed root
+  is dropped when either role is denied. Unreadable settings leave the roots unfiltered with one warning; Linux `/etc/ssl/certs/ca-certificates.crt` or
   `/etc/pki/tls/certs/ca-bundle.crt`, Windows the certificate store `ROOT`
   exported via `tls.getCACertificates('system')` (Node 22.15+). Without any
   source the start fails with the reason. A repeated `proxy.env` keeps port

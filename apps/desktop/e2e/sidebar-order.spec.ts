@@ -22,8 +22,8 @@ test('bays and shortcuts are sorted by dragging or from their menu and keep the 
   try {
     const { app, shell } = first;
     const nav = shell.getByRole('navigation', { name: 'Bays' });
-    // The sidebar fills in after the first paint; read it only once all five bays are there.
-    await expect.poll(async () => (await shown(shell)).length).toBe(5);
+    // The sidebar fills in after the first paint; read it only once all six bays are there.
+    await expect.poll(async () => (await shown(shell)).length).toBe(6);
     const before = await shown(shell);
     const button = (id: string) => nav.getByTestId(`bay-${id}`);
 

@@ -423,6 +423,25 @@ test:linux-server`) and its setup over SSH (`pnpm test:linux-setup`, ADR
   firing in the app (only start, "Aktualisieren" and new feeds), 200 % zoom by
   hand. Review:
   `docs/reviews/2026-11-09-feeds-bay.md`.
+- **Proxy bay, engine** (ADR 0049, step 2, 2026-11-25): `bays/proxy/src/main/engine.integration.test.ts`
+  against a real `mitmdump` 12.3.1 on macOS: 407 without, with a wrong and with the
+  other listener's password; CONNECT with credentials; the upstream gets the
+  original `Authorization` and never `Proxy-Authorization`; headers, query
+  parameters (also encoded names) redacted, no secret in any event; only
+  `127.0.0.1` listens (`lsof`); a pass-through host gives a `tunnel` row with the
+  client's byte counts (up to the TLS close alerts); a WebSocket gets no
+  compression, also when the server claims it unasked, and a 20 MB message ends
+  with 1009 and `ws.tooLarge`; a gzip body reaches the bay compressed; `unlisten`
+  closes the tunnel and WebSocket of that listener only; `example.com` through
+  the proxy with the system roots (macOS: `cert.pem`, keychain and Node's bundled
+  roots, without roots the keychain trust settings deny; checked with fixtures
+  of the export format, a real denied root not tried). Unit: `protocol.test.ts`, `ca.test.ts`,
+  `engine.test.ts` (fake process: backoff, restore order, races), `index.test.ts`.
+  E2E: `e2e/proxy.spec.ts` (status line, axe light and dark 0 findings). Not
+  checked: Linux and Windows locally (CI), HTTP/2 uploads, the addon's stdout
+  limits, the copy of the addon in the packaged app (CI step
+  `scripts/check-proxy-addon.mjs` loads it from `app.asar`). Review:
+  `docs/reviews/2026-11-25-proxy-engine.md`.
 - **Server in operation, phase 12** (ADR 0029): `pnpm test:container` builds the
   production image and checks with Docker Desktop (Linux arm64): runs as uid
   1000, `/data` with mode 700, health check `healthy`, agent bay loaded, no

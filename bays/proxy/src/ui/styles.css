@@ -1,0 +1,11 @@
+/* Proxy layout. All values come from the Hangar theme (--hangar-*), injected by the host. */
+body {
+  margin: 0;
+  background: var(--hangar-color-bg);
+  color: var(--hangar-color-text);
+  font: var(--hangar-font-size-md) / 1.5 var(--hangar-font-sans);
+}
+
+main {
+  padding: var(--hangar-space-4);
+}

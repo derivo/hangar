@@ -107,7 +107,12 @@ it('starts node-pty on a machine with the declared glibc and fails below it', ()
 
 it('loads the bays of the local server without errors', () => {
   const { bays, errors } = health();
-  expect(bays.map((b) => b.id).sort()).toEqual([AGENTS, 'dev.hangar.board', 'dev.hangar.feeds']);
+  expect(bays.map((b) => b.id).sort()).toEqual([
+    AGENTS,
+    'dev.hangar.board',
+    'dev.hangar.feeds',
+    'dev.hangar.proxy',
+  ]);
   expect(errors).toEqual([]);
 });
 
@@ -144,7 +149,7 @@ it('runs a session whose shell reaches the hangar CLI, and a restart brings it b
 
   connections.closeAll();
   docker('restart', name);
-  await vi.waitFor(() => expect(health().bays.length).toBe(3), { timeout: 60_000 });
+  await vi.waitFor(() => expect(health().bays.length).toBe(4), { timeout: 60_000 });
 
   connections = connect();
   data.length = 0;

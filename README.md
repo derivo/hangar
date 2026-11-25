@@ -37,6 +37,9 @@ password store itself stays closed to them.
 - **Feeds bay** (`bays/feeds`, `dev.hangar.feeds`): RSS and Atom feeds as one
   history, newest last, like a chat; agents subscribe and read the entries
   (ADR 0040).
+- **Proxy bay** (`bays/proxy`, `dev.hangar.proxy`, in progress, ADR 0049):
+  runs mitmproxy (`mitmdump`, installed separately) as a local intercepting
+  proxy; so far only the engine, watched sessions follow.
 - **Password bay** (`bays/secrets`, `dev.hangar.secrets`): passwords and tokens
   encrypted with the system keychain; they reach a session's shell as
   environment variables, agents cannot list or read the store (ADR 0021).
@@ -161,6 +164,7 @@ bays/agents      Projects, sessions, shells (node-pty), status bar
 bays/browser     Web pages in tabs, for the person and for agents (MCP)
 bays/board       Tasks per project in three columns, for the person and agents
 bays/feeds       RSS and Atom feeds as one history, for the person and agents
+bays/proxy       Traffic of agent sessions through mitmproxy (in progress)
 bays/secrets     Passwords and tokens, encrypted with the system keychain
 docs/            Documentation and ADRs
 .claude/skills/  Skills for recurring tasks

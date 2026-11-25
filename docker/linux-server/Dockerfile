@@ -22,6 +22,8 @@ COPY bays/board/manifest.json bays/board/icon.svg bays/board/
 COPY bays/board/dist bays/board/dist
 COPY bays/feeds/manifest.json bays/feeds/icon.svg bays/feeds/
 COPY bays/feeds/dist bays/feeds/dist
+COPY bays/proxy/manifest.json bays/proxy/icon.svg bays/proxy/
+COPY bays/proxy/dist bays/proxy/dist
 # The newest glibc and libstdc++ symbol versions any binary of the package needs; the setup
 # refuses a machine with an older glibc before uploading (ADR 0041) and then starts node-pty there.
 RUN newest() { find . -type f \( -name node -o -name '*.node' \) -exec objdump -T {} + \
