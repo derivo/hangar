@@ -33,6 +33,8 @@ describe('UpdateCheck', () => {
     expect(check).toBeEnabled();
     push({ state: 'available', version: '1.0.0' });
     expect(screen.getByText('Update 1.0.0 ist verfügbar.')).toBeVisible();
+    // The download starts right away; its first progress event can take a while.
+    expect(check).toBeDisabled();
     push({ state: 'downloading', version: '1.0.0', percent: 41 });
     expect(screen.getByText('Update 1.0.0 wird geladen: 41 %')).toBeVisible();
     expect(screen.getByRole('progressbar', { name: 'Download' })).toHaveAttribute('value', '41');
@@ -46,6 +48,8 @@ describe('UpdateCheck', () => {
   it('installs a downloaded update on request, once per click burst', async () => {
     const { api } = setup({ state: 'ready', version: '1.0.0' });
     expect(await screen.findByText('Update 1.0.0 ist bereit.')).toBeVisible();
+    // Installs on the next quit anyway; a new check could only lose it.
+    expect(screen.getByRole('button', { name: 'Nach Updates suchen' })).toBeDisabled();
     const install = screen.getByRole('button', { name: 'Neu starten und installieren' });
     fireEvent.click(install, { detail: 1 });
     fireEvent.click(install, { detail: 2 });

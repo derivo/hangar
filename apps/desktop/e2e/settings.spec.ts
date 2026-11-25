@@ -26,7 +26,8 @@ test('the settings navigation brings each section to the top and focuses its hea
             const content = h.closest('.content')!;
             const top = h.getBoundingClientRect().top - content.getBoundingClientRect().top;
             const atEnd = content.scrollTop + content.clientHeight >= content.scrollHeight - 1;
-            return top < 80 || atEnd;
+            // Not above the scroll area either (scrolled past the heading).
+            return top > -1 && (top < 80 || atEnd);
           }),
         )
         .toBe(true);
@@ -73,6 +74,9 @@ test('"Check for updates" shows each state of the updater, without violations', 
     await push({ state: 'ready', version: '9.9.9' });
     // Not packaged, nothing downloaded in the main process: installing does nothing.
     await shell.getByRole('button', { name: 'Neu starten und installieren' }).click();
+    // A ready update installs on the next quit; a new check could only lose it.
+    await expect(check).toBeDisabled();
+    await push({ state: 'error', message: 'Code signature invalid' });
     // The keyboard reaches the button; a check asks the main process, which answers.
     await check.focus();
     await check.press('Enter');

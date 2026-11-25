@@ -9,12 +9,17 @@ let listener: (status: UpdateStatus) => void = () => {};
 let listening = false;
 
 const warn = (e: unknown) => console.warn('Update:', e);
+// A found update downloads right away; a second check meanwhile, or once it is ready,
+// would overwrite its status. A ready update installs on the next quit anyway.
+const BUSY = ['checking', 'available', 'downloading', 'ready'];
 // The download runs on its own promise; its failure is not part of checkForUpdates().
-const check = () =>
+const check = () => {
+  if (status && BUSY.includes(status.state)) return;
   void electronUpdater.autoUpdater
     .checkForUpdates()
     .then((result) => result?.downloadPromise?.catch(warn))
     .catch(warn);
+};
 
 function set(next: UpdateStatus): void {
   status = next;
@@ -64,7 +69,6 @@ export function onUpdateStatus(next: (status: UpdateStatus) => void): void {
 /** "Check for updates" in the settings; a found update downloads right away. */
 export function checkForUpdates(): void {
   if (!app.isPackaged) return set({ state: 'unsupported' });
-  if (status?.state === 'checking' || status?.state === 'downloading') return;
   check();
 }
 

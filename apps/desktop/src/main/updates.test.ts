@@ -28,6 +28,8 @@ beforeEach(() => {
   electron.app.isPackaged = true;
   updater.checkForUpdates.mockReset().mockResolvedValue(null);
   updater.quitAndInstall.mockReset();
+  // Tests run shuffled; the status of an earlier test must not block the next check.
+  updater.emit('update-not-available');
 });
 afterEach(() => vi.useRealTimers());
 
@@ -125,6 +127,31 @@ describe('update status', () => {
     updater.emit('download-progress', { percent: 3 });
     checkForUpdates();
     expect(updater.checkForUpdates).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not check again while a found update downloads, from any entry point', () => {
+    startUpdates('stable');
+    updater.emit('update-available', { version: '1.0.0' });
+    updater.checkForUpdates.mockClear();
+    // The download already runs before its first progress event.
+    checkForUpdates();
+    startUpdates('beta');
+    vi.advanceTimersByTime(4 * 60 * 60 * 1000);
+    expect(updater.checkForUpdates).not.toHaveBeenCalled();
+    updater.emit('download-progress', { percent: 31 });
+    expect(updateStatus()).toEqual({ state: 'downloading', version: '1.0.0', percent: 31 });
+  });
+
+  it('keeps a downloaded update installable: no further check while ready', () => {
+    startUpdates('stable');
+    updater.emit('update-downloaded', { version: '1.0.0' });
+    updater.checkForUpdates.mockClear();
+    checkForUpdates();
+    startUpdates('beta');
+    vi.advanceTimersByTime(4 * 60 * 60 * 1000);
+    expect(updater.checkForUpdates).not.toHaveBeenCalled();
+    installUpdate();
+    expect(updater.quitAndInstall).toHaveBeenCalledTimes(1);
   });
 
   it('says that updates exist only in the packaged app', () => {

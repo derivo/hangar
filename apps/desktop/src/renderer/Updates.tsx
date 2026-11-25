@@ -33,7 +33,9 @@ export function UpdateCheck({ api }: Props) {
     return api.onUpdate(setStatus);
   }, [api]);
   if (!status) return null;
-  const busy = ['unsupported', 'checking', 'downloading'].includes(status.state);
+  const busy = ['unsupported', 'checking', 'available', 'downloading', 'ready'].includes(
+    status.state,
+  );
 
   return (
     <>
