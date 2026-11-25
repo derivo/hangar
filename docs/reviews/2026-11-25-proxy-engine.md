@@ -200,3 +200,115 @@ trust-settings-import` of hand-written settings):
 
 Not observed: a live trustd evaluation with changed settings (that would change the
 keychain).
+
+## Sixth review: commit 77f01cf
+
+Reviewer: Codex (`codex exec -s read-only`), on commit 77f01cf, with the three known
+differences of the fifth review excluded. Two findings. Every claim and the three known
+differences were checked against Apple's open-source Security code at commit
+`db15acbe6a7f257a859ad9a3bb86097bfe0679d9` (raw files fetched; line numbers refer to that
+commit).
+
+| #   | Sev. | Finding                                                                                          | Checked                                                                                                                                                                                                                                                                                                                                                                                                           | Change |
+| --- | ---- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 1   | high | An entry with only `kSecTrustSettingsPolicyName` ended the search as `TrustRoot` before a `Deny` | Confirmed: `copyTrustSettings` drops an entry without policy, application, policy string, allowed error, result and key usage, the name not counted (`OSX/libsecurity_keychain/lib/TrustSettings.cpp:1048-1056`), so trustd never sees it                                                                                                                                                                         | Fixed  |
+| 2   | med  | `DisableUserTrustSettings` ignored, so user denies dropped roots trustd keeps (fail closed)      | Confirmed: `tsGetGlobalTrustSettings` returns no user domain when `DisableUserTrustSettings` in `/Library/Preferences/com.apple.security.plist` is true (`OSX/libsecurity_keychain/lib/SecTrustSettings.cpp:102-118`, `:189-191`, read by `Dictionary::getBoolValue`, `OSX/libsecurity_utilities/lib/simpleprefs.cpp:202-228`); the export reads the domain without that check (`SecTrustSettings.cpp:1148-1166`) | Fixed  |
+
+The three known differences of the fifth review, checked:
+
+- Unknown DER OID: confirmed. `SecPolicyCopy` fails for an OID outside the
+  `PolicyCursor.cpp:46-65` list, and also for iChat and the two PKINIT OIDs in it, which
+  `SecPolicySearchCopyNext` skips (`OSX/libsecurity_keychain/lib/SecPolicySearch.cpp:74-90`);
+  `copyTrustSettings` then throws (`TrustSettings.cpp:1068-1071`), the cached API returns
+  an error (`SecTrustSettings.cpp:71-81`, `:368-389`) and trustd falls back from admin to
+  user, or sees no settings (`trust/trustd/SecCertificateSource.c:998-1021`). Fixed.
+- Unresolved string OID: confirmed. `SecPolicyCreateWithProperties(oid, NULL)` returns
+  NULL for an identifier it does not handle or that needs a name
+  (`OSX/sec/Security/SecPolicy.c:278-503`, macro list `SecPolicy.list`), the entry keeps
+  no policy (`TrustSettings.cpp:1072-1079`) and applies to every policy unless its name
+  scopes it (`SecPolicyServer.c:3368-3372`, `:3041-3083`). Fixed.
+- Self-signed root as leaf: confirmed. trustd adds SignCert only when the certificate is
+  not at path index 0 (`SecPolicyServer.c:3197-3207`), so the leaf computes usage 0. A
+  bundle cannot tell the roles apart, and OpenSSL trusts a self-signed leaf found in its
+  store, so a self-signed root is dropped when either role is denied (fail closed for
+  the other role). Fixed.
+
+Found while checking (not reported by Codex): `kSecTrustSettingsPolicyOptions` is not
+copied by `copyTrustSettings` (`TrustSettings.cpp:1040-1124`), so trustd evaluates such an
+entry without options; the regex parser could not read the nested dictionary and skipped
+the entry (fail open). Fixed by the plist parser below.
+
+Fix in `bays/proxy/src/main/ca.ts`: `parsePlist()` reads the export as a plist (nested
+dictionaries, empty `<dict/>`); `deniesTls()` converts the entries as `copyTrustSettings`
+does (`DATA_OIDS`: the DER OIDs `SecPolicyCopy` resolves, any other drops the
+certificate's settings in that domain; `OTHER_ARCS`: the string OIDs that resolve to a
+non-SSL policy, any other string means no policy) and returns the decision for both
+roles; `distrustedRoots()` returns `{ chain, leaf }` and skips the user domain when
+`userTrustSettingsDisabled()` says so; `systemRoots()` drops a root denied as chain
+signer, or as leaf when it is self-signed. Tests in `ca.test.ts` (red before): "converts
+the stored settings as Security.framework does before trustd sees them", "checks a
+self-signed root as its own server certificate without SignCert", "ignores the user
+domain when DisableUserTrustSettings is set, as trustd does", "reads
+DisableUserTrustSettings as Security.framework does" (macOS), and a leaf case in "drops a
+root the keychain distrusts …".
+
+Not modelled: an `Application` entry whose data `SecTrustedApplicationCreateWithExternalRepresentation`
+rejects also makes `copyTrustSettings` abort (`TrustSettings.cpp:1093-1099`); the filter
+skips only that entry.
+
+## Seventh review: working tree after the sixth review
+
+Reviewer: Codex (`codex exec -s read-only`), on the uncommitted fix of the sixth review.
+Three findings, checked against the same Apple commit.
+
+| #   | Sev. | Finding                                                                                      | Checked                                                                                                                                                                                                                                                                                                                                                               | Change |
+| --- | ---- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 1   | med  | `kSecTrustSettingsResult` 4294967299 is not converted to SInt32, so its `Deny` (3) is missed | Rejected: `tsIsGoodCfNum` refuses a result that does not fit SInt32 when a domain is loaded, imported or exported (`OSX/libsecurity_keychain/lib/TrustSettings.cpp:337-358`, `:1579-1583`, `:1714-1716`), and trustd turns a failed SInt32 conversion into `TrustRoot`, not the low bits (`trust/trustd/SecPolicyServer.c:3348-3356`); the filter also yields no deny | None   |
+| 2   | low  | An integer `DisableUserTrustSettings` above 2^53 lost bits before the char cast              | Confirmed: `Dictionary::getBoolValue` casts the number to char (`OSX/libsecurity_utilities/lib/simpleprefs.cpp:223-226`); `Number()` rounds 9007199254740993 to an even value                                                                                                                                                                                         | Fixed  |
+| 3   | low  | A string `DisableUserTrustSettings` compared without Unicode case folding (`yeſ`)            | Confirmed: `CFStringCompare(…, "YES", kCFCompareCaseInsensitive)` (`simpleprefs.cpp:210-214`) folds U+017F to `s`; `/^yes$/i` without the `u` flag does not                                                                                                                                                                                                           | Fixed  |
+
+Fix in `bays/proxy/src/main/ca.ts` (`userTrustSettingsDisabled()`): strings match
+`/^yes$/iu`, integers are cast with `BigInt.asIntN(8, …)`. Test: three more cases in
+"reads DisableUserTrustSettings as Security.framework does" (red before: two).
+
+## Eighth review: working tree after the seventh review
+
+Reviewer: Codex (`codex exec -s read-only`), on the uncommitted fixes of the sixth and
+seventh reviews. Two findings, checked against the same Apple commit and, for the number
+conversion, a CoreFoundation probe on this Mac (arm64).
+
+| #   | Sev. | Finding                                                                                                                                                                  | Checked                                                                                                                                                                                                                                                                                                                                                                   | Change |
+| --- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 1   | high | The leaf check used `X509Certificate.checkIssued()`, which needs `keyCertSign`, so a self-signed certificate without it kept its leaf deny out of the filter (fail open) | Confirmed: `_SecCertificateIsSelfSigned` (`OSX/sec/Security/SecCertificate.c:6192-6223`) compares the normalised issuer and subject, the key IDs when an authority key ID exists, and the own signature; key usage does not count. OpenSSL's `X509_check_issued` also checks the key usage; `checkIssued()` was false for a test certificate with only `digitalSignature` | Fixed  |
+| 2   | med  | A `<real>` `DisableUserTrustSettings` was cast to char with `% 256`, unlike CoreFoundation (NaN, 1e20)                                                                   | Confirmed with a CoreFoundation probe: `CFNumberGetValue(…, kCFNumberCharType, …)` gives NaN 0, 1e20 -1, -1e20 0, 257.9 1, 9.3e18 -1, so the value saturates to 64 bits before the low byte is taken (`simpleprefs.cpp:223-226`)                                                                                                                                          | Fixed  |
+
+Fix in `bays/proxy/src/main/ca.ts`: `systemRoots()` treats a certificate as self-signed
+when subject and issuer match (case and whitespace ignored) and it verifies with its own
+key; `userTrustSettingsDisabled()` converts reals as measured. Tests (red before): a
+self-signed certificate with only `digitalSignature` in "drops a root the keychain
+distrusts …", four reals in "reads DisableUserTrustSettings as Security.framework does".
+
+Known limits: names are compared case- and whitespace-insensitively, not with Apple's
+full normalisation, and the authority/subject key ID check is not modelled (Node exposes
+neither); the real conversion follows arm64, an Intel Mac saturates differently.
+
+## Ninth review: working tree after the eighth review
+
+Reviewer: Codex (`codex exec -s read-only`), on the uncommitted fixes of the sixth to
+eighth reviews. Two findings, both confirmed; this was the last of four rounds agreed
+for this filter, so the fixes below were not reviewed again.
+
+| #   | Sev. | Finding                                                                                                    | Checked                                                                                                                                                                                                                                                 | Change |
+| --- | ---- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 1   | med  | `KeyUsage` as `<real>0.0</real>` made `BigInt()` throw, so the whole domain was skipped (fail open)        | Confirmed: `tsIsGoodCfNum` accepts any CFNumber that converts to SInt32 without loss (`OSX/libsecurity_keychain/lib/TrustSettings.cpp:337-358`), and trustd reads it as SInt64 (`trust/trustd/SecPolicyServer.c:3179`), so 0.0 is 0 and 8.0 is SignCert | Fixed  |
+| 2   | low  | `DisableUserTrustSettings` as `<real>+infinity</real>` read as NaN (false), CoreFoundation gives -1 (true) | Confirmed: `plutil` writes infinities as `+infinity` / `-infinity`, which `Number()` does not parse; `getBoolValue` casts to char (`OSX/libsecurity_utilities/lib/simpleprefs.cpp:223-226`), saturating as measured in the eighth review                | Fixed  |
+
+Fix in `bays/proxy/src/main/ca.ts`: `keyUsageApplies()` reads the value through
+`Number()` (a valid real is an exact SInt32); `userTrustSettingsDisabled()` maps
+`infinity` before converting. Tests (red before): reals 0.0 and 8.0 in "checks a
+self-signed root as its own server certificate without SignCert", ±infinity in "reads
+DisableUserTrustSettings as Security.framework does".
+
+Open after four rounds: whether a fifth Codex round on this state reports no findings is
+not known. Not observed in any round: a live trustd evaluation with changed settings
+(that would change the keychain).

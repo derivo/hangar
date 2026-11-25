@@ -60,12 +60,18 @@ Events (stdout): `hello { version }` at start, `flow.request`, `flow.response`
 - Proxy credentials are checked per listener by the addon (plain HTTP per
   request, HTTPS at CONNECT), not by mitmproxy's `proxyauth`.
 - macOS: Node's bundled roots ignore the keychain, so `distrustedRoots()` reads
-  the user and admin trust settings (`security trust-settings-export`) and
-  `systemRoots()` drops denied roots by SHA-1. As in trustd: admin settings of a
-  certificate overrule its user settings; the first entry that applies to a TLS
-  server check decides, `Unspecified` included (no application or host, key
-  usage absent, any or SignCert (8), policy absent or SSL, string OIDs `.3.1`
-  and `.3.2` included, name absent or exactly `sslServer`).
+  the user and admin trust settings (`security trust-settings-export`, parsed as
+  a plist) and `systemRoots()` drops denied roots by SHA-1. As in trustd: admin
+  settings of a certificate overrule its user settings; `DisableUserTrustSettings`
+  in `/Library/Preferences/com.apple.security.plist` turns the user domain off;
+  entries are converted as `copyTrustSettings` does (an unknown DER policy OID
+  drops all settings of the certificate in that domain, an unresolved string OID
+  means no policy, options are not copied, an entry with none of policy,
+  application, host, allowed error, result and key usage is dropped); the first entry that applies to a TLS server check decides,
+  `Unspecified` included (no application or host, key usage absent, any or the
+  usage of the role, policy absent, unresolved or SSL, name absent or exactly
+  `sslServer`). A self-signed root is checked as chain signer (SignCert, 8) and
+  as leaf (0) and dropped if either is denied.
   Unreadable settings warn once and filter nothing.
 - The engine starts with the first `listen`, not with Hangar.
 - With a local server the bay runs there (`IN_SERVER`), like the agent bay.

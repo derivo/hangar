@@ -169,10 +169,15 @@ listen_host=127.0.0.1` and without a default listener (`server=false` until
   for TLS is dropped from all three: `security trust-settings-export` for the
   user and the admin domain (the system domain is Apple's read-only root list),
   matched by SHA-1. As in trustd, a certificate's admin settings overrule its
-  user settings, and its first entry that applies to a TLS server check
-  decides, `Unspecified` included (no application or host; key usage absent,
-  any or SignCert; policy absent or SSL, as data or string, the SSL server and
-  client OIDs included; policy name absent or exactly `sslServer`). Unreadable settings leave the roots unfiltered with one warning; Linux `/etc/ssl/certs/ca-certificates.crt` or
+  user settings (the user domain counts only without `DisableUserTrustSettings`),
+  entries are converted as Security.framework's `copyTrustSettings` does (an
+  unknown DER policy OID drops the certificate's settings in that domain, an
+  unresolved string OID means no policy), and its first entry that applies to a
+  TLS server check decides, `Unspecified` included (no application or host; key
+  usage absent, any or that of the role: SignCert as chain signer, none as leaf;
+  policy absent, unresolved or SSL, as data or string, the SSL server and client
+  OIDs included; policy name absent or exactly `sslServer`). A self-signed root
+  is dropped when either role is denied. Unreadable settings leave the roots unfiltered with one warning; Linux `/etc/ssl/certs/ca-certificates.crt` or
   `/etc/pki/tls/certs/ca-bundle.crt`, Windows the certificate store `ROOT`
   exported via `tls.getCACertificates('system')` (Node 22.15+). Without any
   source the start fails with the reason. A repeated `proxy.env` keeps port
