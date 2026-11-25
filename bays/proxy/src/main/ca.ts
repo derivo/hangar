@@ -34,9 +34,9 @@ const ROOT_FILES: Partial<Record<NodeJS.Platform, string[]>> = {
 const PEM = /-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g;
 
 const DENY = 3; // kSecTrustSettingsResultDeny
-const UNSPECIFIED = 4; // kSecTrustSettingsResultUnspecified: the next entry decides
-// SSL and basic X.509 policy (1.2.840.113635.100.1.3 and .2) as the export stores the OID.
-const TLS_POLICIES = new Set(['KoZIhvdjZAED', 'KoZIhvdjZAEC']);
+// The SSL policy OID 1.2.840.113635.100.1.3 as the export stores it: data or string.
+const SSL_POLICY = new Set(['KoZIhvdjZAED', '1.2.840.113635.100.1.3']);
+const KEY_USE_ANY = '4294967295'; // kSecTrustSettingsKeyUseAny
 
 /** One domain's trust settings as `security trust-settings-export` writes them (XML plist). */
 function exportTrustSettings(domain: 'user' | 'admin'): string {
@@ -52,35 +52,39 @@ function exportTrustSettings(domain: 'user' | 'admin'): string {
 }
 
 /**
- * Whether one certificate's settings deny TLS: the first entry that applies decides, as in
- * Apple's evaluation; `undefined` when none applies. An entry applies when it names no
- * application, host (`PolicyString`) or key usage and its policy is absent, SSL or basic
- * X.509; any other policy-scoped entry is skipped. No entries is an empty array: trusted.
+ * Whether one certificate's settings deny a TLS server check: the first entry that applies
+ * decides, as in trustd (`SecPVCGetTrustSettingsResult`), `Unspecified` included. An entry
+ * applies when it names no application or host (`PolicyString`), its key usage is absent or
+ * any, its policy is absent or SSL and its policy name absent or `sslServer`. No entry that
+ * applies (or none at all) is no deny.
  */
-function deniesTls(cert: string): boolean | undefined {
+function deniesTls(cert: string): boolean {
   // The usage constraint dictionaries are flat (data, integer, string values only).
   const entries = (cert.match(/<dict>(?:(?!<dict>)[\s\S])*?<\/dict>/g) ?? []).filter((d) =>
     d.includes('<key>kSecTrustSettings'),
   );
-  if (!entries.length) return false;
   for (const entry of entries) {
     const value = (key: string) =>
       new RegExp(`<key>${key}</key>\\s*<\\w+>([^<]*)<`).exec(entry)?.[1]?.replace(/\s/g, '');
-    if (/<key>kSecTrustSettings(Application|PolicyString|KeyUsage)<\/key>/.test(entry)) continue;
+    if (/<key>kSecTrustSettings(Application|PolicyString)<\/key>/.test(entry)) continue;
+    const usage = value('kSecTrustSettingsKeyUsage');
+    if (usage !== undefined && usage !== KEY_USE_ANY) continue;
     const policy = value('kSecTrustSettingsPolicy');
-    if (policy !== undefined && !TLS_POLICIES.has(policy)) continue;
-    const result = Number(value('kSecTrustSettingsResult') ?? 1);
-    if (result !== UNSPECIFIED) return result === DENY;
+    if (policy !== undefined && !SSL_POLICY.has(policy)) continue;
+    const name = value('kSecTrustSettingsPolicyName');
+    if (name !== undefined && name !== 'sslServer') continue;
+    return Number(value('kSecTrustSettingsResult') ?? 1) === DENY;
   }
-  return undefined;
+  return false;
 }
 
 let warned = false;
 
 /**
  * SHA-1 fingerprints (upper-case hex) of the certificates the keychain trust settings deny
- * for TLS. The user domain decides before the admin domain; the system domain is Apple's
- * read-only root list and carries no denies. A domain without settings counts as empty.
+ * for TLS. A certificate's admin settings overrule its user settings wholesale, as in trustd
+ * (`SecLegacyAnchorSourceCopyUsageConstraints`); the system domain is Apple's read-only root
+ * list and carries no denies. A domain without settings counts as empty.
  */
 export function distrustedRoots(read = exportTrustSettings): Set<string> {
   const decided = new Map<string, boolean>();
@@ -98,10 +102,8 @@ export function distrustedRoots(read = exportTrustSettings): Set<string> {
       continue;
     }
     const parts = xml.split(/<key>([0-9A-F]{40})<\/key>/);
-    for (let i = 1; i < parts.length; i += 2) {
-      const deny = decided.has(parts[i]!) ? undefined : deniesTls(parts[i + 1]!);
-      if (deny !== undefined) decided.set(parts[i]!, deny);
-    }
+    // Admin comes second and overwrites.
+    for (let i = 1; i < parts.length; i += 2) decided.set(parts[i]!, deniesTls(parts[i + 1]!));
   }
   return new Set([...decided].filter(([, deny]) => deny).map(([sha1]) => sha1));
 }

@@ -168,10 +168,11 @@ listen_host=127.0.0.1` and without a default listener (`server=false` until
   can lack a chain's root (CI runners); a root the keychain trust settings deny
   for TLS is dropped from all three: `security trust-settings-export` for the
   user and the admin domain (the system domain is Apple's read-only root list),
-  matched by SHA-1. Only a deny that applies to TLS counts (no policy, the SSL
-  or basic X.509 policy, no application, host or key usage); the first entry of
-  a certificate that applies decides, and the user domain before the admin
-  domain. Unreadable settings leave the roots unfiltered with one warning; Linux `/etc/ssl/certs/ca-certificates.crt` or
+  matched by SHA-1. As in trustd, a certificate's admin settings overrule its
+  user settings, and its first entry that applies to a TLS server check
+  decides, `Unspecified` included (no application or host; key usage absent or
+  any; policy absent or SSL, as data or string; policy name absent or
+  `sslServer`). Unreadable settings leave the roots unfiltered with one warning; Linux `/etc/ssl/certs/ca-certificates.crt` or
   `/etc/pki/tls/certs/ca-bundle.crt`, Windows the certificate store `ROOT`
   exported via `tls.getCACertificates('system')` (Node 22.15+). Without any
   source the start fails with the reason. A repeated `proxy.env` keeps port

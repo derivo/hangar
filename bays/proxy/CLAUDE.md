@@ -61,10 +61,11 @@ Events (stdout): `hello { version }` at start, `flow.request`, `flow.response`
   request, HTTPS at CONNECT), not by mitmproxy's `proxyauth`.
 - macOS: Node's bundled roots ignore the keychain, so `distrustedRoots()` reads
   the user and admin trust settings (`security trust-settings-export`) and
-  `systemRoots()` drops denied roots by SHA-1. Only a deny for TLS counts (no
-  policy, SSL or basic X.509, no application, host or key usage); other
-  policy-scoped entries are skipped. Unreadable settings warn once and filter
-  nothing.
+  `systemRoots()` drops denied roots by SHA-1. As in trustd: admin settings of a
+  certificate overrule its user settings; the first entry that applies to a TLS
+  server check decides, `Unspecified` included (no application or host, key
+  usage absent or any, policy absent or SSL, name absent or `sslServer`).
+  Unreadable settings warn once and filter nothing.
 - The engine starts with the first `listen`, not with Hangar.
 - With a local server the bay runs there (`IN_SERVER`), like the agent bay.
 - Windows: `curl.exe` (schannel) ignores the CA variables; only

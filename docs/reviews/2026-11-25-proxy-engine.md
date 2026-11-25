@@ -109,3 +109,42 @@ no filter and warns once when the settings cannot be read", "reads the trust
 settings of this system without throwing". Not tried: a real root set to "Never
 Trust" (that would change the keychain); in particular which entries Keychain Access
 writes for it is taken from the header, not observed.
+
+## Fourth review: commit ec520f0 (keychain distrust filter)
+
+Reviewer: Codex (`codex exec -s read-only`), on commit ec520f0. Eight findings; Codex
+reproduced six with in-memory plists against the unchanged parser. Each was checked
+against Apple's open-source Security code (`apple-oss-distributions/Security`, branch
+`main`): `trust/trustd/SecCertificateSource.c` (`SecLegacyAnchorSourceCopyUsageConstraints`),
+`trust/trustd/SecPolicyServer.c` (`SecPVCContainsPolicy`, `SecPVCMeetsConstraint`,
+`SecPVCGetTrustSettingsResult`, `SecPVCContainsTrustSettingsKeyUsage`) and
+`OSX/libsecurity_keychain/lib/TrustSettings.cpp` (disk format to API).
+
+| #   | Sev. | Finding                                                                                     | Checked                                                                                                                                                                                                      | Change |
+| --- | ---- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
+| 1   | high | Domain order reversed: user `TrustRoot` hides an admin `Deny`                               | Confirmed: trustd returns a certificate's admin settings whenever they exist ("admin trust settings overrule user trust settings") and reads the user domain only otherwise, whole array, not entry by entry | Fixed  |
+| 2   | high | Basic X.509 entries counted as TLS, so a basic `TrustRoot` hides a later SSL `Deny`         | Confirmed: `SecPVCContainsPolicy` compares the entry's OID with the compatibility OID of the evaluated policy; an SSL check never matches basic X.509                                                        | Fixed  |
+| 3   | high | `kSecTrustSettingsPolicyName` ignored, so an `sslClient` entry decides a server check       | Confirmed: with OID and name both must match; a name `sslServer` also matches, `sslClient` never does for a server check; a name without OID matches by name                                                 | Fixed  |
+| 4   | high | Policy OID as `<string>` skipped                                                            | Confirmed: `TrustSettings.cpp` accepts CFData or CFString (`SecPolicyCreateWithProperties`), the schema header says the same                                                                                 | Fixed  |
+| 5   | high | `KeyUsage` 4294967295 (`kSecTrustSettingsKeyUseAny`) skipped                                | Confirmed: `SecPVCContainsTrustSettingsKeyUsage` returns true for exactly that value. Other key usages stay skipped (exact match against the policy's usages, not modelled)                                  | Fixed  |
+| 6   | med  | `Unspecified` passes to the next entry; an `AllowedError`/`Unspecified` entry was a fixture | Confirmed: `SecPVCGetTrustSettingsResult` breaks at the first entry that meets the constraint, whatever its result; `AllowedError` is no matching criterion                                                  | Fixed  |
+| 7   | med  | macOS test expects every bundled root although a denied one is now dropped                  | Confirmed: "includes cert.pem and Node's bundled roots on macOS" fails on a machine that distrusts a bundled root                                                                                            | Fixed  |
+| 8   | low  | System smoke test passes with both exports failing once `warned` is set                     | Confirmed as latent: no earlier test in the file sets `warned` in the shared module today, but the order is not guaranteed                                                                                   | Fixed  |
+
+Fix in `bays/proxy/src/main/ca.ts`: `distrustedRoots()` reads user, then admin, and a
+certificate's admin entry overwrites its user result. `deniesTls()` returns the result
+of the first entry that applies to an SSL server check: no `Application` or
+`PolicyString`, `KeyUsage` absent or 4294967295, `Policy` absent or SSL (data
+`KoZIhvdjZAED` or string `1.2.840.113635.100.1.3`), `PolicyName` absent or
+`sslServer`; `Unspecified` stops the search like any result. Tests in `ca.test.ts`
+(the first two red before): "stops at the first entry that applies to an SSL server
+check, as trustd does", "lets admin settings of a certificate overrule its user
+settings"; the macOS test now skips roots `distrustedRoots()` denies, and the smoke test
+runs on a fresh module. ADR 0049 and `bays/proxy/CLAUDE.md` follow the new rule.
+
+Not observed: a real "Never Trust" entry (that would change the keychain). This Mac's
+exports (user: empty `trustList`, admin: two certificates without settings) yield no
+deny before and after the fix. Whether Keychain Access writes `KeyUsage` as
+4294967295 or as -1 is unknown; -1 stays skipped, as trustd's exact comparison would
+also not treat it as "any". Entries with `kSecTrustSettingsPolicyOptions` (a nested
+dictionary) are outside the flat-dictionary parser, as before.

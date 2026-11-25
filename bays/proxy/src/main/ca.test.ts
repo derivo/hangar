@@ -150,11 +150,16 @@ describe('systemRoots', () => {
     "includes cert.pem and Node's bundled roots on macOS",
     () => {
       const roots = systemRoots('darwin');
+      // A root this keychain denies is dropped on purpose.
+      const denied = distrustedRoots();
+      const kept = (c: string) =>
+        !denied.has(new X509Certificate(c).fingerprint.replaceAll(':', ''));
       const first = readFileSync('/etc/ssl/cert.pem', 'utf8').match(
         /-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/,
       )![0];
-      expect(roots).toContain(first);
-      for (const cert of getCACertificates('bundled')) expect(roots).toContain(cert.trim());
+      if (kept(first)) expect(roots).toContain(first);
+      for (const cert of getCACertificates('bundled').filter(kept))
+        expect(roots).toContain(cert.trim());
     },
   );
 });
@@ -214,11 +219,7 @@ describe('distrustedRoots', () => {
         `\t\t\t\t\t<key>kSecTrustSettingsPolicyString</key>\n\t\t\t\t\t<string>example.com</string>\n${policy(SSL)}${result(DENY)}`,
       ],
       [sha('F')]: [result(1), result(DENY)],
-      [sha('1')]: [
-        `\t\t\t\t\t<key>kSecTrustSettingsAllowedError</key>\n\t\t\t\t\t<integer>-2147409654</integer>\n${result(4)}`,
-        policy(SMIME) + result(1),
-        policy(SSL) + result(DENY),
-      ],
+      [sha('1')]: [policy(SMIME) + result(1), policy(SSL) + result(DENY)],
       [sha('2')]: null,
       [sha('3')]: [policy(SMIME) + result(DENY)],
     });
@@ -227,16 +228,49 @@ describe('distrustedRoots', () => {
     ).toEqual([sha('1'), sha('A'), sha('B')]);
   });
 
-  it('lets the user domain decide before the admin domain', () => {
+  it('stops at the first entry that applies to an SSL server check, as trustd does', () => {
+    const key = (k: string, tag: string, v: string) =>
+      `\t\t\t\t\t<key>kSecTrustSettings${k}</key>\n\t\t\t\t\t<${tag}>${v}</${tag}>\n`;
+    const name = (n: string) => key('PolicyName', 'string', n);
+    const BASIC = 'KoZIhvdjZAEC';
+    const admin = plist({
+      // Unspecified ends the search like any other result; AllowedError does not scope an entry.
+      [sha('A')]: [key('AllowedError', 'integer', '-2147409654') + result(4), result(DENY)],
+      // Basic X.509 is not SSL.
+      [sha('B')]: [policy(BASIC) + result(1), policy(SSL) + result(DENY)],
+      [sha('C')]: [policy(BASIC) + result(DENY)],
+      // The policy name scopes an SSL entry to client or server.
+      [sha('D')]: [
+        policy(SSL) + name('sslClient') + result(1),
+        policy(SSL) + name('sslServer') + result(DENY),
+      ],
+      [sha('E')]: [policy(SSL) + name('sslClient') + result(DENY)],
+      // The OID may be a string; only kSecTrustSettingsKeyUseAny leaves the key usage open.
+      [sha('F')]: [key('Policy', 'string', '1.2.840.113635.100.1.3') + result(DENY)],
+      [sha('0')]: [key('KeyUsage', 'integer', '4294967295') + policy(SSL) + result(DENY)],
+      [sha('1')]: [key('KeyUsage', 'integer', '1') + result(DENY)],
+    });
+    expect(
+      [...distrustedRoots((domain) => (domain === 'admin' ? admin : plist({})))].sort(),
+    ).toEqual([sha('0'), sha('B'), sha('D'), sha('F')]);
+  });
+
+  it('lets admin settings of a certificate overrule its user settings', () => {
     const admin = plist({
       [sha('A')]: [result(DENY)],
       [sha('B')]: [result(DENY)],
-      [sha('C')]: [result(DENY)],
+      [sha('C')]: null,
     });
-    const user = plist({ [sha('A')]: null, [sha('B')]: [policy(SMIME) + result(DENY)] });
+    const user = plist({
+      [sha('A')]: null,
+      [sha('B')]: [policy(SMIME) + result(DENY)],
+      [sha('C')]: [result(DENY)],
+      [sha('D')]: [result(DENY)],
+    });
     expect([...distrustedRoots((domain) => (domain === 'admin' ? admin : user))].sort()).toEqual([
+      sha('A'),
       sha('B'),
-      sha('C'),
+      sha('D'),
     ]);
   });
 
@@ -270,9 +304,12 @@ describe('distrustedRoots', () => {
   });
 
   // Reads the real trust settings (macOS) or fails over to none (no `security`); changes nothing.
-  it('reads the trust settings of this system without throwing', () => {
+  it('reads the trust settings of this system without throwing', async () => {
+    // A fresh module: an earlier warning must not hide a failed export here.
+    vi.resetModules();
+    const fresh = await import('./ca');
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const denied = distrustedRoots();
+    const denied = fresh.distrustedRoots();
     for (const sha1 of denied) expect(sha1).toMatch(/^[0-9A-F]{40}$/);
     if (process.platform === 'darwin') expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
