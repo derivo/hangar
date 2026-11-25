@@ -1,6 +1,6 @@
 # Status
 
-As of 2026-11-06, version 0.1.0. All milestones from
+As of 2026-11-25, version 0.9.0. All milestones from
 [specification-mvp.md](specification-mvp.md) §10 are implemented. Verification ran
 locally on macOS (arm64). The gaps are listed below, the next steps in [roadmap.md](roadmap.md).
 
