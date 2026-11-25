@@ -17,13 +17,14 @@ from urllib.parse import unquote_plus
 
 from mitmproxy import ctx, http, version
 from mitmproxy.addons.termlog import TermLogHandler
-from mitmproxy.proxy import commands
+from mitmproxy.proxy import commands, events
 from mitmproxy.proxy.layers import websocket as wsl
 from wsproto.connection import ConnectionState
 from wsproto.events import CloseConnection
 
 BODY_LIMIT = 1024 * 1024
 WS_LIMIT = 16 * 1024 * 1024
+WS_CLOSE_WAIT = 2  # seconds a peer gets to answer the 1009 close frame
 MAX_LINES = 1000
 MAX_BYTES = 8 * 1024 * 1024
 SECRET = re.compile(r"token|secret|key|auth", re.I)
@@ -134,12 +135,35 @@ def _limited_relay(self, event):
     for w in (self.server_ws, self.client_ws):
         if w.state in {ConnectionState.OPEN, ConnectionState.REMOTE_CLOSING}:
             yield w.send2(CloseConnection(code=1009, reason="message too big"))
-        yield commands.CloseConnection(w.conn)
+        if w.state is not ConnectionState.LOCAL_CLOSING:
+            yield commands.CloseConnection(w.conn)
+    # A peer still sending gets a reset when we close now, and the reset can discard the
+    # close frame before the peer reads it. So read on until its close answer, its EOF or
+    # WS_CLOSE_WAIT. (Closing it while it still sends can also hit a cancel race in
+    # mitmproxy 12.3.1's handle_connection that never closes the socket.)
+    yield commands.RequestWakeup(WS_CLOSE_WAIT)
     self.flow.websocket.close_code = 1009
     self.flow.live = False
-    self._handle_event = self.done
+    self._handle_event = lambda event: _closing(self, event)
     out.put({"type": "ws.tooLarge", "id": self.flow.id, "buffered": size})
     yield wsl.WebsocketEndHook(self.flow)
+
+
+def _closing(self, event):
+    if isinstance(event, events.Wakeup):
+        for w in (self.server_ws, self.client_ws):
+            yield commands.CloseConnection(w.conn)
+        return
+    if not isinstance(event, events.ConnectionEvent):
+        return
+    w = self.client_ws if event.connection == self.context.client else self.server_ws
+    if w.state is not ConnectionState.LOCAL_CLOSING:
+        return
+    if isinstance(event, events.DataReceived):
+        w.receive_data(event.data)
+        if not any(isinstance(e, CloseConnection) for e in w.events()):
+            return
+    yield commands.CloseConnection(w.conn)
 
 
 wsl.WebsocketLayer.relay_messages = _limited_relay

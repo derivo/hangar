@@ -213,8 +213,9 @@ listen_host=127.0.0.1` and without a default listener (`server=false` until
   hook sees them. The addon therefore wraps `WebsocketLayer.relay_messages`
   (not `_handle_event`, which `start` reassigns per instance): after each
   received event it sums `frame_buf` of both sides; above 16 MB it
-  closes both sides with code 1009 (message too big), drops the buffer and
-  sends a `ws.tooLarge` row. That check sees only fragments: wsproto inflates
+  sends both sides close code 1009 (message too big), drops the buffer and
+  sends a `ws.tooLarge` row; it closes each TCP connection after that side's
+  close answer or end, at the latest after 2 s (see `bays/proxy/CLAUDE.md`). That check sees only fragments: wsproto inflates
   `permessage-deflate` frames without a size bound (`wsproto/extensions.py`),
   so a few KB of compressed input can become one complete 32 MB message
   between two checks (reproduced in the Codex review of PR #41). The addon
