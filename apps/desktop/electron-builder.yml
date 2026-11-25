@@ -43,6 +43,8 @@ extraResources:
 # node-pty is N-API: the prebuilt (macOS/Windows) or install-time compiled (Linux)
 # binary works in Electron as is, so no electron-rebuild (it cannot cross-compile).
 npmRebuild: false
+# Ad-hoc signature for unsigned macOS builds, so the app is not "damaged".
+afterPack: build/adhoc-sign.mjs
 asarUnpack:
   # Native addon plus spawn-helper must exist as real files.
   - node_modules/node-pty/**
