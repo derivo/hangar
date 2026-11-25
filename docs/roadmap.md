@@ -750,6 +750,10 @@ from the plan below:
   `proxyserver.connections` instead of tracking them in hooks.
 - Events added: `hello` (version), `flow.done` (bytes, WebSocket close code),
   `dropped`, `warning`.
+- The addon is not unpacked from `app.asar`: `asarUnpack` does not reach the
+  files mapped in from `bays/`. The bay copies it into its data folder at
+  activation; the packaged check extracts it from `app.asar` and loads it in
+  `mitmdump`.
 - The integration test uses `127.0.0.1` with a certificate for that address
   instead of `proxy-test.invalid`: its client is the test's own and ignores
   `NO_PROXY`. The tunnel byte counts match the client's up to the TLS close

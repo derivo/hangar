@@ -437,7 +437,8 @@ test:linux-server`) and its setup over SSH (`pnpm test:linux-setup`, ADR
   `engine.test.ts` (fake process: backoff, restore order, races), `index.test.ts`.
   E2E: `e2e/proxy.spec.ts` (status line, axe light and dark 0 findings). Not
   checked: Linux and Windows locally (CI), HTTP/2 uploads, the addon's stdout
-  limits, the packaged addon (CI step `scripts/check-proxy-addon.mjs`). Review:
+  limits, the copy of the addon in the packaged app (CI step
+  `scripts/check-proxy-addon.mjs` loads it from `app.asar`). Review:
   `docs/reviews/2026-11-25-proxy-engine.md`.
 - **Server in operation, phase 12** (ADR 0029): `pnpm test:container` builds the
   production image and checks with Docker Desktop (Linux arm64): runs as uid

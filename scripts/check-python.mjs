@@ -2,7 +2,7 @@
 // compile() instead of `python -m py_compile`, which would leave __pycache__ behind.
 import { execFileSync } from 'node:child_process';
 
-const files = ['bays/proxy/addon/hangar_proxy.py'];
+const files = ['bays/proxy/src/addon/hangar_proxy.py'];
 const code = 'import sys\nfor f in sys.argv[1:]: compile(open(f, "rb").read(), f, "exec")';
 const python = ['python3', 'python'].find((cmd) => {
   try {

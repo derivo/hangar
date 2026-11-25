@@ -149,7 +149,7 @@ it('runs a session whose shell reaches the hangar CLI, and a restart brings it b
 
   connections.closeAll();
   docker('restart', name);
-  await vi.waitFor(() => expect(health().bays.length).toBe(3), { timeout: 60_000 });
+  await vi.waitFor(() => expect(health().bays.length).toBe(4), { timeout: 60_000 });
 
   connections = connect();
   data.length = 0;

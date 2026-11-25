@@ -13,7 +13,7 @@ import { Ca } from './ca';
 import { findMitmdump, MitmEngine } from './engine';
 import type { AddonEvent } from './protocol';
 
-const ADDON = resolve(import.meta.dirname, '../../addon/hangar_proxy.py');
+const ADDON = resolve(import.meta.dirname, '../addon/hangar_proxy.py');
 const missing = (() => {
   try {
     findMitmdump('');
@@ -482,18 +482,20 @@ describe.skipIf(missing)(
     it('reaches a public HTTPS host with the system roots', async () => {
       const t = await tunnel(B, 'example.com:443', 'pw-b');
       expect(t.status).toBe(200);
-      const status = await new Promise<number>((done, fail) => {
+      const answer = await new Promise<{ status: number; body: string }>((done, fail) => {
         const tlsSocket = tlsConnect({
           socket: t.socket,
           servername: 'example.com',
           ca: readFileSync(ca.certFile),
         });
         httpsGet({ host: 'example.com', path: '/', createConnection: () => tlsSocket }, (res) => {
-          res.resume();
-          done(res.statusCode!);
+          let body = '';
+          res.on('data', (d) => (body += d));
+          res.on('end', () => done({ status: res.statusCode!, body }));
         }).on('error', fail);
       });
-      expect(status).toBe(200);
+      // A 502 carries mitmproxy's reason, e.g. a certificate the upstream roots lack.
+      expect(answer.status, answer.body.slice(0, 500)).toBe(200);
       t.socket.destroy();
       await vi.waitFor(() =>
         expect(events).toContainEqual(

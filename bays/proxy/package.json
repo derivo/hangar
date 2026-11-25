@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build --config vite.ui.config.ts && vite build --config vite.main.config.ts && node -e \"require('node:fs').cpSync('addon/hangar_proxy.py','dist/addon/hangar_proxy.py')\""
+    "build": "vite build --config vite.ui.config.ts && vite build --config vite.main.config.ts && node -e \"require('node:fs').cpSync('src/addon/hangar_proxy.py','dist/addon/hangar_proxy.py')\""
   },
   "devDependencies": {
     "@hangar/sdk": "workspace:*",

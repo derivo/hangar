@@ -1,5 +1,8 @@
 import type { Engine, EngineStatus } from './engine';
-import { addonPath, createProxyBay } from './index';
+import { mkdtempSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createProxyBay, installAddon } from './index';
 import { fakeContext } from './test-ctx';
 
 const status = (state: EngineStatus['state']): EngineStatus => ({
@@ -95,15 +98,26 @@ describe('dev.hangar.proxy', () => {
   });
 });
 
-describe('addonPath', () => {
-  it('points next to the main part, outside app.asar', () => {
-    const base = process.platform === 'win32' ? 'file:///C:/app' : 'file:///app';
-    const slash = (p: string) => p.replaceAll('\\', '/').replace(/^C:/, '');
-    expect(slash(addonPath(`${base}/bays/proxy/dist/main/index.js`))).toBe(
-      '/app/bays/proxy/dist/addon/hangar_proxy.py',
-    );
-    expect(slash(addonPath(`${base}/Resources/app.asar/bays/proxy/dist/main/index.js`))).toBe(
-      '/app/Resources/app.asar.unpacked/bays/proxy/dist/addon/hangar_proxy.py',
-    );
+describe('installAddon', () => {
+  it('copies the addon into the data folder and rewrites it only when it changed', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hangar-proxy-addon-'));
+    const source = join(dir, 'source.py');
+    writeFileSync(source, 'addons = []\n');
+    const target = installAddon(join(dir, 'data'), source);
+    expect(target).toBe(join(dir, 'data', 'addon', 'hangar_proxy.py'));
+    expect(readFileSync(target, 'utf8')).toBe('addons = []\n');
+    const written = statSync(target).mtimeMs;
+    utimesSync(target, 0, 0);
+    installAddon(join(dir, 'data'), source);
+    expect(statSync(target).mtimeMs).toBe(0);
+    writeFileSync(source, 'addons = [1]\n');
+    installAddon(join(dir, 'data'), source);
+    expect(readFileSync(target, 'utf8')).toBe('addons = [1]\n');
+    expect(written).toBeGreaterThan(0);
+  });
+
+  it('defaults to the addon of the bay', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hangar-proxy-addon-'));
+    expect(readFileSync(installAddon(dir), 'utf8')).toContain('class HangarProxy');
   });
 });

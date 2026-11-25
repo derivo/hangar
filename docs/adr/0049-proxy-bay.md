@@ -66,9 +66,10 @@ joins the variables, on Windows with the Git variant (curl.exe has none); the th
   (`docker/linux-server/Dockerfile`, `scripts/linux-server-package.mjs`).
 - **Engine: mitmproxy, not an own TLS interceptor.** The bay starts `mitmdump`
   as a child process with an addon shipped in the bay. The build copies it to
-  `dist/addon/hangar_proxy.py`; `electron-builder.yml` unpacks it from
-  `app.asar` (`asarUnpack`), because an external Python cannot read inside the
-  archive. mitmproxy is not bundled: the bay looks for `mitmdump` on `PATH` or
+  `dist/addon/hangar_proxy.py`; at activation the bay copies it into its data
+  folder (`addon/hangar_proxy.py`), because in the app it lies in `app.asar`,
+  which an external Python cannot read (`asarUnpack` does not reach files that
+  `electron-builder.yml` maps in from `bays/`). mitmproxy is not bundled: the bay looks for `mitmdump` on `PATH` or
   in the setting `mitmdumpPath`.
 - **Control protocol in both directions.** Events from the addon arrive as
   JSON lines on stdout (`hello` with the version, `flow.request`,

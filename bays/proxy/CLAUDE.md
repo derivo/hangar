@@ -9,7 +9,7 @@ UI shows only the engine state (step 5).
 ## Layout
 
 - `manifest.json` – id, `proxy.status`, settings `mitmdumpPath`, `upstreamCaFile`.
-- `addon/hangar_proxy.py` – the mitmdump addon; `pnpm build` copies it to
+- `src/addon/hangar_proxy.py` – the mitmdump addon; `pnpm build` copies it to
   `dist/addon/`. `pnpm lint` compiles it (`scripts/check-python.mjs`).
 - `src/main/engine.ts` – finds and starts `mitmdump`, version check, restart
   with backoff 1 s, 5 s, 30 s and the same listeners, stop. Interface `Engine`;
@@ -47,8 +47,9 @@ Events (stdout): `hello { version }` at start, `flow.request`, `flow.response`
   `WebsocketLayer.relay_messages`. Another version fails with the reason.
 - `mitmdump` starts with `server=false`: an empty `mode` is refused, and the
   default `regular` would bind port 8080. The first `listen` turns the server on.
-- The addon's file must be outside `app.asar` (`asarUnpack` in
-  `apps/desktop/electron-builder.yml`); `addonPath()` maps the path.
+- mitmdump's Python cannot read inside `app.asar`, and `asarUnpack` does not
+  reach files mapped in from `bays/`: `installAddon()` copies the addon into
+  the data folder (`addon/hangar_proxy.py`) at activation.
 - stdout carries only the addon's JSON lines: the addon points mitmproxy's
   log and dumper to stderr and writes through a bounded queue, so a slow bay
   never blocks the proxy (extra lines are dropped and counted).

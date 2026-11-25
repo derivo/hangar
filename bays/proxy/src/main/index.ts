@@ -1,14 +1,26 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { BayContext, BayMain } from '@hangar/sdk';
 import { Ca } from './ca';
 import { MitmEngine, type Engine } from './engine';
 
-/** The addon next to the built main part, outside `app.asar` so Python can read it. */
-export const addonPath = (mainUrl: string) =>
-  fileURLToPath(new URL('../addon/hangar_proxy.py', mainUrl)).replace(
-    /([\\/])app\.asar([\\/])/,
-    '$1app.asar.unpacked$2',
-  );
+/**
+ * Copies the addon next to the built main part into the data folder: in the app it lies in
+ * `app.asar`, which Electron reads but mitmdump's Python cannot. Rewritten only when it changed.
+ */
+export function installAddon(
+  dataDir: string,
+  source = fileURLToPath(new URL('../addon/hangar_proxy.py', import.meta.url)),
+): string {
+  const target = join(dataDir, 'addon', 'hangar_proxy.py');
+  const content = readFileSync(source);
+  if (!existsSync(target) || !readFileSync(target).equals(content)) {
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, content);
+  }
+  return target;
+}
 
 /** Settings that change how mitmdump starts. */
 const ENGINE_SETTINGS = ['mitmdumpPath', 'upstreamCaFile'];
@@ -17,7 +29,7 @@ export function createProxyBay(
   makeEngine = (ctx: BayContext): Engine =>
     new MitmEngine({
       ca: new Ca(ctx.dataDir),
-      addonPath: addonPath(import.meta.url),
+      addonPath: installAddon(ctx.dataDir),
       mitmdumpPath: () => String(ctx.settings.get('mitmdumpPath')),
       upstreamCaFile: () => String(ctx.settings.get('upstreamCaFile')),
       log: (message) => console.warn(`[proxy] ${message}`),
