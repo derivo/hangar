@@ -3,9 +3,12 @@ name: Release
 # Tag v1.2.3 publishes a stable release, v1.2.3-beta.1 a prerelease (beta channel).
 # Each platform uploads into a draft; the release goes public only after all of them
 # succeeded, so the updater never sees a release with missing files.
+# Run by hand (workflow_dispatch) it is a dry run: same tests and packages on all three
+# systems, uploaded as workflow artifacts; nothing goes to GitHub Releases.
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -69,8 +72,16 @@ jobs:
             echo "APPLE_API_KEY=$RUNNER_TEMP/apple_api_key.p8" >> "$GITHUB_ENV"
           fi
       - name: Package and publish to GitHub Releases
-        run: pnpm --filter @hangar/desktop exec electron-builder --publish always
+        shell: bash
+        # A missing secret arrives as "", which electron-builder takes for a path (CSC_LINK
+        # "" resolves to the working directory: "… not a file"); unset, it builds unsigned.
+        run: |
+          for name in CSC_LINK CSC_KEY_PASSWORD WIN_CSC_LINK WIN_CSC_KEY_PASSWORD APPLE_API_KEY_ID APPLE_API_ISSUER; do
+            [ -n "${!name}" ] || unset "$name"
+          done
+          pnpm --filter @hangar/desktop exec electron-builder --publish "$PUBLISH"
         env:
+          PUBLISH: ${{ github.event_name == 'push' && 'always' || 'never' }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Signing: without these secrets the packages stay unsigned.
           CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
@@ -80,9 +91,26 @@ jobs:
           # macOS notarization (App Store Connect API key; APPLE_API_KEY is set above).
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      # A broken signature makes macOS call the downloaded app "damaged" (adhoc-sign.mjs).
+      - name: Check the app signature (macOS)
+        if: runner.os == 'macOS'
+        run: codesign --verify --deep --strict apps/desktop/release/*/mac*/Hangar.app
+      - name: Keep the packages (dry run)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ runner.os }}
+          path: |
+            apps/desktop/release/*/*.dmg
+            apps/desktop/release/*/*.zip
+            apps/desktop/release/*/*.exe
+            apps/desktop/release/*/*.AppImage
+            apps/desktop/release/*/*.yml
+          if-no-files-found: error
 
   publish:
     needs: release
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Publish the draft (prerelease for beta tags)

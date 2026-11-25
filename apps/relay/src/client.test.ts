@@ -435,8 +435,9 @@ describe('RelayClient', () => {
     hand.send({ type: 'list', id: 3, list: v2 });
     await arrives(() => expect(c.client.workspace('team')?.list.version).toBe(2));
     hand.to(carl, { t: 'announce', functions: [], list: v2, ask: true });
-    await arrives(() => expect(hand.inbox.some((m) => m.type === 'deliver')).toBe(true));
-    await new Promise((r) => setTimeout(r, 100));
+    // Two delivers: carl's own announce for list v2 and the answer to the ask; waiting for
+    // only the first let the answer land after the splice on slow runners.
+    await arrives(() => expect(hand.inbox.filter((m) => m.type === 'deliver')).toHaveLength(2));
     hand.inbox.splice(0);
     // A member asking again and again gets no catalog per message.
     for (let i = 0; i < 5; i++)
