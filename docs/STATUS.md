@@ -68,7 +68,10 @@ manual step is needed. pnpm reports ignored build scripts of
   (list: skill `release`). Without a signature, auto-update does not work on
   macOS. The repository `derivo/hangar` is public (checked 2026-11-18), so
   `electron-updater` (`provider: github`) needs no token, but no release is
-  published yet: packaged apps find no update until the first one.
+  published yet: packaged apps find no update until the first one. The first
+  `release.yml` run (tag `v0.9.0`, run 45622289549) stopped at `pnpm test`
+  because the workflow did not install mitmproxy; the tag is set again after
+  the fix. No signing secrets exist, so the 0.9.0 packages are unsigned.
 - **Security audit 2026-11-17** (source-only, `main` at 2c19132, no
   confirmed finding): of six leads that need validation, the main window's
   navigation guard (#29) and the bridge's Origin check and pairing limit
