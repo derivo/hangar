@@ -77,6 +77,8 @@ test('"Check for updates" shows each state of the updater, without violations', 
     // A ready update installs on the next quit; a new check could only lose it.
     await expect(check).toBeDisabled();
     await push({ state: 'error', message: 'Code signature invalid' });
+    // An error allows a new check; Enter on the still disabled button would do nothing.
+    await expect(check).toBeEnabled();
     // The keyboard reaches the button; a check asks the main process, which answers.
     await check.focus();
     await check.press('Enter');
