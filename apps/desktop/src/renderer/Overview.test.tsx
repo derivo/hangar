@@ -14,10 +14,15 @@ const renderOverview = (data: OverviewView) =>
   render(<Overview api={{ getOverview: vi.fn(async () => data) }} />);
 
 describe('Overview', () => {
-  it('shows the Hangar version only, git identity and the installed bays', async () => {
+  it('shows the Hangar version with the project page, git identity and the installed bays', async () => {
     renderOverview(view);
     expect(await screen.findByRole('heading', { name: 'Hangar-Übersicht' })).toBeVisible();
-    expect(screen.getByRole('list', { name: 'Version' })).toHaveTextContent(/^Hangar0\.1\.0$/);
+    const version = screen.getByRole('list', { name: 'Version' });
+    expect(version).toHaveTextContent(/^Hangar0\.1\.0Projektseitegithub\.com\/derivo\/hangar$/);
+    expect(within(version).getByRole('link', { name: 'github.com/derivo/hangar' })).toHaveAttribute(
+      'href',
+      'https://github.com/derivo/hangar',
+    );
     const git = screen.getByRole('list', { name: 'Git' });
     expect(git).toHaveTextContent('NameAda Lovelace');
     expect(git).toHaveTextContent('E-Mailada@example.invalid');

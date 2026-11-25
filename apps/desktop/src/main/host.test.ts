@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Shortcut } from '@hangar/host';
+import { PROJECT_URL } from '../shared';
 
 // Electron is faked; the bay runtimes are real and load small bays from a temporary folder.
 
@@ -931,7 +932,7 @@ describe('Host: what a bay view may do', () => {
     expect(electron.shell.openExternal.mock.calls).toEqual([['https://example.com']]);
   });
 
-  it('keeps the shell window on its own page and opens no windows from it', async () => {
+  it('keeps the shell window on its own page and opens only the project page outside', async () => {
     await started();
     const contents = FakeWindow.all[0]!.webContents;
     const navigation = { preventDefault: vi.fn() };
@@ -939,6 +940,8 @@ describe('Host: what a bay view may do', () => {
     expect(navigation.preventDefault).toHaveBeenCalled();
     expect(contents.openHandler!({ url: 'https://example.com' })).toEqual({ action: 'deny' });
     expect(electron.shell.openExternal).not.toHaveBeenCalled();
+    expect(contents.openHandler!({ url: PROJECT_URL })).toEqual({ action: 'deny' });
+    expect(electron.shell.openExternal.mock.calls).toEqual([[PROJECT_URL]]);
   });
 
   it('sends bay events to its view and windows, badges to the app and the shell', async () => {

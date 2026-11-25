@@ -31,7 +31,14 @@ import {
 } from './local-server';
 import { dialogPrompter } from './prompter';
 import { setLocale, t } from '../messages';
-import { startUpdates } from './updates';
+import {
+  checkForUpdates,
+  installUpdate,
+  onUpdateStatus,
+  startUpdates,
+  updateStatus,
+} from './updates';
+import { PROJECT_URL } from '../shared';
 
 // Tests and parallel dev instances isolate all state through this variable.
 const dataDir = userDataDir();
@@ -42,6 +49,9 @@ if (process.env.HANGAR_E2E) app.commandLine.appendSwitch('use-mock-keychain');
 if (process.env.HANGAR_E2E && !process.env.HANGAR_E2E_SHOW && process.platform === 'darwin') {
   app.setActivationPolicy('accessory');
 }
+
+// "About Hangar" (app menu on macOS): credits show on macOS and Windows, website on Linux.
+app.setAboutPanelOptions({ credits: PROJECT_URL, website: PROJECT_URL });
 
 let host: Host | undefined;
 let core: Core | undefined;
@@ -384,6 +394,12 @@ async function start(): Promise<void> {
     const updateChannel = channel === 'beta' ? 'beta' : 'stable';
     writeSettings(settingsFile, { ...readSettings(settingsFile), updateChannel });
     startUpdates(updateChannel);
+  });
+  ipcMain.handle('shell:update', () => updateStatus());
+  ipcMain.on('shell:update.check', () => checkForUpdates());
+  ipcMain.on('shell:update.install', () => installUpdate());
+  onUpdateStatus((status) => {
+    if (host?.window?.isDestroyed() === false) host.window.webContents.send('shell:update', status);
   });
   ipcMain.handle('shell:language', (_e, language: unknown) => {
     const valid = language === 'de' || language === 'en' ? language : 'system';

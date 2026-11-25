@@ -67,11 +67,12 @@ manual step is needed. pnpm reports ignored build scripts of
   Apple Developer account and a Windows code signing certificate as secrets
   (list: skill `release`). Without a signature, auto-update does not work on
   macOS. The repository `derivo/hangar` is public (checked 2026-11-18), so
-  `electron-updater` (`provider: github`) needs no token, but no release is
-  published yet: packaged apps find no update until the first one. The first
+  `electron-updater` (`provider: github`) needs no token. Release 0.9.0 is
+  published (2026-11-25, run 45643887645: arm64 dmg/zip, NSIS installer,
+  AppImage, `latest*.yml`; no Intel macOS build). The first
   `release.yml` run (tag `v0.9.0`, run 45622289549) stopped at `pnpm test`
-  because the workflow did not install mitmproxy; the tag is set again after
-  the fix. No signing secrets exist, so the 0.9.0 packages are unsigned. The
+  because the workflow did not install mitmproxy; the tag was set again after
+  each fix. No signing secrets exist, so the 0.9.0 packages are unsigned. The
   second run (45633628234) failed on macOS with `apps/desktop not a file`
   (a missing secret arrives as an empty `CSC_LINK`, which electron-builder
   resolves to the working directory) and on Windows with the flaky relay test
@@ -159,8 +160,13 @@ manual step is needed. pnpm reports ignored build scripts of
   on Linux is checked in containers: the shipped package (`pnpm
 test:linux-server`) and its setup over SSH (`pnpm test:linux-setup`, ADR
   0041).
-- **Auto-update**: Channel choice and options are tested. Download and
-  installation are not checked end to end without a published release.
+- **Auto-update**: Channel choice and options are tested. "Check for updates"
+  in the settings (status, progress, "Restart and install", error message of
+  electron-updater, on every platform) is tested with a fake updater
+  (`updates.test.ts`, `Updates.test.tsx`) and with pushed states in
+  `e2e/settings.spec.ts` (axe light and dark per state). Download and
+  installation are not checked end to end without a published release;
+  unsigned macOS builds are expected to show Squirrel's signature error.
 - **Real Claude Code run** (Claude Code 2.1.312, 2026-10-28, macOS,
   session with a cleaned environment in a temp repository):
   - `claude -p` in the session: server `hangar` connected, four tools

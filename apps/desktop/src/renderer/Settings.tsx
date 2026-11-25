@@ -12,6 +12,7 @@ import { BayCatalog } from './BayCatalog';
 import { Jobs } from './Jobs';
 import { Notifications } from './Notifications';
 import { Permissions } from './Permissions';
+import { UpdateCheck } from './Updates';
 import { Workspaces } from './Workspaces';
 
 interface Props {
@@ -56,16 +57,25 @@ interface Props {
     | 'onNotifications'
     | 'testNotification'
     | 'openNotificationSettings'
+    | 'getUpdate'
+    | 'onUpdate'
+    | 'checkForUpdates'
+    | 'installUpdate'
   >;
 }
 
-/** Moves the focus to the first heading of a section, so the keyboard continues there. */
+/**
+ * Scrolls the section's first heading to the top and moves the focus there, so the keyboard
+ * continues there. focus() alone only scrolls a heading that is out of view: on a tall window
+ * a click on a visible section did nothing.
+ */
 function jump(e: React.MouseEvent, id: string) {
   const heading = document.getElementById(id)?.querySelector('h2');
   if (!heading) return;
   e.preventDefault();
   heading.tabIndex = -1;
-  heading.focus();
+  heading.focus({ preventScroll: true });
+  heading.scrollIntoView({ block: 'start' });
 }
 
 export function Settings({ api }: Props) {
@@ -161,6 +171,7 @@ export function Settings({ api }: Props) {
                   <option value="beta">{t.channelBeta}</option>
                 </select>
               </label>
+              <UpdateCheck api={api} />
             </div>
           </div>
           {local && (

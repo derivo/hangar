@@ -106,6 +106,10 @@ function fakeApi(initial: ShellState) {
     testNotification: vi.fn(async () => ({ result: 'shown' as const })),
     openNotificationSettings: vi.fn(async () => {}),
     onNotifications: vi.fn(() => () => {}),
+    getUpdate: vi.fn(async () => ({ state: 'unsupported' as const })),
+    onUpdate: vi.fn(() => () => {}),
+    checkForUpdates: vi.fn(),
+    installUpdate: vi.fn(),
     onState: (l) => {
       listener = l;
       return () => {};

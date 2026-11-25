@@ -1,7 +1,7 @@
 // Preload of the shell renderer (sidebar, settings).
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import type { UiLocale } from '@hangar/sdk/i18n';
-import type { ShellApi, ShellState } from '../shared';
+import type { ShellApi, ShellState, UpdateStatus } from '../shared';
 
 const locale = ipcRenderer.sendSync('hangar:locale') as UiLocale;
 window.addEventListener('DOMContentLoaded', () => (document.documentElement.lang = locale));
@@ -53,6 +53,14 @@ const api: ShellApi = {
   },
   testNotification: () => ipcRenderer.invoke('shell:notifications.test'),
   openNotificationSettings: () => ipcRenderer.invoke('shell:notifications.settings'),
+  getUpdate: () => ipcRenderer.invoke('shell:update'),
+  onUpdate(listener) {
+    const handler = (_e: IpcRendererEvent, status: UpdateStatus) => listener(status);
+    ipcRenderer.on('shell:update', handler);
+    return () => ipcRenderer.removeListener('shell:update', handler);
+  },
+  checkForUpdates: () => ipcRenderer.send('shell:update.check'),
+  installUpdate: () => ipcRenderer.send('shell:update.install'),
   pickShortcut: (kind) => ipcRenderer.invoke('shell:shortcut.pick', kind),
   addUrlShortcut: (url) => ipcRenderer.invoke('shell:shortcut.url', url),
   openShortcut: (id) => ipcRenderer.send('shell:shortcut.open', id),
