@@ -312,3 +312,19 @@ DisableUserTrustSettings as Security.framework does".
 Open after four rounds: whether a fifth Codex round on this state reports no findings is
 not known. Not observed in any round: a live trustd evaluation with changed settings
 (that would change the keychain).
+
+## Tenth review: commit 5dd2054
+
+Reviewer: Codex (`codex exec -s read-only`), on commit 5dd2054 (the fixes of the sixth to
+ninth reviews), told to read the fourth to ninth reviews first and not to repeat their
+findings or known limits. Codex was also asked to classify every new finding as reachable
+through Keychain Access or the `security` CLI, or only through a hand-crafted plist.
+
+Result: no findings ("NO FINDINGS"). No code changed.
+
+Known limits that stay, all listed in the reviews above: entries scoped to an
+application or a host are skipped; malformed application data is not modelled; the
+conversion of real numbers follows arm64; distinguished names are compared ignoring case
+and whitespace only, and key IDs are not compared; `OTHER_ARCS` matches the Apple source
+at commit `db15acbe6a7f257a859ad9a3bb86097bfe0679d9`. Not observed: a live trustd
+evaluation with changed settings (that would change the keychain).
