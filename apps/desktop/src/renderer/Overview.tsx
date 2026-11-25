@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { t } from '../messages';
-import type { OverviewView, ShellApi } from '../shared';
+import { PROJECT_URL, type OverviewView, type ShellApi } from '../shared';
 
 interface Props {
   api: Pick<ShellApi, 'getOverview'>;
@@ -21,6 +21,13 @@ export function Overview({ api }: Props) {
       <h2>{t.version}</h2>
       <ul className="facts" aria-label={t.version}>
         <Fact label="Hangar" value={view.version} />
+        <li>
+          <span>{t.projectPage}</span>
+          {/* The shell opens only this URL, in the default browser (host.ts). */}
+          <a href={PROJECT_URL} target="_blank" rel="noreferrer">
+            {PROJECT_URL.replace('https://', '')}
+          </a>
+        </li>
       </ul>
 
       <h2>Git</h2>

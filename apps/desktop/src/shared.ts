@@ -79,6 +79,9 @@ export interface SidebarLocalServer {
 /** Height of the hint „Neue Version bereit“ above a bay of the local server. */
 export const UPDATE_HINT_HEIGHT = 48;
 
+/** Project page, shown in "About Hangar" and the overview; the only link the shell opens. */
+export const PROJECT_URL = 'https://github.com/derivo/hangar';
+
 /** A program, folder, file or website in the sidebar (ADR 0027). */
 export interface SidebarShortcut {
   id: string;
@@ -242,6 +245,13 @@ export interface ShellApi {
   testNotification(): Promise<NotificationTest>;
   /** Opens the notification settings of the system; only where `settings` is set. */
   openNotificationSettings(): Promise<void>;
+  /** The app updater; `onUpdate` gets every change. */
+  getUpdate(): Promise<UpdateStatus>;
+  onUpdate(listener: (status: UpdateStatus) => void): () => void;
+  /** Checks now; a found update downloads right away. */
+  checkForUpdates(): void;
+  /** Quits and installs a downloaded update. */
+  installUpdate(): void;
   /** Adds a path from the file dialog; resolves to false if it was cancelled (ADR 0027). */
   pickShortcut(kind: 'file' | 'folder'): Promise<boolean>;
   /** Adds a website; rejects with `Invalid URL` unless it is http or https. */
@@ -285,6 +295,13 @@ export interface ShellApi {
   rollbackBay(id: string): Promise<void>;
   onState(listener: (state: ShellState) => void): () => void;
 }
+
+/** The app updater as the settings show it; `unsupported`: not packaged (dev). */
+export type UpdateStatus =
+  | { state: 'unsupported' | 'idle' | 'checking' | 'current' }
+  | { state: 'available' | 'ready'; version: string }
+  | { state: 'downloading'; version: string; percent: number }
+  | { state: 'error'; message: string };
 
 /** What Hangar knows about system notifications (ADR 0044). */
 export interface NotificationStatus {

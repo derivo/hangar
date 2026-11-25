@@ -61,6 +61,7 @@ import {
   type Bounds,
 } from './view-state';
 import {
+  PROJECT_URL,
   UPDATE_HINT_HEIGHT,
   type JobsView,
   type NotificationStatus,
@@ -1287,7 +1288,10 @@ export class Host {
     });
     // The shell preload grants every shell:* channel; no other page may ever run here.
     this.window.webContents.on('will-navigate', (e) => e.preventDefault());
-    this.window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    this.window.webContents.setWindowOpenHandler(({ url }) => {
+      if (url === PROJECT_URL) void shell.openExternal(url);
+      return { action: 'deny' };
+    });
     if (process.env.ELECTRON_RENDERER_URL) {
       void this.window.loadURL(process.env.ELECTRON_RENDERER_URL);
     } else {

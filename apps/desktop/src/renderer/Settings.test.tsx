@@ -79,9 +79,16 @@ describe('Settings', () => {
     testNotification: vi.fn(async () => ({ result: 'shown' as const })),
     openNotificationSettings: vi.fn(async () => {}),
     onNotifications: vi.fn(() => () => {}),
+    getUpdate: vi.fn(async () => ({ state: 'idle' as const })),
+    onUpdate: vi.fn(() => () => {}),
+    checkForUpdates: vi.fn(),
+    installUpdate: vi.fn(),
   });
 
-  it('lists its sections in a navigation that moves the focus to the chosen one', async () => {
+  it('lists its sections in a navigation that scrolls to the chosen one and focuses it', async () => {
+    // jsdom has no layout; the real scrolling is checked in e2e/settings.spec.ts.
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
     render(<Settings api={settingsApi()} />);
     const nav = screen.getByRole('navigation', { name: 'Einstellungsbereiche' });
     expect(
@@ -92,6 +99,8 @@ describe('Settings', () => {
     const heading = await screen.findByRole('heading', { name: 'Workspaces', level: 2 });
     await userEvent.click(within(nav).getByRole('link', { name: 'Workspaces' }));
     expect(heading).toHaveFocus();
+    expect(scroll.mock.contexts).toEqual([heading]);
+    expect(scroll).toHaveBeenCalledWith({ block: 'start' });
     await userEvent.click(within(nav).getByRole('link', { name: 'Allgemein' }));
     expect(screen.getByRole('heading', { name: 'Allgemein', level: 2 })).toHaveFocus();
   });

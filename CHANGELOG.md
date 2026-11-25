@@ -6,6 +6,15 @@ All notable changes to this project. Format based on
 
 ## [Unreleased]
 
+### Added
+
+- Settings → General → Updates: "Check for updates" shows what the updater does (checking, up to date, update available, download with progress, ready, error with the message of electron-updater) and offers "Restart and install" for a downloaded update, on every platform. Unsigned macOS builds get the updater's error. Outside the packaged app it says that updates only exist there.
+- Project page https://github.com/derivo/hangar in "About Hangar" (credits on macOS and Windows, website on Linux) and as a link in the Hangar overview; the shell window opens only this URL, in the default browser.
+
+### Fixed
+
+- Settings: the section navigation did not move the page when the target heading was already visible (tall windows), since `focus()` only scrolls headings out of view. A link now scrolls its section to the top and then focuses its heading, by mouse and Enter.
+
 ## [0.9.0] - 2026-11-25
 
 First public release. The packages are not signed (see README, "Download").

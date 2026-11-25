@@ -185,6 +185,9 @@ describe('shell preload (window.hangarShell)', () => {
     ['getNotifications', [], 'invoke', ['shell:notifications']],
     ['testNotification', [], 'invoke', ['shell:notifications.test']],
     ['openNotificationSettings', [], 'invoke', ['shell:notifications.settings']],
+    ['getUpdate', [], 'invoke', ['shell:update']],
+    ['checkForUpdates', [], 'send', ['shell:update.check']],
+    ['installUpdate', [], 'send', ['shell:update.install']],
   ] as const;
 
   it.each(calls)('%s sends on its channel', async (method, args, kind, call) => {
@@ -199,7 +202,7 @@ describe('shell preload (window.hangarShell)', () => {
 
   it('covers every method of the shell API in the table above', async () => {
     const api = (await load('shell')) as Api;
-    const listeners = ['onJobs', 'onNotifications', 'onState', 'onWorkspaces'];
+    const listeners = ['onJobs', 'onNotifications', 'onState', 'onUpdate', 'onWorkspaces'];
     const methods = Object.keys(api).filter((k) => typeof api[k] === 'function');
     expect(methods.filter((m) => !listeners.includes(m)).sort()).toEqual(
       calls.map(([method]) => method).sort(),
@@ -217,12 +220,16 @@ describe('shell preload (window.hangarShell)', () => {
     const offWorkspaces = api.onWorkspaces!(workspaces) as () => void;
     const notifications = vi.fn();
     const offNotifications = api.onNotifications!(notifications) as () => void;
+    const update = vi.fn();
+    const offUpdate = api.onUpdate!(update) as () => void;
     const handlers = Object.fromEntries(ipc.on.mock.calls as [string, (...a: unknown[]) => void][]);
     handlers['shell:state']!({}, { bays: [] });
     handlers['shell:jobs']!({}, 'ignored');
     handlers['shell:workspaces']!({}, 'ignored');
     handlers['shell:notifications']!({}, 'ignored');
     expect(notifications.mock.calls).toEqual([[]]);
+    handlers['shell:update']!({}, { state: 'checking' });
+    expect(update.mock.calls).toEqual([[{ state: 'checking' }]]);
     expect(state).toHaveBeenCalledWith({ bays: [] });
     expect(jobs.mock.calls).toEqual([[]]);
     expect(workspaces.mock.calls).toEqual([[]]);
@@ -230,11 +237,13 @@ describe('shell preload (window.hangarShell)', () => {
     offJobs();
     offWorkspaces();
     offNotifications();
+    offUpdate();
     expect(ipc.removeListener.mock.calls).toEqual([
       ['shell:state', handlers['shell:state']],
       ['shell:jobs', handlers['shell:jobs']],
       ['shell:workspaces', handlers['shell:workspaces']],
       ['shell:notifications', handlers['shell:notifications']],
+      ['shell:update', handlers['shell:update']],
     ]);
   });
 });

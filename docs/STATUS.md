@@ -146,8 +146,13 @@ manual step is needed. pnpm reports ignored build scripts of
   on Linux is checked in containers: the shipped package (`pnpm
 test:linux-server`) and its setup over SSH (`pnpm test:linux-setup`, ADR
   0041).
-- **Auto-update**: Channel choice and options are tested. Download and
-  installation are not checked end to end without a published release.
+- **Auto-update**: Channel choice and options are tested. "Check for updates"
+  in the settings (status, progress, "Restart and install", error message of
+  electron-updater, on every platform) is tested with a fake updater
+  (`updates.test.ts`, `Updates.test.tsx`) and with pushed states in
+  `e2e/settings.spec.ts` (axe light and dark per state). Download and
+  installation are not checked end to end without a published release;
+  unsigned macOS builds are expected to show Squirrel's signature error.
 - **Real Claude Code run** (Claude Code 2.1.312, 2026-10-28, macOS,
   session with a cleaned environment in a temp repository):
   - `claude -p` in the session: server `hangar` connected, four tools
