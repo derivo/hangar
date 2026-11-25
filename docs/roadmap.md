@@ -764,7 +764,9 @@ from the plan below:
   file lacked the root of `example.com`'s chain (mitmproxy 502 "unable to get
   local issuer certificate"). `systemRoots()` adds the keychain
   (`tls.getCACertificates('system')`) and Node's bundled roots, each
-  certificate once; Linux and Windows are unchanged.
+  certificate once, and drops the roots the user or admin trust settings deny
+  for TLS (`security trust-settings-export`, review of 27263ba); Linux and
+  Windows are unchanged.
 
 - `bays/proxy` per skill `new-bay`: manifest (`id dev.hangar.proxy`,
   functions `proxy.env` and `proxy.status`, both `bayOnly`, and `flow.list`,

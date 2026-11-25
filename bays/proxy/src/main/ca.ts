@@ -1,15 +1,18 @@
 // Trust of the proxy bay (ADR 0049, "Trust"): the CA per installation, the upstream roots
 // for mitmproxy and the bundles that watched sessions trust.
-import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { X509Certificate, createHash } from 'node:crypto';
 import {
   chmodSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   readdirSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getCACertificates } from 'node:tls';
 
@@ -30,25 +33,105 @@ const ROOT_FILES: Partial<Record<NodeJS.Platform, string[]>> = {
 
 const PEM = /-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g;
 
+const DENY = 3; // kSecTrustSettingsResultDeny
+const UNSPECIFIED = 4; // kSecTrustSettingsResultUnspecified: the next entry decides
+// SSL and basic X.509 policy (1.2.840.113635.100.1.3 and .2) as the export stores the OID.
+const TLS_POLICIES = new Set(['KoZIhvdjZAED', 'KoZIhvdjZAEC']);
+
+/** One domain's trust settings as `security trust-settings-export` writes them (XML plist). */
+function exportTrustSettings(domain: 'user' | 'admin'): string {
+  const dir = mkdtempSync(join(tmpdir(), 'hangar-trust-'));
+  try {
+    const file = join(dir, 'trust.plist');
+    const args = ['trust-settings-export', ...(domain === 'admin' ? ['-d'] : []), file];
+    execFileSync('security', args, { stdio: 'pipe' });
+    return readFileSync(file, 'utf8');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Whether one certificate's settings deny TLS: the first entry that applies decides, as in
+ * Apple's evaluation; `undefined` when none applies. An entry applies when it names no
+ * application, host (`PolicyString`) or key usage and its policy is absent, SSL or basic
+ * X.509; any other policy-scoped entry is skipped. No entries is an empty array: trusted.
+ */
+function deniesTls(cert: string): boolean | undefined {
+  // The usage constraint dictionaries are flat (data, integer, string values only).
+  const entries = (cert.match(/<dict>(?:(?!<dict>)[\s\S])*?<\/dict>/g) ?? []).filter((d) =>
+    d.includes('<key>kSecTrustSettings'),
+  );
+  if (!entries.length) return false;
+  for (const entry of entries) {
+    const value = (key: string) =>
+      new RegExp(`<key>${key}</key>\\s*<\\w+>([^<]*)<`).exec(entry)?.[1]?.replace(/\s/g, '');
+    if (/<key>kSecTrustSettings(Application|PolicyString|KeyUsage)<\/key>/.test(entry)) continue;
+    const policy = value('kSecTrustSettingsPolicy');
+    if (policy !== undefined && !TLS_POLICIES.has(policy)) continue;
+    const result = Number(value('kSecTrustSettingsResult') ?? 1);
+    if (result !== UNSPECIFIED) return result === DENY;
+  }
+  return undefined;
+}
+
+let warned = false;
+
+/**
+ * SHA-1 fingerprints (upper-case hex) of the certificates the keychain trust settings deny
+ * for TLS. The user domain decides before the admin domain; the system domain is Apple's
+ * read-only root list and carries no denies. A domain without settings counts as empty.
+ */
+export function distrustedRoots(read = exportTrustSettings): Set<string> {
+  const decided = new Map<string, boolean>();
+  for (const domain of ['user', 'admin'] as const) {
+    let xml: string;
+    try {
+      xml = read(domain);
+    } catch (e) {
+      const text = `${(e as { stderr?: unknown }).stderr ?? ''} ${(e as Error).message}`;
+      if (!/No Trust Settings/i.test(text) && !warned) {
+        warned = true;
+        // shortcut: unreadable settings keep distrusted roots (warned once); show it in proxy.status if needed.
+        console.warn(`[proxy] keychain trust settings not read, no root filtered: ${text.trim()}`);
+      }
+      continue;
+    }
+    const parts = xml.split(/<key>([0-9A-F]{40})<\/key>/);
+    for (let i = 1; i < parts.length; i += 2) {
+      const deny = decided.has(parts[i]!) ? undefined : deniesTls(parts[i + 1]!);
+      if (deny !== undefined) decided.set(parts[i]!, deny);
+    }
+  }
+  return new Set([...decided].filter(([, deny]) => deny).map(([sha1]) => sha1));
+}
+
 /**
  * The system's root certificates as PEM; Windows exports its `ROOT` store through Node.
  * macOS: `cert.pem` alone can lack roots the keychain and browsers trust (CI runners), so it
- * adds the keychain (`system`, enterprise CAs too) and Node's Mozilla roots, each once.
+ * adds the keychain (`system`, enterprise CAs too) and Node's Mozilla roots, each once, and
+ * drops every root the keychain trust settings deny (`distrustedRoots()`).
  */
 export function systemRoots(
   platform: NodeJS.Platform = process.platform,
   files = ROOT_FILES[platform] ?? [],
   store: (type: 'system' | 'bundled') => readonly string[] = getCACertificates,
+  distrusted: () => ReadonlySet<string> = distrustedRoots,
 ): string {
   if (platform === 'win32') return store('system').join('\n');
   const file = files.find((f) => existsSync(f));
   if (platform === 'darwin') {
-    const certs = [
-      ...(file ? (readFileSync(file, 'utf8').match(PEM) ?? []) : []),
-      ...store('system'),
-      ...store('bundled'),
-    ].map((c) => c.trim());
-    return `${[...new Set(certs)].join('\n')}\n`;
+    const certs = new Set(
+      [
+        ...(file ? (readFileSync(file, 'utf8').match(PEM) ?? []) : []),
+        ...store('system'),
+        ...store('bundled'),
+      ].map((c) => c.trim()),
+    );
+    const denied = distrusted();
+    const sha1 = (c: string) => new X509Certificate(c).fingerprint.replaceAll(':', '');
+    const kept = [...certs].filter((c) => !denied.size || !denied.has(sha1(c)));
+    return `${kept.join('\n')}\n`;
   }
   if (!file) throw new Error(`No system root certificates found (${files.join(', ')})`);
   return readFileSync(file, 'utf8');

@@ -434,7 +434,8 @@ test:linux-server`) and its setup over SSH (`pnpm test:linux-setup`, ADR
   with 1009 and `ws.tooLarge`; a gzip body reaches the bay compressed; `unlisten`
   closes the tunnel and WebSocket of that listener only; `example.com` through
   the proxy with the system roots (macOS: `cert.pem`, keychain and Node's bundled
-  roots). Unit: `protocol.test.ts`, `ca.test.ts`,
+  roots, without roots the keychain trust settings deny; checked with fixtures
+  of the export format, a real denied root not tried). Unit: `protocol.test.ts`, `ca.test.ts`,
   `engine.test.ts` (fake process: backoff, restore order, races), `index.test.ts`.
   E2E: `e2e/proxy.spec.ts` (status line, axe light and dark 0 findings). Not
   checked: Linux and Windows locally (CI), HTTP/2 uploads, the addon's stdout
