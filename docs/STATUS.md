@@ -82,9 +82,9 @@ manual step is needed. pnpm reports ignored build scripts of
   workflow artifacts; dry run 45635936716 built dmg/zip, NSIS installer and
   AppImage. Unsigned macOS apps get an ad-hoc signature (`adhoc-sign.mjs`,
   checked by `codesign --verify` in the workflow); without it macOS calls the
-  downloaded app "damaged". Release 0.9.1 is prepared in a pull request
-  (branch `chore/release-0.9.1`) but not tagged or published yet; 0.9.0 is
-  the latest published release.
+  downloaded app "damaged". Release 0.9.1 is published (tag `v0.9.1`,
+  run 45830741947: arm64 dmg/zip, NSIS installer, AppImage, unsigned like
+  0.9.0).
 - **Security audit 2026-11-17** (source-only, `main` at 2c19132, no
   confirmed finding): of six leads that need validation, the main window's
   navigation guard (#29) and the bridge's Origin check and pairing limit
