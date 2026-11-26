@@ -6,6 +6,8 @@ All notable changes to this project. Format based on
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-26
+
 ### Added
 
 - Settings → General → Updates: "Check for updates" shows what the updater does (checking, up to date, update available, download with progress, ready, error with the message of electron-updater) and offers "Restart and install" for a downloaded update, on every platform. Unsigned macOS builds get the updater's error. Outside the packaged app it says that updates only exist there.
@@ -16,9 +18,7 @@ All notable changes to this project. Format based on
 - Settings → General → Updates on macOS: when Squirrel.Mac refuses an update because Hangar is not signed ("Code signature … did not pass validation"), the card says so ("This update cannot be installed automatically on macOS because Hangar is not signed.") and links "Download version X.Y.Z" to the release page of the offered version instead of showing the raw error. Other errors keep their message. Besides the project page, the shell window now opens release pages of the project (`https://github.com/derivo/hangar/releases/…`, checked by prefix and URL parsing, no `%`).
 - Settings: long error texts (file URLs) no longer overflow their card.
 - Settings: the section navigation did not move the page when the target heading was already visible (tall windows), since `focus()` only scrolls headings out of view. A link now scrolls its section to the top and then focuses its heading, by mouse and Enter.
-- Release workflow: packages build unsigned when the signing secrets are missing (an empty `CSC_LINK` stopped the macOS build with "not a file"). Unsigned macOS apps get an ad-hoc signature, so macOS offers "Open Anyway" instead of calling the app damaged. Started by hand, the workflow is a dry run: packages as workflow artifacts, nothing published.
 - Proxy bay: after a WebSocket message above 16 MB the client connection stayed open (mitmproxy 12.3.1 missed the close while the client was still sending), or a reset discarded the 1009 close frame before the client read it; the test "ends a 20 MB message with 1009" failed on CI for this. The addon now reads on after the close frame and closes the server after its close answer or end and the client after both, at the latest after 2 s. The test reads only after the limit, covers an answering and a silent client and reports socket errors instead of swallowing them.
-- Relay test "answers asking announces of one member at most once per interval" no longer fails on slow runners: it waits for both expected delivers before clearing the inbox.
 
 ## [0.9.0] - 2026-11-25
 
@@ -254,3 +254,5 @@ First public release. The packages are not signed (see README, "Download").
 - Error messages of the agent bay: `role="alert"` is only on the text, the close button ("×") is no longer read out with it.
 - Double click: creating, closing, restarting a session, saving the environment and removing a project do not run twice while the same action is still running.
 - At 200 % zoom the session header no longer overflows sideways (7 px).
+- Release workflow: packages build unsigned when the signing secrets are missing (an empty `CSC_LINK` stopped the macOS build with "not a file"). Unsigned macOS apps get an ad-hoc signature, so macOS offers "Open Anyway" instead of calling the app damaged. Started by hand, the workflow is a dry run: packages as workflow artifacts, nothing published.
+- Relay test "answers asking announces of one member at most once per interval" no longer fails on slow runners: it waits for both expected delivers before clearing the inbox.
