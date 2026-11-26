@@ -170,6 +170,7 @@ describe.skipIf(missing)(
     const seen: IncomingHttpHeaders[] = [];
     const upgrades: IncomingHttpHeaders[] = [];
     const serverCloses: number[] = [];
+    let serverEnds = 0;
     let plain: number;
     let secure: number;
     let pinned: number;
@@ -193,7 +194,7 @@ describe.skipIf(missing)(
         res.end('hello');
       };
       const http = createHttpServer(handler);
-      // A WebSocket server that echoes text and records close codes.
+      // A WebSocket server that echoes text and answers and records close codes.
       http.on('upgrade', (req, socket: Socket) => {
         upgrades.push(req.headers);
         const deflate = req.url === '/ws-deflate';
@@ -216,8 +217,11 @@ describe.skipIf(missing)(
         }
         frames(socket, (opcode, payload) => {
           if (opcode === 1) socket.write(frame(1, payload, true, false));
-          if (opcode === 8) serverCloses.push(payload.readUInt16BE(0));
+          if (opcode !== 8) return;
+          serverCloses.push(payload.readUInt16BE(0));
+          socket.write(frame(8, payload, true, false));
         });
+        socket.on('end', () => serverEnds++);
         socket.on('error', () => {});
       });
       const https = createHttpsServer(tls, handler);
@@ -404,22 +408,51 @@ describe.skipIf(missing)(
       expect(row.bytesDown).toBeGreaterThan(5000);
     });
 
-    it('strips WebSocket compression and ends a 20 MB message with 1009', async () => {
-      const socket = await websocket(A, plain, 'pw-a');
-      expect(upgrades.at(-1)).not.toHaveProperty('sec-websocket-extensions');
-      const fromProxy: number[] = [];
-      frames(socket, (opcode, payload) => opcode === 8 && fromProxy.push(payload.readUInt16BE(0)));
-      socket.on('error', () => {});
-      const mb = Buffer.alloc(1024 * 1024, 'a');
-      for (let i = 0; i < 20 && !socket.destroyed; i++) socket.write(frame(i ? 0 : 1, mb, false));
-      await vi.waitFor(() => expect(events.find((e) => e.type === 'ws.tooLarge')).toBeDefined(), {
-        timeout: 20_000,
-      });
-      await vi.waitFor(() => {
+    // A real client answers the close frame; a silent one is closed after a wait.
+    it.each([true, false])(
+      'strips WebSocket compression and ends a 20 MB message with 1009 (client answers: %s)',
+      async (answers) => {
+        const socket = await websocket(A, plain, 'pw-a');
+        expect(upgrades.at(-1)).not.toHaveProperty('sec-websocket-extensions');
+        const fromProxy: number[] = [];
+        const errors: string[] = [];
+        frames(socket, (opcode, payload) => {
+          if (opcode !== 8) return;
+          fromProxy.push(payload.readUInt16BE(0));
+          if (answers) socket.write(frame(8, payload));
+        });
+        socket.on('error', (e) => errors.push(e.message));
+        const [ends, closes, tooLarge] = [
+          serverEnds,
+          serverCloses.length,
+          events.filter((e) => e.type === 'ws.tooLarge').length,
+        ];
+        // Reads only after the limit, so the close frame waits while the rest is still sent:
+        // closing the connection early resets it, and the client never reads the frame.
+        socket.pause();
+        const mb = Buffer.alloc(1024 * 1024, 'a');
+        for (let i = 0; i < 20 && !socket.destroyed; i++) socket.write(frame(i ? 0 : 1, mb, false));
+        await vi.waitFor(
+          () => expect(events.filter((e) => e.type === 'ws.tooLarge')).toHaveLength(tooLarge + 1),
+          { timeout: 20_000 },
+        );
+        socket.resume();
+        const resumed = Date.now();
+        // The proxy closes both sides once both answered, or after WS_CLOSE_WAIT (2 s).
+        await vi.waitFor(
+          () => {
+            expect(socket.destroyed, `client still open, errors: ${errors.join(', ')}`).toBe(true);
+            expect(serverEnds).toBe(ends + 1);
+          },
+          { timeout: 10_000 },
+        );
+        if (answers) expect(Date.now() - resumed).toBeLessThan(1500);
+        expect(errors).toEqual([]);
         expect(fromProxy).toEqual([1009]);
-        expect(serverCloses).toEqual([1009]);
-      });
-    }, 30_000);
+        expect(serverCloses.slice(closes)).toEqual([1009]);
+      },
+      30_000,
+    );
 
     it('hands compressed bodies on compressed, never inflated', async () => {
       const body = await new Promise<Buffer>((done, fail) => {
