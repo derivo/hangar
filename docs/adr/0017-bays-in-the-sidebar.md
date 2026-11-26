@@ -1,6 +1,8 @@
 # ADR 0017 – Adding and removing bays
 
-Status: accepted.
+Status: accepted; the empty start is replaced by
+[ADR 0050](0050-agent-bay-by-default-and-bay-switches.md) (a new Hangar starts
+with the agent bay; switches in the settings).
 
 ## Context
 
@@ -10,7 +12,7 @@ Whoever opens Hangar should decide which bays they use.
 
 ## Decision
 
-- **Empty start:** A new Hangar shows only the Hangar symbol at the top of the
+- **Empty start** (replaced by ADR 0050)**:** A new Hangar shows only the Hangar symbol at the top of the
   sidebar (Hangar overview, selected) and below it "Add bay" (plus).
 - **Adding:** The plus opens a modal with all found bays that are not yet in the
   sidebar (icon, name, id). A selection starts the bay, adds it at the bottom of

@@ -9,6 +9,7 @@ import type {
   UpdateChannel,
 } from '../shared';
 import { BayCatalog } from './BayCatalog';
+import { BaySwitches } from './BaySwitches';
 import { Jobs } from './Jobs';
 import { Notifications } from './Notifications';
 import { Permissions } from './Permissions';
@@ -31,6 +32,9 @@ interface Props {
     | 'onJobs'
     | 'getBaySettings'
     | 'setBaySetting'
+    | 'getState'
+    | 'onState'
+    | 'setBayInSidebar'
     | 'getWorkspaces'
     | 'connectRelay'
     | 'createWorkspace'
@@ -209,6 +213,9 @@ export function Settings({ api }: Props) {
         </section>
         <section id="settings-bays" aria-labelledby="settings-bays-title">
           <h2 id="settings-bays-title">{t.settingsBays}</h2>
+          <div className="settings-card">
+            <BaySwitches api={api} />
+          </div>
           {bays.length > 0 && (
             <div className="settings-card">
               <h3>{t.baySettings}</h3>

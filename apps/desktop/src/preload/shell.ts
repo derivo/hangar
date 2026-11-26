@@ -30,6 +30,7 @@ const api: ShellApi = {
   setBaySetting: (bayId, key, value) => ipcRenderer.invoke('shell:baySetting', bayId, key, value),
   select: (selection) => ipcRenderer.send('shell:select', selection),
   addBay: (id) => ipcRenderer.invoke('shell:addBay', id),
+  setBayInSidebar: (id, on) => ipcRenderer.invoke('shell:bayInSidebar', id, on),
   bayMenu: (id) => ipcRenderer.send('shell:bayMenu', id),
   moveBay: (id, index) => ipcRenderer.send('shell:moveBay', id, index),
   setModal: (open) => ipcRenderer.send('shell:modal', open),

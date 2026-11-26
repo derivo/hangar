@@ -832,3 +832,70 @@ li:has(> .sidebar-item[aria-current='page'])::before,
   flex-wrap: wrap;
   gap: var(--hangar-space-2);
 }
+
+/* Bays in the sidebar, switched in the settings (ADR 0050). */
+.bay-switches {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--hangar-space-2);
+}
+
+.bay-switches li {
+  display: flex;
+  align-items: center;
+  gap: var(--hangar-space-2);
+}
+
+.bay-switches img {
+  width: 20px;
+  height: 20px;
+}
+
+.bay-switch {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--hangar-space-3);
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--hangar-color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bay-switch-track {
+  position: relative;
+  flex: none;
+  width: 32px;
+  height: 18px;
+  border: 1px solid var(--hangar-color-text-muted);
+  border-radius: 9px;
+  background: var(--hangar-color-surface-raised);
+}
+
+.bay-switch-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--hangar-color-text-muted);
+}
+
+.bay-switch[aria-checked='true'] .bay-switch-track {
+  border-color: var(--hangar-color-accent);
+  background: var(--hangar-color-accent);
+}
+
+.bay-switch[aria-checked='true'] .bay-switch-track::after {
+  left: 16px;
+  background: var(--hangar-color-accent-text);
+}

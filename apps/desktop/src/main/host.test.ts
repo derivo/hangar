@@ -285,6 +285,8 @@ interface BayLog {
   started: string[];
   stopped: string[];
   gates: Map<string, Promise<void>>;
+  /** Holds a bay's stop. */
+  stopGates: Map<string, Promise<void>>;
   failStart: Set<string>;
   failStop: Set<string>;
   contexts: Map<string, import('@hangar/sdk').BayContext>;
@@ -305,8 +307,9 @@ export default {
     ctx.ui.handle('echo', (x) => 'echo ' + x);
     log.contexts.set(id, ctx);
   },
-  deactivate() {
+  async deactivate() {
     globalThis.__bays.stopped.push(id);
+    await globalThis.__bays.stopGates.get(id);
     if (globalThis.__bays.failStop.has(id)) throw new Error('stop failed');
   },
 };`;
@@ -450,6 +453,7 @@ beforeEach(() => {
     started: [],
     stopped: [],
     gates: new Map(),
+    stopGates: new Map(),
     failStart: new Set(),
     failStop: new Set(),
     contexts: new Map(),
@@ -776,6 +780,62 @@ describe('Host: adding and removing bays', () => {
     await removing;
     expect(store.sidebar).toEqual([]);
     expect(host.runtimes.has('dev.test.c')).toBe(false);
+  });
+
+  it('switches a bay in and out of the sidebar from the settings without selecting it', async () => {
+    const { host, store, viewOf, window } = await started();
+    host.select('settings');
+    await invoke('shell:bayInSidebar', window().webContents, 'dev.test.c', true);
+    expect(store.sidebar).toEqual(['dev.test.a', 'dev.test.c']);
+    expect(host.runtimes.has('dev.test.c')).toBe(true);
+    expect(host.state().selected).toBe('settings');
+    expect(viewOf('dev.test.c')!.visible).toBe(false);
+    // On again: nothing changes.
+    await invoke('shell:bayInSidebar', window().webContents, 'dev.test.c', true);
+    expect(host.state().selected).toBe('settings');
+    await invoke('shell:bayInSidebar', window().webContents, 'dev.test.a', false);
+    expect(store.sidebar).toEqual(['dev.test.c']);
+    expect(host.runtimes.has('dev.test.a')).toBe(false);
+    expect(host.state().selected).toBe('settings');
+    await expect(
+      invoke('shell:bayInSidebar', window().webContents, 'dev.test.c', 'yes'),
+    ).rejects.toThrow('Invalid bay');
+    await expect(invoke('shell:bayInSidebar', window().webContents, 7, true)).rejects.toThrow(
+      'Invalid bay',
+    );
+  });
+
+  it('selects a bay chosen with the plus while the settings switch starts it (Codex)', async () => {
+    const { host } = await started();
+    host.select('settings');
+    const gate = hold('dev.test.c');
+    const switching = host.addBay('dev.test.c', false);
+    const picking = host.addBay('dev.test.c');
+    gate.release();
+    await Promise.all([switching, picking]);
+    expect(globalThis.__bays.started.filter((id) => id === 'dev.test.c')).toHaveLength(1);
+    expect(host.state().selected).toBe('dev.test.c');
+  });
+
+  it('adds a bay again only after its stop is done, so the stop keeps its new functions (Codex)', async () => {
+    const { host, store, bus } = await started();
+    let release!: () => void;
+    globalThis.__bays.stopGates.set('dev.test.a', new Promise<void>((r) => (release = r)));
+    // Starts of A when its functions were unregistered: only the old one.
+    const startsAtUnregister: number[] = [];
+    bus.unregisterBay.mockImplementation(() =>
+      startsAtUnregister.push(globalThis.__bays.started.filter((id) => id === 'dev.test.a').length),
+    );
+    const removing = host.removeBay('dev.test.a');
+    const adding = host.addBay('dev.test.a', false);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(globalThis.__bays.started.filter((id) => id === 'dev.test.a')).toHaveLength(1);
+    release();
+    await Promise.all([removing, adding]);
+    expect(globalThis.__bays.started.filter((id) => id === 'dev.test.a')).toHaveLength(2);
+    expect(host.runtimes.has('dev.test.a')).toBe(true);
+    expect(store.sidebar).toEqual(['dev.test.a']);
+    expect(startsAtUnregister).toEqual([1]);
   });
 
   it('opens the bay menu only for running bays; its item removes the bay', async () => {

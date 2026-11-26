@@ -30,7 +30,8 @@ const DEFAULTS: AppSettings = {
   updateChannel: 'stable',
   language: 'system',
   theme: 'system',
-  bays: [],
+  // A new Hangar starts with the agent bay (ADR 0050, replaces the empty start of ADR 0017).
+  bays: ['dev.hangar.agents'],
   baySettings: {},
   shortcuts: [],
 };
@@ -52,8 +53,10 @@ export function readSettings(file: string): AppSettings {
       shortcuts: validShortcuts(raw.shortcuts),
       ...(typeof raw.localServer === 'boolean' && { localServer: raw.localServer }),
     };
-  } catch {
-    return { ...DEFAULTS, bays: [], baySettings: {}, shortcuts: [] };
+  } catch (e) {
+    // Only a missing file is a new Hangar; a broken one keeps an empty sidebar.
+    const fresh = (e as NodeJS.ErrnoException).code === 'ENOENT';
+    return { ...DEFAULTS, bays: fresh ? [...DEFAULTS.bays] : [], baySettings: {}, shortcuts: [] };
   }
 }
 

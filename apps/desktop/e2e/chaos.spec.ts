@@ -46,7 +46,7 @@ async function agentsWithSession(name: string) {
 }
 
 test('adding the same bay five times during its start starts it once', async () => {
-  const { app, shell, userData } = await launch({ bayDirs: [slowBays], seedBays: false });
+  const { app, shell, userData } = await launch({ bayDirs: [slowBays], seedBays: [] });
   try {
     await shell.evaluate(() =>
       Promise.all([1, 2, 3, 4, 5].map(() => window.hangarShell.addBay('dev.hangar.slow'))),
@@ -156,7 +156,7 @@ test('a job: planned once for five submits, run once for five clicks', async () 
 });
 
 test('the shell: theme, picker and shortcut, each pressed again and again', async () => {
-  const { app, shell, userData } = await launch({ bayDirs: [slowBays], seedBays: false });
+  const { app, shell, userData } = await launch({ bayDirs: [slowBays], seedBays: [] });
   try {
     await app.evaluate(({ shell }) => {
       globalThis.__opened = [];
