@@ -214,6 +214,8 @@ export interface ShellApi {
   select(selection: Selection): void;
   /** Starts a bay, puts it at the end of the sidebar and selects it (ADR 0017). */
   addBay(id: string): Promise<void>;
+  /** Settings switch (ADR 0050): starts a bay into the sidebar without selecting it, or removes it. */
+  setBayInSidebar(id: string, on: boolean): Promise<void>;
   /** Opens the native context menu of a bay in the sidebar ("remove"). */
   bayMenu(id: string): void;
   /** Puts a bay of the app or of the local server at `index` of the sidebar (ADR 0038). */

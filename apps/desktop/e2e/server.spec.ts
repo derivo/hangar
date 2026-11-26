@@ -58,7 +58,7 @@ test('pairs with a server and works with its agent bay as if it ran here (ADR 00
   const s = await startHangarServer(dirname(repo), [repoBays, vaultBays]);
   server = s;
   const env = agentsEnv();
-  const first = await launch({ bayDirs: [repoBays, vaultBays], env, seedBays: false });
+  const first = await launch({ bayDirs: [repoBays, vaultBays], env, seedBays: [] });
   try {
     const nav = first.shell.getByRole('navigation', { name: 'Bays' });
     await nav.getByRole('button', { name: 'Zur Leiste hinzufügen' }).click();
@@ -173,7 +173,7 @@ test('pairs with a server and works with its agent bay as if it ran here (ADR 00
     userData: first.userData,
     bayDirs: [repoBays, vaultBays],
     env,
-    seedBays: false,
+    seedBays: [],
   });
   try {
     const nav = second.shell.getByRole('navigation', { name: 'Bays' });
@@ -198,7 +198,7 @@ test('pairs over SSH by keyboard alone and stays usable at 200 % zoom (ADR 0019)
   const { app, shell } = await launch({
     bayDirs: [repoBays],
     env: { ...agentsEnv(), HANGAR_SSH: fakeSsh },
-    seedBays: false,
+    seedBays: [],
   });
   const focused = () =>
     shell.evaluate(
@@ -285,7 +285,7 @@ test('sets up a server on a Linux machine: refuses this Mac, then asks for linge
   const { app, shell } = await launch({
     bayDirs: [repoBays],
     env: { ...agentsEnv(), HANGAR_SSH: fakeSsh },
-    seedBays: false,
+    seedBays: [],
   });
   const checked = async (state: string) => {
     for (const colorScheme of ['light', 'dark'] as const) {
@@ -331,7 +331,7 @@ test('a job that runs while the desktop is away notifies, badges and shows its r
   const repo = createRepo('remote-jobs');
   const s = await startHangarServer(dirname(repo));
   server = s;
-  const { app, shell } = await launch({ bayDirs: [repoBays], env: agentsEnv(), seedBays: false });
+  const { app, shell } = await launch({ bayDirs: [repoBays], env: agentsEnv(), seedBays: [] });
   try {
     const nav = shell.getByRole('navigation', { name: 'Bays' });
     await nav.getByRole('button', { name: 'Zur Leiste hinzufügen' }).click();

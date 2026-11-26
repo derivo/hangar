@@ -24,7 +24,8 @@ beforeAll(() => {
 });
 
 function fakeApi(initial: ShellState) {
-  let listener: (s: ShellState) => void = () => {};
+  // Several listeners like the preload: the settings follow the sidebar too (ADR 0050).
+  const listeners = new Set<(s: ShellState) => void>();
   const api: ShellApi = {
     locale: 'de',
     getState: vi.fn(async () => initial),
@@ -57,6 +58,7 @@ function fakeApi(initial: ShellState) {
     setLanguage: vi.fn(async () => {}),
     select: vi.fn(),
     addBay: vi.fn(async () => {}),
+    setBayInSidebar: vi.fn(async () => {}),
     bayMenu: vi.fn(),
     setModal: vi.fn(),
     setHintHeight: vi.fn(),
@@ -111,11 +113,11 @@ function fakeApi(initial: ShellState) {
     checkForUpdates: vi.fn(),
     installUpdate: vi.fn(),
     onState: (l) => {
-      listener = l;
-      return () => {};
+      listeners.add(l);
+      return () => listeners.delete(l);
     },
   };
-  return { api, push: (s: ShellState) => act(() => listener(s)) };
+  return { api, push: (s: ShellState) => act(() => listeners.forEach((l) => l(s))) };
 }
 
 describe('App', () => {

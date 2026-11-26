@@ -291,10 +291,9 @@ test('the settings: keyboard through the section navigation, cards reflow at 200
     await expect(nav.getByRole('link', { name: 'Bays' })).toBeFocused();
     await shell.keyboard.press('Enter');
     await expect(shell.getByRole('heading', { name: 'Bays', level: 2 })).toBeFocused();
+    // The first control of the section: the switch of the first bay (ADR 0050).
     await shell.keyboard.press('Tab');
-    await expect(
-      shell.getByRole('checkbox', { name: 'Markieren kopiert in die Zwischenablage' }),
-    ).toBeFocused();
+    await expect(shell.getByRole('switch', { name: 'Agents' })).toBeFocused();
 
     // No card is narrower than its controls, at 740 px and at 200 %.
     const overflowing = () =>

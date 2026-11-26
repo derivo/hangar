@@ -233,8 +233,11 @@ test:linux-server`) and its setup over SSH (`pnpm test:linux-setup`, ADR
   self-signed certificate (openssl): `ERR_CERT_AUTHORITY_INVALID` for the agent
   tab and the person's tab, axe light and dark 0 findings, after the click page
   and its script load, and the agent tab in its own partition loads too.
-- **Bays in the sidebar** (ADR 0017): empty start with plus, selection modal,
-  removal via right-click; backed by `src/renderer/Sidebar.test.tsx` and
+- **Bays in the sidebar** (ADR 0017, 0050): a new Hangar starts with only the
+  agent bay, plus with selection modal, removal via right-click, a switch per
+  found bay in Settings → Bays (Space and Enter, settings stay open, follows the
+  sidebar; `BaySwitches.test.tsx`, E2E `sidebar-bays.spec.ts` with axe light and
+  dark); backed by `src/renderer/Sidebar.test.tsx` and
   `e2e/sidebar-bays.spec.ts` (keyboard, axe light/dark for the modal, restart,
   removal). The real native context menu is replaced in the test, not clicked.
   An error when starting a chosen bay appears in the modal; backed only by a

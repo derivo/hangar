@@ -143,6 +143,7 @@ describe('shell preload (window.hangarShell)', () => {
     ['getBaySettings', [], 'invoke', ['shell:baySettings']],
     ['setBaySetting', ['b', 'k', 1], 'invoke', ['shell:baySetting', 'b', 'k', 1]],
     ['addBay', ['b'], 'invoke', ['shell:addBay', 'b']],
+    ['setBayInSidebar', ['b', false], 'invoke', ['shell:bayInSidebar', 'b', false]],
     ['probeServer', ['h:1'], 'invoke', ['shell:server.probe', 'h:1']],
     ['setupServer', ['Heim', 'anna@h'], 'invoke', ['shell:server.setup', 'Heim', 'anna@h']],
     ['pairServer', ['p', 'n', 'c'], 'invoke', ['shell:server.pair', 'p', 'n', 'c']],

@@ -23,7 +23,7 @@ the same code.
   `close()` (stops scheduler and MCP server).
 - `readSettings`, `writeSettings`, `themeSetting`, `uiLocale` (`settings.ts`) –
   `settings.json` with the types `AppSettings`, `UpdateChannel`, `LanguageSetting`,
-  `ThemeSetting`; `localServer` (ADR 0036) only if chosen.
+  `ThemeSetting`; `localServer` (ADR 0036) only if chosen. A missing file gives `bays: ["dev.hangar.agents"]` (ADR 0050), a broken one or one without `bays` an empty list.
 - `shortcuts.ts` – shortcuts of the sidebar (ADR 0027): `shortcutUrl` (only http/https with a host, otherwise `Invalid URL`), `shortcutName`, `addShortcut` (without duplicates), `validShortcuts` (absolute path or http/https).
 - `Workspaces` (`workspaces.ts`, ADR 0030) – one relay connection per Hangar:
   `workspaces.json`, `relay-identity.json` (key via `protect`, mode 600),

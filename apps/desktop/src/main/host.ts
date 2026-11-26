@@ -166,6 +166,8 @@ export class Host {
   readonly runtimes = new Map<string, BayRuntime>();
   /** Bays starting from `addBay`, by id. */
   private readonly adding = new Map<string, Promise<void>>();
+  /** Bays stopping from `removeBay`, by id. */
+  private readonly removing = new Map<string, Promise<void>>();
   private readonly views = new Map<string, WebContentsView>();
   /** Extra windows of bays (ADR 0010). */
   private readonly bayWindows = new Map<BrowserWindow, BayWindowState>();
@@ -821,29 +823,44 @@ export class Host {
     return runtime;
   }
 
-  /** Starts a found bay, puts it at the end of the sidebar and selects it (ADR 0017). */
-  addBay(id: string): Promise<void> {
-    if (this.runtimes.has(id)) return Promise.resolve(this.select(id));
-    // Adding again while the bay starts waits for that start instead of starting it twice.
+  /**
+   * Starts a found bay, puts it at the end of the sidebar and selects it (ADR 0017); the
+   * settings switch (ADR 0050) adds without `select`, so the settings stay open.
+   */
+  addBay(id: string, select = true): Promise<void> {
+    // Added while it stops: start anew once the stop is done, or the stop would unregister it.
+    const removing = this.removing.get(id);
+    if (removing) return removing.then(() => this.addBay(id, select));
+    if (this.runtimes.has(id)) return Promise.resolve(select ? this.select(id) : undefined);
+    // Adding again while the bay starts waits for that start instead of starting it twice;
+    // the plus selects the bay even if the settings switch started it.
     const running = this.adding.get(id);
-    if (running) return running;
-    const adding = this.startBay(id).finally(() => this.adding.delete(id));
+    if (running) return select ? running.then(() => this.select(id)) : running;
+    const adding = this.startBay(id, select).finally(() => this.adding.delete(id));
     this.adding.set(id, adding);
     return adding;
   }
 
-  private async startBay(id: string): Promise<void> {
+  private async startBay(id: string, select: boolean): Promise<void> {
     const bay = this.startable().find((b) => b.manifest.id === id);
     if (!bay) throw new Error(`Unknown bay "${id}"`);
     this.createView(id, (await this.activate(bay)).bay);
     this.errors = this.errors.filter((e) => e.id !== id);
     this.sidebar.set([...this.sidebar.get().filter((b) => b !== id), id]);
-    this.select(id);
+    if (select) this.select(id);
+    else this.pushState();
     this.servers.offerAgain();
   }
 
   /** Stops a bay and takes it out of the sidebar; its data folder stays. */
-  async removeBay(id: string): Promise<void> {
+  removeBay(id: string): Promise<void> {
+    const removing =
+      this.removing.get(id) ?? this.stopBay(id).finally(() => this.removing.delete(id));
+    this.removing.set(id, removing);
+    return removing;
+  }
+
+  private async stopBay(id: string): Promise<void> {
     // Removed during its start: wait for it, or the start would put the bay back afterwards.
     await this.adding.get(id)?.catch(() => undefined);
     const runtime = this.runtimes.get(id);
@@ -1497,6 +1514,10 @@ export class Host {
     ipcMain.handle('shell:addBay', (_e, id: unknown) => {
       if (typeof id !== 'string') throw new Error('Invalid bay');
       return this.addBay(id);
+    });
+    ipcMain.handle('shell:bayInSidebar', (_e, id: unknown, on: unknown) => {
+      if (typeof id !== 'string' || typeof on !== 'boolean') throw new Error('Invalid bay');
+      return on ? this.addBay(id, false) : this.removeBay(id);
     });
     ipcMain.on('shell:bayMenu', (_e, id: unknown) => {
       if (typeof id === 'string') this.bayMenu(id);

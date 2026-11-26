@@ -101,7 +101,9 @@ flowchart TD
 - **Sidebar** (ADR 0017): Only bays whose ID is listed in `settings.json` under
   `bays` run – in that order. The plus (`shell:addBay`) starts another one, the
   context menu (`shell:bayMenu`, "Remove from sidebar") ends it, closes its
-  windows and tabs and unregisters its functions.
+  windows and tabs and unregisters its functions. A new `settings.json` starts
+  with the agent bay (ADR 0050); the switches in Settings → Bays do the same as
+  plus and context menu (`shell:bayInSidebar`).
 - **Runtime** (`bay-runtime.ts`, `BayRuntime`): loads `manifest.main` through a
   dynamic `import()` in the main process and calls `activate(ctx)`. Default
   exports from ESM and CommonJS are both recognized. If `activate` throws, the

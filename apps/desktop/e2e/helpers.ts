@@ -67,8 +67,11 @@ export interface LaunchOptions {
   userData?: string;
   bayDirs?: string[];
   env?: Record<string, string>;
-  /** `false` starts with an empty sidebar, like a new Hangar (ADR 0017). */
-  seedBays?: boolean;
+  /**
+   * `false` writes no settings, like a new Hangar (only the agent bay, ADR 0050); a list
+   * seeds exactly these bays, `[]` an empty sidebar.
+   */
+  seedBays?: boolean | string[];
 }
 
 /** Ids of the valid bays in `dirs`. */
@@ -89,13 +92,13 @@ function bayIds(dirs: string[]): string[] {
  * New user data gets every bay in the sidebar and the first one selected, as the tests
  * before ADR 0017 expect; existing user data is left alone.
  */
-function seedBays(userData: string, bayDirs: string[]) {
+function seedBays(userData: string, bays: string[]) {
   const settings = join(userData, 'settings.json');
   if (existsSync(settings)) return;
-  const bays = bayIds(bayDirs);
   writeFileSync(settings, JSON.stringify({ bays }));
   const view = join(userData, 'view.json');
-  if (!existsSync(view)) writeFileSync(view, JSON.stringify({ selected: bays[0] ?? null }));
+  // Empty: no view.json, so the overview is selected like in a new Hangar.
+  if (bays.length && !existsSync(view)) writeFileSync(view, JSON.stringify({ selected: bays[0] }));
 }
 
 /**
@@ -109,7 +112,8 @@ export async function launch(options: LaunchOptions = {}) {
   const userData = options.userData ?? mkdtempSync(join(tmpdir(), 'hangar-e2e-'));
   const bayDirs = options.bayDirs ?? [fixturesBays];
   const useBundledBays = packaged && bayDirs.length === 1 && bayDirs[0] === repoBays;
-  if (options.seedBays !== false) seedBays(userData, bayDirs);
+  if (options.seedBays !== false)
+    seedBays(userData, Array.isArray(options.seedBays) ? options.seedBays : bayIds(bayDirs));
   const app = await _electron.launch({
     ...(packaged ? { executablePath: packaged } : { args: [join(__dirname, '..')] }),
     env: {

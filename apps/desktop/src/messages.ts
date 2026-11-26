@@ -156,6 +156,10 @@ const de = {
   settingsSections: 'Einstellungsbereiche',
   settingsGeneral: 'Allgemein',
   settingsBays: 'Bays',
+  // Switches of the bays in the sidebar (ADR 0050)
+  baysInSidebar: 'In der Leiste',
+  baysInSidebarHint:
+    'Eingeschaltete Bays stehen in der Leiste und laufen. Ausschalten beendet die Bay, ihre Daten bleiben.',
   functionDescription: 'Beschreibung',
   functionDescriptionFor: (id: string) => `Beschreibung für ${id}`,
   updateChannel: 'Update-Kanal',
@@ -583,6 +587,9 @@ const en: typeof de = {
   settingsSections: 'Settings sections',
   settingsGeneral: 'General',
   settingsBays: 'Bays',
+  baysInSidebar: 'In the sidebar',
+  baysInSidebarHint:
+    'Bays switched on are in the sidebar and run. Switching one off stops it; its data stays.',
   functionDescription: 'Description',
   functionDescriptionFor: (id: string) => `Description for ${id}`,
   updateChannel: 'Update channel',

@@ -17,7 +17,8 @@ describe('settings', () => {
       shortcuts: [],
     };
     const f = file();
-    expect(readSettings(f)).toEqual(defaults);
+    // A new Hangar starts with the agent bay (ADR 0050); a broken file keeps an empty sidebar.
+    expect(readSettings(f)).toEqual({ ...defaults, bays: ['dev.hangar.agents'] });
     writeFileSync(f, '{kaputt');
     expect(readSettings(f)).toEqual(defaults);
     writeFileSync(
@@ -25,6 +26,14 @@ describe('settings', () => {
       JSON.stringify({ updateChannel: 'nightly', language: 'fr', theme: 'blue', bays: 'x' }),
     );
     expect(readSettings(f)).toEqual(defaults);
+  });
+
+  it('keeps an existing empty sidebar and one without bays empty (ADR 0050)', () => {
+    const f = file();
+    writeFileSync(f, JSON.stringify({ bays: [] }));
+    expect(readSettings(f).bays).toEqual([]);
+    writeFileSync(f, JSON.stringify({ theme: 'dark' }));
+    expect(readSettings(f).bays).toEqual([]);
   });
 
   it('persists channel, language, color scheme and the bays of the sidebar', () => {

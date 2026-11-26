@@ -41,6 +41,16 @@ describe('Settings', () => {
       },
     ]),
     setBaySetting: vi.fn(async () => {}),
+    getState: vi.fn(async () => ({
+      bays: [{ id: 'dev.hangar.agents', name: 'Agents', icon: '', badge: 0 }],
+      servers: [],
+      errors: [],
+      shortcuts: [],
+      selected: 'settings' as const,
+      available: [{ id: 'dev.hangar.browser', name: 'Browser', icon: '' }],
+    })),
+    onState: vi.fn(() => () => {}),
+    setBayInSidebar: vi.fn(async () => {}),
     getWorkspaces: vi.fn(async () => ({
       status: 'off' as const,
       name: 'anna-mac',
@@ -113,6 +123,14 @@ describe('Settings', () => {
     expect(
       await screen.findByRole('heading', { name: 'Bays installieren', level: 3 }),
     ).toBeVisible();
+  });
+
+  it('switches the bays of the sidebar in the bays section (ADR 0050)', async () => {
+    const api = settingsApi();
+    render(<Settings api={api} />);
+    await userEvent.click(await screen.findByRole('switch', { name: 'Browser' }));
+    expect(api.setBayInSidebar).toHaveBeenCalledWith('dev.hangar.browser', true);
+    expect(screen.getByRole('switch', { name: 'Agents' })).toHaveAttribute('aria-checked', 'true');
   });
 
   it('has a section for system notifications (ADR 0044)', async () => {

@@ -6,6 +6,14 @@ All notable changes to this project. Format based on
 
 ## [Unreleased]
 
+### Changed
+
+- A new Hangar starts with the agent bay in the sidebar instead of an empty one (ADR 0050). Existing settings stay as they are, including an empty sidebar; the other bundled bays are still added with the plus.
+
+### Added
+
+- Settings → Bays → "In the sidebar": a switch per found bay. On puts the bay into the sidebar and starts it, off removes it like "Remove from sidebar" (the bay stops, its data stays). Works with Space and Enter and follows changes made in the sidebar.
+
 ## [0.9.1] - 2026-11-26
 
 ### Added
