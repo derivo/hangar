@@ -74,6 +74,24 @@ describe('UpdateCheck', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
+  it('keeps a status event that arrives before the answer for the start value', async () => {
+    let push: (s: UpdateStatus) => void = () => {};
+    let answer: (s: UpdateStatus) => void = () => {};
+    const api = {
+      getUpdate: () => new Promise<UpdateStatus>((r) => (answer = r)),
+      onUpdate: (listener: (s: UpdateStatus) => void) => {
+        push = listener;
+        return () => {};
+      },
+      checkForUpdates: vi.fn(),
+      installUpdate: vi.fn(),
+    };
+    render(<UpdateCheck api={api} />);
+    act(() => push({ state: 'ready', version: '1.0.0' }));
+    await act(async () => answer({ state: 'idle' }));
+    expect(screen.getByText('Update 1.0.0 ist bereit.')).toBeVisible();
+  });
+
   it('says that updates exist only in the packaged app', async () => {
     setup({ state: 'unsupported' });
     expect(await screen.findByText('Updates gibt es nur in der installierten App.')).toBeVisible();

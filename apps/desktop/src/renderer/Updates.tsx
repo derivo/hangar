@@ -31,7 +31,8 @@ const text = (s: UpdateStatus) => {
 export function UpdateCheck({ api }: Props) {
   const [status, setStatus] = useState<UpdateStatus>();
   useEffect(() => {
-    void api.getUpdate().then(setStatus);
+    // An event before the answer is newer: the start value must not overwrite it.
+    void api.getUpdate().then((s) => setStatus((current) => current ?? s));
     return api.onUpdate(setStatus);
   }, [api]);
   if (!status) return null;

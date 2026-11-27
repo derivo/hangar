@@ -186,6 +186,8 @@ test:linux-server`) and its setup over SSH (`pnpm test:linux-setup`, ADR
   (each state, start value, events, inbox combination, English) and
   `e2e/settings.spec.ts` (pushed `available`, then `current`; axe light and
   dark).
+  The updates card and the badge keep a status event that arrives before the
+  answer for the start status (`Updates.test.tsx`, `Sidebar.test.tsx`).
 - **Real Claude Code run** (Claude Code 2.1.312, 2026-10-28, macOS,
   session with a cleaned environment in a temp repository):
   - `claude -p` in the session: server `hangar` connected, four tools
