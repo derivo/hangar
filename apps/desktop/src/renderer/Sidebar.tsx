@@ -7,6 +7,7 @@ import type {
   SidebarBayError,
   SidebarShortcut,
   ThemeSetting,
+  UpdateStatus,
 } from '../shared';
 import { t } from '../messages';
 
@@ -30,6 +31,8 @@ interface Props {
     | 'shortcutMenu'
     | 'moveBay'
     | 'moveShortcut'
+    | 'getUpdate'
+    | 'onUpdate'
   >;
   onSelect(selection: Selection): void;
 }
@@ -79,6 +82,10 @@ const THEME_ICONS: Record<ThemeSetting, string> = {
 };
 
 const badgeText = (n: number) => (n > 99 ? '99+' : String(n));
+
+/** A newer version exists: found, loading, ready to install or to download by hand. */
+export const newerVersion = (s: UpdateStatus | undefined) =>
+  ['available', 'downloading', 'ready', 'manual'].includes(s?.state ?? '');
 
 /** The message of an error from the main process, in the app language where known. */
 function shownError(e: Error): string {
@@ -227,6 +234,17 @@ export function Sidebar({ state, api, onSelect }: Props) {
   const dragShortcut = useReorder(api.moveShortcut);
   const local = state.localServer;
   const settingsBadge = state.settingsBadge ?? 0;
+  // Like the updates card: the current status first, so one set before the window loaded shows.
+  const [update, setUpdate] = useState<UpdateStatus>();
+  useEffect(() => {
+    // An event before the answer is newer: the start value must not overwrite it.
+    void api.getUpdate().then((s) => setUpdate((current) => current ?? s));
+    return api.onUpdate(setUpdate);
+  }, [api]);
+  const updateWaiting = newerVersion(update);
+  const settingsLabel =
+    (settingsBadge > 0 ? t.badge(t.settings, settingsBadge) : t.settings) +
+    (updateWaiting ? ` – ${t.updateWaiting}` : '');
   const localLabel = (name: string) =>
     local?.status === 'connected'
       ? name
@@ -350,15 +368,16 @@ export function Sidebar({ state, api, onSelect }: Props) {
       <button
         type="button"
         className="sidebar-item"
-        title={t.settings}
-        aria-label={settingsBadge > 0 ? t.badge(t.settings, settingsBadge) : t.settings}
+        title={settingsLabel}
+        aria-label={settingsLabel}
         aria-current={state.selected === 'settings' ? 'page' : undefined}
         onClick={() => onSelect('settings')}
       >
-        {/* Waiting inbox entries (ADR 0046); inside the button, which is positioned. */}
-        {settingsBadge > 0 && (
+        {/* Waiting inbox entries (ADR 0046) or a newer version; inside the button, which is
+            positioned. One badge: the count wins, the label names both. */}
+        {(settingsBadge > 0 || updateWaiting) && (
           <span className="badge" data-testid="badge-settings" aria-hidden="true">
-            {badgeText(settingsBadge)}
+            {settingsBadge > 0 ? badgeText(settingsBadge) : '↑'}
           </span>
         )}
         <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">

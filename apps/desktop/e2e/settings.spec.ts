@@ -89,6 +89,35 @@ test('"Check for updates" shows each state of the updater, without violations', 
   }
 });
 
+test('a newer version marks the settings in the sidebar until the updater is current again', async () => {
+  const { app, shell } = await launch();
+  try {
+    const push = (status: unknown) =>
+      app.evaluate(({ BrowserWindow }, s) => {
+        BrowserWindow.getAllWindows()[0]!.webContents.send('shell:update', s);
+      }, status);
+    const badge = shell.getByTestId('badge-settings');
+    await expect(shell.getByRole('button', { name: 'Einstellungen', exact: true })).toBeVisible();
+    await expect(badge).toHaveCount(0);
+
+    await push({ state: 'available', version: '9.9.9' });
+    const settings = shell.getByRole('button', { name: 'Einstellungen – Update verfügbar' });
+    await expect(settings).toBeVisible();
+    await expect(settings).toHaveAttribute('title', 'Einstellungen – Update verfügbar');
+    await expect(badge).toHaveText('↑');
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await shell.emulateMedia({ colorScheme });
+      expect(await violations(shell), `sidebar with update badge (${colorScheme})`).toEqual([]);
+    }
+
+    await push({ state: 'current' });
+    await expect(shell.getByRole('button', { name: 'Einstellungen', exact: true })).toBeVisible();
+    await expect(badge).toHaveCount(0);
+  } finally {
+    await app.close();
+  }
+});
+
 test('an update macOS cannot install links its release page; long errors stay in the card', async () => {
   const { app, shell } = await launch();
   try {
