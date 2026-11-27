@@ -84,9 +84,8 @@ manual step is needed. pnpm reports ignored build scripts of
   checked by `codesign --verify` in the workflow); without it macOS calls the
   downloaded app "damaged". Release 0.9.1 is published (tag `v0.9.1`,
   run 45830741947: arm64 dmg/zip, NSIS installer, AppImage, unsigned like
-  0.9.0) and is the latest published release. Release 0.9.2 is prepared in a
-  pull request (branch `chore/release-0.9.2`) but not tagged or published
-  yet.
+  0.9.0). Release 0.9.2 is published (tag `v0.9.2`, run 46010312897, same
+  packages, unsigned) and is the latest published release.
 - **Security audit 2026-11-17** (source-only, `main` at 2c19132, no
   confirmed finding): of six leads that need validation, the main window's
   navigation guard (#29) and the bridge's Origin check and pairing limit
