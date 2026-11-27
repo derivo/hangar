@@ -1,7 +1,7 @@
 {
   "name": "@hangar/desktop",
   "productName": "Hangar",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "private": true,
   "description": "Hangar desktop app",
   "author": "Derivo",

@@ -55,7 +55,7 @@ password store itself stays closed to them.
 
 ## Status
 
-Version 0.9.2, early and still changing. Builds for macOS, Windows and Linux;
+Version 0.9.3, early and still changing. Builds for macOS, Windows and Linux;
 the local server is macOS only. What works and what is tested:
 [docs/STATUS.md](docs/STATUS.md); next steps: [docs/roadmap.md](docs/roadmap.md).
 

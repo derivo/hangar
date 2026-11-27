@@ -6,6 +6,8 @@ All notable changes to this project. Format based on
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-11-27
+
 ### Added
 
 - The settings entry in the sidebar shows a badge while a newer Hangar version exists (update found, downloading, ready to install, or to download by hand), so it is noticed without opening the settings. Its accessible name and tooltip say "Settings – update available"; with waiting inbox entries the badge keeps their count and the name mentions both. It disappears once the updater is current again.
