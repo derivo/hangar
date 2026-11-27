@@ -179,6 +179,13 @@ test:linux-server`) and its setup over SSH (`pnpm test:linux-setup`, ADR
   and pushed states in `e2e/settings.spec.ts` (axe light and dark, keyboard,
   long error text within its card); not yet observed with a real packaged
   build.
+  While a newer version exists (`available`, `downloading`, `ready`,
+  `manual`) the settings entry in the sidebar carries a badge (`↑`, or the
+  inbox count when there is one) and the name "Einstellungen – Update
+  verfügbar"/"Settings – update available"; tested in `Sidebar.test.tsx`
+  (each state, start value, events, inbox combination, English) and
+  `e2e/settings.spec.ts` (pushed `available`, then `current`; axe light and
+  dark).
 - **Real Claude Code run** (Claude Code 2.1.312, 2026-10-28, macOS,
   session with a cleaned environment in a temp repository):
   - `claude -p` in the session: server `hangar` connected, four tools

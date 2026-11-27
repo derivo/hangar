@@ -1,9 +1,9 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { Sidebar } from './Sidebar';
+import { newerVersion, Sidebar } from './Sidebar';
 import { setLocale } from '../messages';
-import type { ShellState, ThemeSetting } from '../shared';
+import type { ShellState, ThemeSetting, UpdateStatus } from '../shared';
 
 // jsdom has no modal dialogs; like a browser, focus the first button.
 beforeAll(() => {
@@ -36,7 +36,9 @@ const state: ShellState = {
   ],
 };
 
-const themeApi = (theme: ThemeSetting = 'system') => ({
+const themeApi = (theme: ThemeSetting = 'system', update: UpdateStatus = { state: 'idle' }) => ({
+  getUpdate: vi.fn(async () => update),
+  onUpdate: vi.fn((_listener: (s: UpdateStatus) => void) => () => {}),
   getSettings: vi.fn(async () => ({
     updateChannel: 'stable' as const,
     language: 'system' as const,
@@ -140,6 +142,85 @@ describe('Sidebar', () => {
     rerender(<Sidebar state={state} api={themeApi()} onSelect={() => {}} />);
     expect(screen.getByRole('button', { name: 'Einstellungen' })).toBeVisible();
     expect(screen.queryByTestId('badge-settings')).toBeNull();
+  });
+
+  it('counts only the states that mean a newer version exists', () => {
+    const states: [UpdateStatus, boolean][] = [
+      [{ state: 'unsupported' }, false],
+      [{ state: 'idle' }, false],
+      [{ state: 'checking' }, false],
+      [{ state: 'current' }, false],
+      [{ state: 'error', message: 'offline' }, false],
+      [{ state: 'available', version: '9.9.9' }, true],
+      [{ state: 'downloading', version: '9.9.9', percent: 42 }, true],
+      [{ state: 'ready', version: '9.9.9' }, true],
+      [{ state: 'manual', version: '9.9.9' }, true],
+    ];
+    for (const [status, shown] of states) expect(newerVersion(status), status.state).toBe(shown);
+    expect(newerVersion(undefined)).toBe(false);
+  });
+
+  it('marks the settings while a newer version exists, from the start and on events', async () => {
+    let push: (s: UpdateStatus) => void = () => {};
+    const api = themeApi('system', { state: 'available', version: '9.9.9' });
+    api.onUpdate.mockImplementation((listener) => {
+      push = listener;
+      return () => {};
+    });
+    render(<Sidebar state={state} api={api} onSelect={() => {}} />);
+    const settings = await screen.findByRole('button', {
+      name: 'Einstellungen – Update verfügbar',
+    });
+    expect(settings).toHaveAttribute('title', 'Einstellungen – Update verfügbar');
+    expect(screen.getByTestId('badge-settings')).toHaveTextContent('↑');
+    act(() => push({ state: 'current' }));
+    expect(settings).toHaveAccessibleName('Einstellungen');
+    expect(settings).toHaveAttribute('title', 'Einstellungen');
+    expect(screen.queryByTestId('badge-settings')).toBeNull();
+    act(() => push({ state: 'ready', version: '9.9.9' }));
+    expect(settings).toHaveAccessibleName('Einstellungen – Update verfügbar');
+  });
+
+  it('keeps a status event that arrives before the answer for the start value', async () => {
+    let push: (s: UpdateStatus) => void = () => {};
+    let answer: (s: UpdateStatus) => void = () => {};
+    const api = themeApi();
+    api.getUpdate.mockImplementation(() => new Promise<UpdateStatus>((r) => (answer = r)));
+    api.onUpdate.mockImplementation((listener) => {
+      push = listener;
+      return () => {};
+    });
+    render(<Sidebar state={state} api={api} onSelect={() => {}} />);
+    act(() => push({ state: 'ready', version: '9.9.9' }));
+    await act(async () => answer({ state: 'idle' }));
+    expect(screen.getByTestId('badge-settings')).toHaveTextContent('↑');
+  });
+
+  it('keeps the inbox count in the one badge and names both', async () => {
+    const api = themeApi('system', { state: 'downloading', version: '9.9.9', percent: 3 });
+    render(<Sidebar state={{ ...state, settingsBadge: 3 }} api={api} onSelect={() => {}} />);
+    expect(
+      await screen.findByRole('button', { name: 'Einstellungen, 3 Hinweise – Update verfügbar' }),
+    ).toBeVisible();
+    expect(screen.getByTestId('badge-settings')).toHaveTextContent(/^3$/);
+  });
+
+  it('names the update hint in English', async () => {
+    setLocale('en');
+    try {
+      render(
+        <Sidebar
+          state={state}
+          api={themeApi('system', { state: 'manual', version: '9.9.9' })}
+          onSelect={() => {}}
+        />,
+      );
+      expect(
+        await screen.findByRole('button', { name: 'Settings – update available' }),
+      ).toBeVisible();
+    } finally {
+      setLocale('de');
+    }
   });
 
   it('caps large badge counts', () => {

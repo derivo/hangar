@@ -24,6 +24,7 @@ const de = {
   settings: 'Einstellungen',
   badge: (bay: string, count: number) =>
     count === 1 ? `${bay}, 1 Hinweis` : `${bay}, ${count} Hinweise`,
+  updateWaiting: 'Update verfügbar',
   noBay: 'Keine Bay geladen.',
   addBay: 'Zur Leiste hinzufügen',
   allBaysAdded: 'Alle Bays sind schon in der Leiste.',
@@ -462,6 +463,7 @@ const en: typeof de = {
   settings: 'Settings',
   badge: (bay, count) =>
     count === 1 ? `${bay}, 1 notification` : `${bay}, ${count} notifications`,
+  updateWaiting: 'update available',
   noBay: 'No bay loaded.',
   addBay: 'Add to sidebar',
   allBaysAdded: 'Every bay is already in the sidebar.',
