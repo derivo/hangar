@@ -6,6 +6,8 @@ All notable changes to this project. Format based on
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-11-27
+
 ### Changed
 
 - A new Hangar starts with the agent bay in the sidebar instead of an empty one (ADR 0050). Existing settings stay as they are, including an empty sidebar; the other bundled bays are still added with the plus.

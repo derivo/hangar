@@ -1,6 +1,6 @@
 # Status
 
-As of 2026-11-26, version 0.9.1. All milestones from
+As of 2026-11-27, version 0.9.2. All milestones from
 [specification-mvp.md](specification-mvp.md) §10 are implemented. Verification ran
 locally on macOS (arm64). The gaps are listed below, the next steps in [roadmap.md](roadmap.md).
 
@@ -84,7 +84,9 @@ manual step is needed. pnpm reports ignored build scripts of
   checked by `codesign --verify` in the workflow); without it macOS calls the
   downloaded app "damaged". Release 0.9.1 is published (tag `v0.9.1`,
   run 45830741947: arm64 dmg/zip, NSIS installer, AppImage, unsigned like
-  0.9.0).
+  0.9.0) and is the latest published release. Release 0.9.2 is prepared in a
+  pull request (branch `chore/release-0.9.2`) but not tagged or published
+  yet.
 - **Security audit 2026-11-17** (source-only, `main` at 2c19132, no
   confirmed finding): of six leads that need validation, the main window's
   navigation guard (#29) and the bridge's Origin check and pairing limit
